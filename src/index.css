@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* CRITICAL: THE FOLLOWING TAILWIND IMPORTS MUST NEVER BE DELETED OR REORDERED — DO NOT DELETE THIS COMMENT */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* END TAILWIND IMPORTS — ALL OTHER CSS MUST GO BELOW THIS LINE */
+
+:root {
+  --gs-primary: #0A1628;
+  --gs-secondary: #102444;
+  --gs-accent: #1E5FA8;
+  --gs-highlight: #2E9BF5;
+  --gs-gold: #F5A623;
+  --gs-border: #1A3A5C;
+  --gs-success: #27AE60;
+  --gs-error: #E74C3C;
+  --gs-draw: #F5A623;
+  --gs-text-primary: #FFFFFF;
+  --gs-text-secondary: #A0B4CC;
+}
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  background-color: var(--gs-primary);
+  color: var(--gs-text-primary);
+  font-family: 'Inter', 'Roboto', sans-serif;
+}
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--gs-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--gs-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gs-accent);
+}
+/* Glassmorphism utility */
+.glass {
+  background: rgba(16, 36, 68, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(26, 58, 92, 0.5);
+}
+.glass-card {
+  background: rgba(16, 36, 68, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(26, 58, 92, 0.3);
+}
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(46, 155, 245, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(46, 155, 245, 0.6); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
