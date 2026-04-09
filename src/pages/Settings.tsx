@@ -1,127 +1,104 @@
-import React from 'react';
-import {
-  Settings as SettingsIcon,
-  Save,
-  Moon,
-  Bell,
-  Shield,
-  Database } from
-'lucide-react';
-import { Card, CardContent } from '../components/ui/Card';
+import React, { useState } from 'react';
+import { Settings as SettingsIcon, Save, Moon, Bell, Shield, Database, ChevronRight } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Toggle } from '../components/ui/Toggle';
 import { Input } from '../components/ui/Input';
+
+const menuItems = [
+  { id: 'general',       label: 'Opšta podešavanja',    icon: SettingsIcon },
+  { id: 'notifications', label: 'Notifikacije',           icon: Bell },
+  { id: 'security',      label: 'Bezbednost',             icon: Shield },
+  { id: 'data',          label: 'Podaci i Backup',        icon: Database },
+];
+
 export default function Settings() {
+  const [activeMenu, setActiveMenu] = useState('general');
+
   return (
-    <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="p-3 rounded-xl bg-gs-accent/20 text-gs-highlight">
-          <SettingsIcon size={24} />
+    <div className="space-y-6 animate-fade-up max-w-5xl mx-auto">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center">
+          <SettingsIcon size={22} className="text-blue-400" />
         </div>
         <div>
-          <h1 className="text-3xl font-heading font-bold text-white">
-            Podešavanja
-          </h1>
-          <p className="text-gs-text-secondary">
-            Konfigurišite sistem i korisnički nalog.
-          </p>
+          <h1 className="font-display text-4xl font-black tracking-wide text-ice-100">PODEŠAVANJA</h1>
+          <p className="text-silver-400 text-sm">Konfigurišite sistem i korisnički nalog.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-1 space-y-2">
-          <button className="w-full text-left px-4 py-3 rounded-lg bg-gs-accent/20 text-gs-highlight border border-gs-accent/30 font-medium flex items-center gap-3">
-            <SettingsIcon size={18} /> Opšta podešavanja
-          </button>
-          <button className="w-full text-left px-4 py-3 rounded-lg text-gs-text-secondary hover:bg-gs-primary/50 hover:text-white transition-colors flex items-center gap-3">
-            <Bell size={18} /> Notifikacije
-          </button>
-          <button className="w-full text-left px-4 py-3 rounded-lg text-gs-text-secondary hover:bg-gs-primary/50 hover:text-white transition-colors flex items-center gap-3">
-            <Shield size={18} /> Bezbednost
-          </button>
-          <button className="w-full text-left px-4 py-3 rounded-lg text-gs-text-secondary hover:bg-gs-primary/50 hover:text-white transition-colors flex items-center gap-3">
-            <Database size={18} /> Podaci i Backup
-          </button>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Sidebar nav */}
+        <div className="space-y-1">
+          {menuItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveMenu(item.id)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                activeMenu === item.id
+                  ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20'
+                  : 'text-silver-400 hover:bg-navy-800/60 hover:text-ice-100 border border-transparent'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <item.icon size={16} />
+                {item.label}
+              </span>
+              <ChevronRight size={14} className="opacity-50" />
+            </button>
+          ))}
         </div>
 
-        <div className="md:col-span-2 space-y-6">
-          <Card className="bg-gs-secondary border-gs-border">
-            <CardContent className="p-6">
-              <h3 className="text-xl font-bold text-white mb-6 border-b border-gs-border pb-2">
-                Opšta podešavanja
-              </h3>
-
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-white flex items-center gap-2">
-                      <Moon size={16} className="text-gs-accent" /> Tamna Tema
-                    </p>
-                    <p className="text-sm text-gs-text-secondary">
-                      Aplikacija trenutno podržava samo tamnu temu.
-                    </p>
-                  </div>
-                  <Toggle checked={true} disabled />
+        {/* Content */}
+        <div className="md:col-span-3 space-y-5">
+          {/* General settings */}
+          <div className="rounded-xl border border-white/6 bg-navy-800/60 p-6">
+            <h3 className="font-bold text-ice-100 mb-6 pb-4 border-b border-white/6">Opšta podešavanja</h3>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-ice-100 flex items-center gap-2 text-sm">
+                    <Moon size={15} className="text-blue-500" /> Tamna tema
+                  </p>
+                  <p className="text-xs text-silver-600 mt-0.5">Aplikacija trenutno podržava samo tamnu temu.</p>
                 </div>
-
-                <div className="space-y-4 pt-4 border-t border-gs-border">
-                  <h4 className="font-medium text-white">
-                    Informacije o organizaciji
-                  </h4>
-                  <Input
-                    label="Naziv organizacije"
-                    defaultValue="GoalStorm Demo"
-                    className="bg-gs-primary border-gs-border text-white" />
-                  
-                  <Input
-                    label="Kontakt Email"
-                    defaultValue="admin@goalstorm.com"
-                    className="bg-gs-primary border-gs-border text-white" />
-                  
-                </div>
+                <Toggle checked={true} disabled />
               </div>
 
-              <div className="mt-8 pt-6 border-t border-gs-border flex justify-end">
-                <Button
-                  className="bg-gs-accent hover:bg-gs-highlight text-white border-none"
-                  leftIcon={<Save size={18} />}>
-                  
-                  Sačuvaj promene
-                </Button>
+              <div className="space-y-4 pt-5 border-t border-white/6">
+                <h4 className="font-semibold text-sm text-ice-100">Informacije o organizaciji</h4>
+                <Input label="Naziv organizacije" defaultValue="GoalStorm Demo" />
+                <Input label="Kontakt Email" defaultValue="admin@goalstorm.com" type="email" />
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card className="bg-gs-secondary border-gs-error/30">
-            <CardContent className="p-6">
-              <h3 className="text-xl font-bold text-gs-error mb-2">
-                Opasna zona
-              </h3>
-              <p className="text-sm text-gs-text-secondary mb-4">
-                Brisanje svih podataka je nepovratna akcija. Svi turniri, ekipe
-                i igrači će biti obrisani.
-              </p>
+            <div className="mt-8 pt-5 border-t border-white/6 flex justify-end">
+              <Button leftIcon={<Save size={16} />}>Sačuvaj promene</Button>
+            </div>
+          </div>
 
-              <Button
-                variant="destructive"
-                className="bg-gs-error/10 text-gs-error hover:bg-gs-error hover:text-white border border-gs-error/30"
-                onClick={() => {
-                  if (
-                  window.confirm(
-                    'Da li ste sigurni da želite da obrišete sve podatke? Ova akcija je nepovratna.'
-                  ))
-                  {
-                    localStorage.removeItem('goalstorm-storage');
-                    window.location.reload();
-                  }
-                }}>
-                
-                Obriši sve podatke (Reset)
-              </Button>
-            </CardContent>
-          </Card>
+          {/* Danger zone */}
+          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6">
+            <h3 className="font-bold text-red-400 mb-2 flex items-center gap-2">
+              <Shield size={16} />
+              Opasna zona
+            </h3>
+            <p className="text-xs text-silver-400 mb-5 max-w-lg">
+              Brisanje svih podataka je nepovratna akcija. Svi turniri, ekipe i igrači će biti trajno obrisani.
+            </p>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (window.confirm('Da li ste sigurni? Ova akcija je nepovratna.')) {
+                  localStorage.removeItem('goalstorm-storage');
+                  window.location.reload();
+                }
+              }}
+            >
+              Obriši sve podatke (Reset)
+            </Button>
+          </div>
         </div>
       </div>
-    </div>);
-
+    </div>
+  );
 }

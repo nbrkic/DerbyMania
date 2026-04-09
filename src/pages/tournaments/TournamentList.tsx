@@ -1,198 +1,148 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Calendar, Users, Trophy } from 'lucide-react';
+import { Plus, Search, Calendar, Users, Trophy, MapPin } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
+
+const statusMap: Record<string, { label: string; variant: 'success' | 'warning' | 'secondary' | 'primary' }> = {
+  active:    { label: 'Aktivan',      variant: 'success' },
+  upcoming:  { label: 'Predstojeći', variant: 'warning' },
+  completed: { label: 'Završen',     variant: 'secondary' },
+  draft:     { label: 'Draft',       variant: 'primary' },
+};
+
+const filterLabels: Record<string, string> = {
+  all: 'Svi', active: 'Aktivni', upcoming: 'Predstojeći', completed: 'Završeni', draft: 'Draft',
+};
+
 export default function TournamentList() {
   const { tournaments } = useStore();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const filteredTournaments = tournaments.filter((t) => {
-    const matchesSearch =
-    t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.city && t.city.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const filtered = tournaments.filter(t => {
+    const matchSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.city ?? '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = statusFilter === 'all' || t.status === statusFilter;
+    return matchSearch && matchStatus;
   });
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return (
-          <Badge
-            variant="success"
-            className="bg-gs-success/20 text-gs-success border-gs-success/30">
-            
-            Aktivan
-          </Badge>);
 
-      case 'upcoming':
-        return (
-          <Badge
-            variant="warning"
-            className="bg-gs-highlight/20 text-gs-highlight border-gs-highlight/30">
-            
-            Predstojeći
-          </Badge>);
-
-      case 'completed':
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-gs-border text-gs-text-secondary">
-            
-            Završen
-          </Badge>);
-
-      case 'draft':
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-gs-primary text-gs-text-secondary border-gs-border">
-            
-            Draft
-          </Badge>);
-
-      default:
-        return null;
-    }
-  };
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-up">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-heading font-bold text-white">
-            Turniri
-          </h1>
-          <p className="text-gs-text-secondary mt-1">
-            Upravljajte svim turnirima na jednom mestu.
-          </p>
+          <h1 className="font-display text-5xl font-bold tracking-tight text-ice-100">TURNIRI</h1>
+          <p className="text-silver-400 mt-1 text-sm">Upravljajte svim turnirima na jednom mestu.</p>
         </div>
-        <Button
-          onClick={() => navigate('/tournaments/new')}
-          className="bg-gs-accent hover:bg-gs-highlight text-white border-none"
-          leftIcon={<Plus size={18} />}>
-          
+        <Button onClick={() => navigate('/app/tournaments/new')} leftIcon={<Plus size={16} />}>
           Novi turnir
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-gs-secondary p-4 rounded-xl border border-gs-border">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 p-4 rounded-xl bg-navy-800/60 border border-white/6">
         <div className="flex-1">
           <Input
             placeholder="Pretraži turnire..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            startAdornment={
-            <Search size={18} className="text-gs-text-secondary" />
-            }
-            className="bg-gs-primary border-gs-border text-white" />
-          
+            onChange={e => setSearchTerm(e.target.value)}
+            startAdornment={<Search size={16} />}
+          />
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
-          {['all', 'active', 'upcoming', 'completed', 'draft'].map((status) =>
-          <button
-            key={status}
-            onClick={() => setStatusFilter(status)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${statusFilter === status ? 'bg-gs-accent text-white' : 'bg-gs-primary text-gs-text-secondary hover:bg-gs-border'}`}>
-            
-              {status === 'all' ?
-            'Svi' :
-            status === 'active' ?
-            'Aktivni' :
-            status === 'upcoming' ?
-            'Predstojeći' :
-            status === 'completed' ?
-            'Završeni' :
-            'Draft'}
+        <div className="flex gap-1.5 overflow-x-auto">
+          {Object.keys(filterLabels).map(status => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                statusFilter === status
+                  ? 'bg-navy-800/50 text-white shadow-glow-blue'
+                  : 'bg-navy-900/80 text-silver-400 hover:text-ice-100 border border-white/6 hover:border-white/6-bright'
+              }`}
+            >
+              {filterLabels[status]}
             </button>
-          )}
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredTournaments.length > 0 ?
-        filteredTournaments.map((tournament) =>
-        <Card
-          key={tournament.id}
-          className="bg-gs-secondary border-gs-border hover:border-gs-highlight transition-all duration-300 cursor-pointer group"
-          onClick={() => navigate(`/tournaments/${tournament.id}`)}>
-          
-              <CardContent className="p-0">
-                <div className="h-24 bg-gradient-to-r from-gs-primary to-gs-secondary relative overflow-hidden rounded-t-xl border-b border-gs-border">
-                  <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform duration-500">
-                    <Trophy size={120} />
-                  </div>
-                  <div className="absolute top-4 right-4">
-                    {getStatusBadge(tournament.status)}
-                  </div>
+      {/* Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {filtered.length > 0 ? filtered.map(t => {
+          const status = statusMap[t.status] ?? statusMap.draft;
+          return (
+            <div
+              key={t.id}
+              onClick={() => navigate(`/app/tournaments/${t.id}`)}
+              className="group rounded-xl border border-white/6 bg-navy-800/60 hover:border-white/6-bright hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+            >
+              {/* Card top banner */}
+              <div className="h-20 relative overflow-hidden bg-gradient-to-br from-navy-700/60 to-navy-900/80">
+                <div className="absolute inset-0 bg-radial-blue opacity-60" />
+                <div className="absolute right-3 top-3">
+                  <Badge variant={status.variant}>{status.label}</Badge>
+                </div>
+                <div className="absolute -right-4 -bottom-6 opacity-10 group-hover:opacity-20 transition-opacity group-hover:scale-110 duration-500">
+                  <Trophy size={100} />
+                </div>
+              </div>
+
+              <div className="p-5 relative">
+                {/* Logo badge */}
+                <div className="absolute -top-6 left-5 w-12 h-12 rounded-xl bg-navy-900/80 border border-white/6 flex items-center justify-center shadow-card">
+                  <Trophy size={22} className="text-amber-400" />
                 </div>
 
-                <div className="p-5 relative">
-                  <div className="w-16 h-16 rounded-xl bg-gs-primary border-2 border-gs-secondary absolute -top-10 flex items-center justify-center shadow-lg">
-                    <Trophy className="text-gs-gold" size={32} />
-                  </div>
+                <div className="mt-7">
+                  <h3 className="font-bold text-ice-100 text-lg group-hover:text-blue-400 transition-colors mb-0.5 truncate">
+                    {t.name}
+                  </h3>
+                  <p className="text-xs text-silver-600 mb-4 line-clamp-1">{t.description ?? 'Nema opisa'}</p>
 
-                  <div className="mt-6">
-                    <h3 className="text-xl font-bold text-white mb-1 group-hover:text-gs-highlight transition-colors">
-                      {tournament.name}
-                    </h3>
-                    <p className="text-sm text-gs-text-secondary mb-4 line-clamp-1">
-                      {tournament.description || 'Nema opisa'}
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm">
-                      <div className="flex items-center gap-2 text-gs-text-secondary">
-                        <Calendar size={16} className="text-gs-accent" />
-                        <span>
-                          {new Date(tournament.startDate).toLocaleDateString(
-                        'sr-RS'
-                      )}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gs-text-secondary">
-                        <Users size={16} className="text-gs-accent" />
-                        <span>
-                          {tournament.teamIds.length} / {tournament.teamCount}{' '}
-                          ekipa
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gs-text-secondary col-span-2">
-                        <div className="w-4 h-4 rounded bg-gs-primary border border-gs-border flex items-center justify-center text-[10px]">
-                          📍
-                        </div>
-                        <span>{tournament.city || 'Nije definisano'}</span>
-                      </div>
+                  <div className="space-y-2 text-xs text-silver-400">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={13} className="text-blue-500 flex-shrink-0" />
+                      <span>{new Date(t.startDate).toLocaleDateString('sr-RS')}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Users size={13} className="text-blue-500 flex-shrink-0" />
+                      <span>{t.teamIds.length} / {t.teamCount} ekipa</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin size={13} className="text-blue-500 flex-shrink-0" />
+                      <span>{t.city ?? 'Nije definisano'}</span>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-        ) :
 
-        <div className="col-span-full text-center p-12 bg-gs-secondary rounded-xl border border-gs-border border-dashed">
-            <Trophy
-            size={48}
-            className="mx-auto text-gs-text-secondary opacity-50 mb-4" />
-          
-            <h3 className="text-xl font-bold text-white mb-2">
-              Nema pronađenih turnira
-            </h3>
-            <p className="text-gs-text-secondary mb-6">
-              Pokušajte sa drugačijim filterima ili kreirajte novi turnir.
-            </p>
-            <Button
-            onClick={() => navigate('/tournaments/new')}
-            className="bg-gs-accent hover:bg-gs-highlight text-white border-none">
-            
-              Kreiraj prvi turnir
+                  {/* Progress bar */}
+                  <div className="mt-4 w-full bg-navy-800/50 rounded-full h-1">
+                    <div
+                      className="bg-accent-gradient h-1 rounded-full transition-all"
+                      style={{ width: `${(t.teamIds.length / t.teamCount) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-right text-silver-600 mt-1">
+                    {t.teamIds.length}/{t.teamCount} ekipa prijavljeno
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        }) : (
+          <div className="col-span-full text-center py-16 rounded-xl border border-dashed border-white/6">
+            <Trophy size={40} className="mx-auto text-silver-600 mb-4" />
+            <h3 className="font-bold text-ice-100 mb-2">Nema pronađenih turnira</h3>
+            <p className="text-silver-400 text-sm mb-5">Pokušajte sa drugačijim filterima ili kreirajte novi.</p>
+            <Button onClick={() => navigate('/app/tournaments/new')} leftIcon={<Plus size={15} />}>
+              Kreiraj turnir
             </Button>
           </div>
-        }
+        )}
       </div>
-    </div>);
-
+    </div>
+  );
 }

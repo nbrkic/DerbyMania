@@ -54,7 +54,7 @@ export default function CreatePlayer() {
     };
     setTimeout(() => {
       addPlayer(newPlayer);
-      navigate('/players');
+      navigate('/app/players');
     }, 500);
   };
   const teamOptions = teams.map((t) => ({
@@ -106,25 +106,25 @@ export default function CreatePlayer() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center gap-3 mb-2">
-        <div className="p-3 rounded-xl bg-gs-accent/20 text-gs-highlight">
+        <div className="p-3 rounded-xl bg-navy-800/50/20 text-silver-400">
           <Users size={24} />
         </div>
         <div>
-          <h1 className="text-3xl font-heading font-bold text-white">
+          <h1 className="text-3xl font-heading font-bold text-silver-4001">
             Novi Igrač
           </h1>
-          <p className="text-gs-text-secondary">
+          <p className="text-silver-4002">
             Registrujte novog igrača u sistem.
           </p>
         </div>
       </div>
 
-      <Card className="bg-gs-secondary border-gs-border">
+      <Card className="bg-navy-800/50 border-white/6">
         <CardContent className="p-6 md:p-8">
           <div className="space-y-8">
             {/* Lični Podaci */}
             <section>
-              <h2 className="text-xl font-bold text-white mb-4 border-b border-gs-border pb-2">
+              <h2 className="text-xl font-bold text-silver-4001 mb-4 border-b border-white/6 pb-2">
                 Lični Podaci
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -134,7 +134,7 @@ export default function CreatePlayer() {
                   onChange={(e) =>
                   handleInputChange('firstName', e.target.value)
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   label="Prezime *"
@@ -142,7 +142,7 @@ export default function CreatePlayer() {
                   onChange={(e) =>
                   handleInputChange('lastName', e.target.value)
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   type="date"
@@ -151,7 +151,7 @@ export default function CreatePlayer() {
                   onChange={(e) =>
                   handleInputChange('dateOfBirth', e.target.value)
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   label="Nacionalnost"
@@ -159,14 +159,14 @@ export default function CreatePlayer() {
                   onChange={(e) =>
                   handleInputChange('nationality', e.target.value)
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
               </div>
             </section>
 
             {/* Fudbalski Podaci */}
             <section>
-              <h2 className="text-xl font-bold text-white mb-4 border-b border-gs-border pb-2">
+              <h2 className="text-xl font-bold text-silver-4001 mb-4 border-b border-white/6 pb-2">
                 Fudbalski Podaci
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -194,7 +194,7 @@ export default function CreatePlayer() {
                   }
                   min={1}
                   max={99}
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Select
                   label="Dominantna noga"
@@ -222,7 +222,7 @@ export default function CreatePlayer() {
                   onChange={(e) =>
                   handleInputChange('height', parseInt(e.target.value))
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   type="number"
@@ -231,14 +231,14 @@ export default function CreatePlayer() {
                   onChange={(e) =>
                   handleInputChange('weight', parseInt(e.target.value))
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-gs-primary rounded-lg border border-gs-border">
+              <div className="flex items-center justify-between p-4 bg-navy-800/50 rounded-lg border border-white/6">
                 <div>
-                  <p className="font-medium text-white">Kapiten</p>
-                  <p className="text-xs text-gs-text-secondary">
+                  <p className="font-medium text-silver-4001">Kapiten</p>
+                  <p className="text-xs text-silver-4002">
                     Da li je ovaj igrač kapiten ekipe?
                   </p>
                 </div>
@@ -250,11 +250,11 @@ export default function CreatePlayer() {
             </section>
           </div>
 
-          <div className="flex justify-between mt-8 pt-6 border-t border-gs-border">
+          <div className="flex justify-between mt-8 pt-6 border-t border-white/6">
             <Button
               variant="secondary"
-              onClick={() => navigate('/players')}
-              className="bg-gs-primary text-white border-gs-border hover:bg-gs-border"
+              onClick={() => navigate('/app/players')}
+              className="bg-navy-800/50 text-silver-4001 border-white/6 hover:bg-navy-800/50"
               leftIcon={<ChevronLeft size={18} />}>
               
               Otkaži
@@ -263,7 +263,7 @@ export default function CreatePlayer() {
             <Button
               onClick={handleSave}
               loading={isSubmitting}
-              className="bg-gs-success hover:bg-green-500 text-white border-none"
+              className="bg-navy-800/50 hover:bg-green-500 text-silver-4001 border-transparent"
               leftIcon={<Save size={18} />}>
               
               Registruj Igrača

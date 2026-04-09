@@ -43,31 +43,31 @@ export default function CreateTeam() {
     };
     setTimeout(() => {
       addTeam(newTeam);
-      navigate('/teams');
+      navigate('/app/teams');
     }, 500);
   };
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center gap-3 mb-2">
-        <div className="p-3 rounded-xl bg-gs-accent/20 text-gs-highlight">
+        <div className="p-3 rounded-xl bg-navy-800/50/20 text-silver-400">
           <Shield size={24} />
         </div>
         <div>
-          <h1 className="text-3xl font-heading font-bold text-white">
+          <h1 className="text-3xl font-heading font-bold text-silver-4001">
             Nova Ekipa
           </h1>
-          <p className="text-gs-text-secondary">
+          <p className="text-silver-4002">
             Registrujte novu ekipu u sistem.
           </p>
         </div>
       </div>
 
-      <Card className="bg-gs-secondary border-gs-border">
+      <Card className="bg-navy-800/50 border-white/6">
         <CardContent className="p-6 md:p-8">
           <div className="space-y-8">
             {/* Osnovne Informacije */}
             <section>
-              <h2 className="text-xl font-bold text-white mb-4 border-b border-gs-border pb-2">
+              <h2 className="text-xl font-bold text-silver-4001 mb-4 border-b border-white/6 pb-2">
                 Osnovne Informacije
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -76,7 +76,7 @@ export default function CreateTeam() {
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
                   placeholder="npr. FK Radnički"
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   label="Skraćenica (max 3 slova) *"
@@ -89,20 +89,20 @@ export default function CreateTeam() {
                   }
                   placeholder="npr. RAD"
                   maxLength={3}
-                  className="bg-gs-primary border-gs-border text-white uppercase" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001 uppercase" />
                 
                 <Input
                   label="Grad *"
                   value={formData.city}
                   onChange={(e) => handleInputChange('city', e.target.value)}
                   placeholder="npr. Beograd"
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   label="Država"
                   value={formData.country}
                   onChange={(e) => handleInputChange('country', e.target.value)}
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   type="number"
@@ -111,20 +111,20 @@ export default function CreateTeam() {
                   onChange={(e) =>
                   handleInputChange('foundedYear', parseInt(e.target.value))
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
               </div>
             </section>
 
             {/* Vizuelni Identitet */}
             <section>
-              <h2 className="text-xl font-bold text-white mb-4 border-b border-gs-border pb-2">
+              <h2 className="text-xl font-bold text-silver-4001 mb-4 border-b border-white/6 pb-2">
                 Vizuelni Identitet
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gs-text-secondary mb-1">
+                    <label className="block text-sm font-medium text-silver-4002 mb-1">
                       Osnovna boja
                     </label>
                     <div className="flex items-center gap-3">
@@ -141,12 +141,12 @@ export default function CreateTeam() {
                         onChange={(e) =>
                         handleInputChange('primaryColor', e.target.value)
                         }
-                        className="bg-gs-primary border-gs-border text-white flex-1" />
+                        className="bg-navy-800/50 border-white/6 text-silver-4001 flex-1" />
                       
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gs-text-secondary mb-1">
+                    <label className="block text-sm font-medium text-silver-4002 mb-1">
                       Sekundarna boja
                     </label>
                     <div className="flex items-center gap-3">
@@ -163,14 +163,14 @@ export default function CreateTeam() {
                         onChange={(e) =>
                         handleInputChange('secondaryColor', e.target.value)
                         }
-                        className="bg-gs-primary border-gs-border text-white flex-1" />
+                        className="bg-navy-800/50 border-white/6 text-silver-4001 flex-1" />
                       
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-center justify-center p-4 bg-gs-primary rounded-lg border border-gs-border border-dashed">
-                  <p className="text-sm text-gs-text-secondary mb-4">
+                <div className="flex flex-col items-center justify-center p-4 bg-navy-800/50 rounded-lg border border-white/6 border-dashed">
+                  <p className="text-sm text-silver-4002 mb-4">
                     Pregled dresa / boja
                   </p>
                   <div
@@ -185,7 +185,7 @@ export default function CreateTeam() {
                         background: `linear-gradient(135deg, ${formData.primaryColor} 50%, ${formData.secondaryColor} 50%)`
                       }}>
                     </div>
-                    <span className="relative z-10 font-bold text-white drop-shadow-md text-xl">
+                    <span className="relative z-10 font-bold text-silver-4001 drop-shadow-md text-xl">
                       {formData.shortName || '???'}
                     </span>
                   </div>
@@ -195,7 +195,7 @@ export default function CreateTeam() {
 
             {/* Kontakt i Opis */}
             <section>
-              <h2 className="text-xl font-bold text-white mb-4 border-b border-gs-border pb-2">
+              <h2 className="text-xl font-bold text-silver-4001 mb-4 border-b border-white/6 pb-2">
                 Kontakt i Opis
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -205,7 +205,7 @@ export default function CreateTeam() {
                   onChange={(e) =>
                   handleInputChange('contactName', e.target.value)
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   label="Telefon"
@@ -213,7 +213,7 @@ export default function CreateTeam() {
                   onChange={(e) =>
                   handleInputChange('contactPhone', e.target.value)
                   }
-                  className="bg-gs-primary border-gs-border text-white" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001" />
                 
                 <Input
                   label="Email"
@@ -222,16 +222,16 @@ export default function CreateTeam() {
                   onChange={(e) =>
                   handleInputChange('contactEmail', e.target.value)
                   }
-                  className="bg-gs-primary border-gs-border text-white md:col-span-2" />
+                  className="bg-navy-800/50 border-white/6 text-silver-4001 md:col-span-2" />
                 
               </div>
 
               <div className="space-y-1">
-                <label className="block text-sm font-medium text-gs-text-secondary">
+                <label className="block text-sm font-medium text-silver-4002">
                   Kratki opis ekipe
                 </label>
                 <textarea
-                  className="w-full bg-gs-primary border border-gs-border rounded-md p-3 text-white focus:ring-2 focus:ring-gs-accent focus:border-transparent outline-none"
+                  className="w-full bg-navy-800/50 border border-white/6 rounded-md p-3 text-silver-4001 focus:ring-2 focus:ring-blue-500 focus:border-white/6 outline-none"
                   rows={3}
                   value={formData.description}
                   onChange={(e) =>
@@ -242,11 +242,11 @@ export default function CreateTeam() {
             </section>
           </div>
 
-          <div className="flex justify-between mt-8 pt-6 border-t border-gs-border">
+          <div className="flex justify-between mt-8 pt-6 border-t border-white/6">
             <Button
               variant="secondary"
-              onClick={() => navigate('/teams')}
-              className="bg-gs-primary text-white border-gs-border hover:bg-gs-border"
+              onClick={() => navigate('/app/teams')}
+              className="bg-navy-800/50 text-silver-4001 border-white/6 hover:bg-navy-800/50"
               leftIcon={<ChevronLeft size={18} />}>
               
               Otkaži
@@ -255,7 +255,7 @@ export default function CreateTeam() {
             <Button
               onClick={handleSave}
               loading={isSubmitting}
-              className="bg-gs-success hover:bg-green-500 text-white border-none"
+              className="bg-navy-800/50 hover:bg-green-500 text-silver-4001 border-transparent"
               leftIcon={<Save size={18} />}>
               
               Registruj Ekipu

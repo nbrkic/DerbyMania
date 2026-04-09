@@ -1,259 +1,184 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Users,
-  ChevronLeft,
-  Shield,
-  Calendar,
-  Activity,
-  Trophy } from
-'lucide-react';
+import { Users, ChevronLeft, Shield, Calendar, Activity, Trophy } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+
 export default function PlayerDetails() {
-  const { id } = useParams<{
-    id: string;
-  }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { players, teams, matches } = useStore();
-  const player = players.find((p) => p.id === id);
+  const player = players.find(p => p.id === id);
+
   if (!player) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-white mb-4">
-          Igrač nije pronađen
-        </h2>
-        <Button onClick={() => navigate('/players')}>Nazad na listu</Button>
-      </div>);
-
+      <div className="text-center py-20">
+        <Users size={48} className="mx-auto text-silver-600 mb-4" />
+        <h2 className="text-xl font-bold text-ice-100 mb-4">Igrač nije pronađen</h2>
+        <Button onClick={() => navigate('/app/players')}>Nazad na listu</Button>
+      </div>
+    );
   }
-  const team = teams.find((t) => t.id === player.teamId);
-  // Calculate stats
-  const playerMatches = matches.filter(
-    (m) => m.homeTeamId === player.teamId || m.awayTeamId === player.teamId
-  );
-  const completedMatches = playerMatches.filter((m) => m.status === 'completed');
-  let goals = 0;
-  let yellowCards = 0;
-  let redCards = 0;
-  completedMatches.forEach((match) => {
-    match.events.forEach((event) => {
+
+  const team = teams.find(t => t.id === player.teamId);
+  const playerMatches = matches.filter(m => m.homeTeamId === player.teamId || m.awayTeamId === player.teamId);
+  const completedMatches = playerMatches.filter(m => m.status === 'completed');
+
+  let goals = 0, yellowCards = 0, redCards = 0;
+  completedMatches.forEach(match => {
+    match.events.forEach(event => {
       if (event.playerId === player.id) {
         if (event.type === 'goal') goals++;
         if (event.type === 'yellow_card') yellowCards++;
-        if (event.type === 'red_card' || event.type === 'second_yellow')
-        redCards++;
+        if (event.type === 'red_card' || event.type === 'second_yellow') redCards++;
       }
     });
   });
-  const age =
-  new Date().getFullYear() - new Date(player.dateOfBirth).getFullYear();
+
+  const age = new Date().getFullYear() - new Date(player.dateOfBirth).getFullYear();
+
+  const positionColors: Record<string, string> = {
+    GK: 'bg-navy-800/50/15 text-amber-400 border-white/6/30',
+    ST: 'bg-navy-800/50/15 text-red-400 border-white/6/30',
+    CF: 'bg-navy-800/50/15 text-red-400 border-white/6/30',
+    LW: 'bg-navy-800/50/15 text-red-400 border-white/6/30',
+    RW: 'bg-navy-800/50/15 text-red-400 border-white/6/30',
+    CM: 'bg-navy-800/50/15 text-emerald-400 border-white/6/30',
+    CAM: 'bg-navy-800/50/15 text-emerald-400 border-white/6/30',
+    CDM: 'bg-navy-800/50/15 text-emerald-400 border-white/6/30',
+  };
+  const posClass = positionColors[player.position] ?? 'bg-navy-800/50/15 text-blue-400 border-white/6/30';
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <button
-        onClick={() => navigate('/players')}
-        className="flex items-center text-sm text-gs-text-secondary hover:text-white transition-colors mb-2">
-        
+    <div className="space-y-6 animate-fade-up">
+      <button onClick={() => navigate('/app/players')} className="flex items-center gap-1 text-sm text-silver-400 hover:text-ice-100 transition-colors">
         <ChevronLeft size={16} /> Nazad na igrače
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Card */}
+        {/* Profile sidebar */}
         <div className="lg:col-span-1">
-          <Card className="bg-gs-secondary border-gs-border h-full">
-            <CardContent className="p-6 flex flex-col items-center text-center">
-              <div className="w-32 h-32 rounded-full bg-gs-primary border-4 border-gs-border flex items-center justify-center mb-4 relative overflow-hidden shadow-xl">
-                <Users size={48} className="text-gs-text-secondary" />
-                <div className="absolute bottom-0 w-full bg-gs-accent/80 text-white text-xs font-bold py-1">
+          <div className="rounded-2xl border border-white/6 bg-navy-800/60 overflow-hidden">
+            {/* Top color strip */}
+            <div className="h-24 bg-radial-blue relative overflow-hidden">
+              <div className="absolute inset-0 opacity-30 bg-accent-gradient" />
+              <div className="absolute bottom-0 right-0 opacity-10 translate-x-4 translate-y-4">
+                <Users size={100} />
+              </div>
+            </div>
+
+            <div className="px-6 pb-6 -mt-10 relative flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-2xl bg-navy-900/80 border-2 border-white/6 flex items-center justify-center shadow-card mb-3 relative">
+                <span className="stat-number text-3xl text-blue-400">#{player.jerseyNumber}</span>
+                <span className={`absolute -bottom-2.5 text-[10px] font-bold px-2 py-0.5 rounded-full border ${posClass}`}>
                   {player.position}
-                </div>
+                </span>
               </div>
 
-              <h1 className="text-2xl font-bold text-white mb-1 flex items-center justify-center gap-2">
+              <h1 className="font-display text-3xl font-black tracking-wide text-ice-100 mt-3 flex items-center gap-2">
                 {player.firstName} {player.lastName}
-                {player.isCaptain &&
-                <span className="text-xs bg-gs-gold text-gs-primary px-1.5 rounded font-bold">
-                    C
-                  </span>
-                }
+                {player.isCaptain && <span className="text-sm bg-navy-800/50 text-silver-400 px-2 py-0.5 rounded font-bold">C</span>}
               </h1>
 
-              {team &&
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gs-primary border border-gs-border mt-2 mb-6 cursor-pointer hover:border-gs-highlight transition-colors"
-                onClick={() => navigate(`/teams/${team.id}`)}>
-                
+              {team && (
+                <button
+                  onClick={() => navigate(`/app/teams/${team.id}`)}
+                  className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-full bg-navy-900/80 border border-white/6 hover:border-white/6-bright transition-all"
+                >
                   <div
-                  className="w-4 h-4 rounded-full bg-gs-primary flex items-center justify-center text-[8px] font-bold"
-                  style={{
-                    borderBottom: `2px solid ${team.primaryColor}`
-                  }}>
-                  
+                    className="w-4 h-4 rounded bg-navy-800/60 border border-white/6 flex items-center justify-center text-[9px] font-bold text-silver-400"
+                    style={{ borderBottomColor: team.primaryColor ?? '#1D6FE8', borderBottomWidth: 2 }}
+                  >
                     {team.shortName.charAt(0)}
                   </div>
-                  <span className="text-sm text-white font-medium">
-                    {team.name}
-                  </span>
-                </div>
-              }
+                  <span className="text-sm font-medium text-ice-100">{team.name}</span>
+                </button>
+              )}
 
-              <div className="w-full space-y-3 text-sm text-left border-t border-gs-border pt-4">
-                <div className="flex justify-between">
-                  <span className="text-gs-text-secondary flex items-center gap-2">
-                    <Calendar size={16} /> Starost
-                  </span>
-                  <span className="text-white font-medium">
-                    {age} god. (
-                    {new Date(player.dateOfBirth).toLocaleDateString('sr-RS')})
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gs-text-secondary flex items-center gap-2">
-                    <Activity size={16} /> Broj dresa
-                  </span>
-                  <span className="text-white font-medium">
-                    #{player.jerseyNumber}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gs-text-secondary flex items-center gap-2">
-                    <Shield size={16} /> Noga
-                  </span>
-                  <span className="text-white font-medium">
-                    {player.dominantFoot === 'right' ?
-                    'Desna' :
-                    player.dominantFoot === 'left' ?
-                    'Leva' :
-                    'Obe'}
-                  </span>
-                </div>
-                {(player.height || player.weight) &&
-                <div className="flex justify-between">
-                    <span className="text-gs-text-secondary flex items-center gap-2">
-                      <Users size={16} /> Fizionomija
-                    </span>
-                    <span className="text-white font-medium">
-                      {player.height ? `${player.height}cm` : ''}{' '}
-                      {player.height && player.weight ? '/' : ''}{' '}
-                      {player.weight ? `${player.weight}kg` : ''}
-                    </span>
+              <div className="w-full mt-6 space-y-0 border-t border-white/6 pt-4 text-sm">
+                {[
+                  { icon: Calendar,  label: 'Starost',     value: `${age} god. (${new Date(player.dateOfBirth).toLocaleDateString('sr-RS')})` },
+                  { icon: Shield,    label: 'Noga',        value: player.dominantFoot === 'right' ? 'Desna' : player.dominantFoot === 'left' ? 'Leva' : 'Obe' },
+                  ...(player.height || player.weight ? [{ icon: Activity, label: 'Fizionomija', value: [player.height && `${player.height}cm`, player.weight && `${player.weight}kg`].filter(Boolean).join(' / ') }] : []),
+                ].map((row, i, arr) => (
+                  <div key={row.label} className={`flex justify-between items-center py-3 ${i < arr.length - 1 ? 'border-b border-white/6' : ''}`}>
+                    <span className="text-silver-600 flex items-center gap-1.5 text-xs"><row.icon size={13} />{row.label}</span>
+                    <span className="text-ice-100 font-medium text-xs text-right">{row.value}</span>
                   </div>
-                }
+                ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
 
-        {/* Stats & History */}
+        {/* Stats & Events */}
         <div className="lg:col-span-2 space-y-6">
-          <h2 className="text-xl font-heading font-bold text-white flex items-center gap-2">
-            <Trophy className="text-gs-gold" size={20} />
-            Statistika Igrača
-          </h2>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Card className="bg-gs-secondary border-gs-border">
-              <CardContent className="p-4 text-center">
-                <p className="text-gs-text-secondary text-sm mb-1">Odigrano</p>
-                <p className="text-3xl font-bold text-white">
-                  {completedMatches.length}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gs-secondary border-gs-border">
-              <CardContent className="p-4 text-center">
-                <p className="text-gs-text-secondary text-sm mb-1">Golovi</p>
-                <p className="text-3xl font-bold text-gs-highlight">{goals}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gs-secondary border-gs-border">
-              <CardContent className="p-4 text-center">
-                <p className="text-gs-text-secondary text-sm mb-1">
-                  Žuti kartoni
-                </p>
-                <p className="text-3xl font-bold text-gs-gold">{yellowCards}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gs-secondary border-gs-border">
-              <CardContent className="p-4 text-center">
-                <p className="text-gs-text-secondary text-sm mb-1">
-                  Crveni kartoni
-                </p>
-                <p className="text-3xl font-bold text-gs-error">{redCards}</p>
-              </CardContent>
-            </Card>
+          <div className="flex items-center gap-2">
+            <Trophy size={18} className="text-amber-400" />
+            <h2 className="font-heading font-bold text-ice-100">Statistika igrača</h2>
           </div>
 
-          <Card className="bg-gs-secondary border-gs-border mt-6">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-bold text-white mb-4 border-b border-gs-border pb-2">
-                Poslednji Događaji
-              </h3>
-
-              <div className="space-y-3">
-                {completedMatches.length > 0 ?
-                completedMatches.map((match) => {
-                  const playerEvents = match.events.filter(
-                    (e) => e.playerId === player.id
-                  );
-                  if (playerEvents.length === 0) return null;
-                  const isHome = match.homeTeamId === player.teamId;
-                  const oppTeamId = isHome ?
-                  match.awayTeamId :
-                  match.homeTeamId;
-                  const oppTeam = teams.find((t) => t.id === oppTeamId);
-                  return (
-                    <div
-                      key={match.id}
-                      className="flex items-center justify-between p-3 bg-gs-primary rounded-lg border border-gs-border">
-                      
-                        <div className="flex items-center gap-3">
-                          <div className="text-xs text-gs-text-secondary w-16">
-                            {match.date}
-                          </div>
-                          <div className="font-medium text-white text-sm">
-                            vs {oppTeam?.name}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {playerEvents.map((event) =>
-                        <div
-                          key={event.id}
-                          className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded bg-gs-secondary border border-gs-border">
-                          
-                              {event.type === 'goal' &&
-                          <span className="text-gs-highlight">
-                                  ⚽ {event.minute}'
-                                </span>
-                          }
-                              {event.type === 'yellow_card' &&
-                          <span className="text-gs-gold">
-                                  🟨 {event.minute}'
-                                </span>
-                          }
-                              {(event.type === 'red_card' ||
-                          event.type === 'second_yellow') &&
-                          <span className="text-gs-error">
-                                  🟥 {event.minute}'
-                                </span>
-                          }
-                            </div>
-                        )}
-                        </div>
-                      </div>);
-
-                }) :
-
-                <p className="text-gs-text-secondary text-sm text-center py-4">
-                    Nema zabeleženih događaja za ovog igrača.
-                  </p>
-                }
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { label: 'Odigrano',       value: completedMatches.length, color: 'text-ice-100' },
+              { label: 'Golovi',         value: goals,                    color: 'text-blue-400' },
+              { label: 'Žuti kartoni',   value: yellowCards,              color: 'text-amber-400' },
+              { label: 'Crveni kartoni', value: redCards,                 color: 'text-red-400' },
+            ].map(s => (
+              <div key={s.label} className="rounded-xl border border-white/6 bg-navy-800/60 p-4 text-center">
+                <p className={`stat-number text-3xl ${s.color} mb-1`}>{s.value}</p>
+                <p className="text-[11px] text-silver-600">{s.label}</p>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
+
+          {/* Events */}
+          <div className="rounded-xl border border-white/6 bg-navy-800/60 p-6">
+            <h3 className="font-bold text-ice-100 mb-5 pb-4 border-b border-white/6">Poslednji događaji</h3>
+            <div className="space-y-2">
+              {completedMatches.length > 0 ? (() => {
+                const eventsRows = completedMatches
+                  .map(match => {
+                    const playerEvents = match.events.filter(e => e.playerId === player.id);
+                    if (playerEvents.length === 0) return null;
+                    const isHome = match.homeTeamId === player.teamId;
+                    const oppTeam = teams.find(t => t.id === (isHome ? match.awayTeamId : match.homeTeamId));
+                    return { match, playerEvents, oppTeam };
+                  })
+                  .filter(Boolean);
+
+                if (eventsRows.length === 0) {
+                  return <p className="text-silver-400 text-sm text-center py-6">Nema zabeleženih događaja za ovog igrača.</p>;
+                }
+
+                return eventsRows.map(row => {
+                  if (!row) return null;
+                  const { match, playerEvents, oppTeam } = row;
+                  return (
+                    <div key={match.id} className="flex items-center justify-between p-3 rounded-lg bg-navy-900/80 border border-white/6">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-silver-600 w-16">{match.date}</span>
+                        <span className="font-medium text-sm text-ice-100">vs {oppTeam?.name}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        {playerEvents.map(event => (
+                          <div key={event.id} className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-navy-800/60 border border-white/6">
+                            {event.type === 'goal' && <span className="text-blue-400">⚽ {event.minute}'</span>}
+                            {event.type === 'yellow_card' && <span className="text-amber-400">🟨 {event.minute}'</span>}
+                            {(event.type === 'red_card' || event.type === 'second_yellow') && <span className="text-red-400">🟥 {event.minute}'</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                });
+              })() : (
+                <p className="text-silver-400 text-sm text-center py-6">Nema zabeleženih događaja za ovog igrača.</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-    </div>);
-
+    </div>
+  );
 }

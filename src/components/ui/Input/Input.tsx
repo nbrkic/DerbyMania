@@ -1,7 +1,7 @@
 import React, { useState, forwardRef } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-export interface InputProps extends
-  React.InputHTMLAttributes<HTMLInputElement> {
+
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   helperText?: string;
@@ -11,57 +11,34 @@ export interface InputProps extends
   maxLength?: number;
   showCharacterCount?: boolean;
 }
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  (
-  {
-    label,
-    error,
-    helperText,
-    startAdornment,
-    endAdornment,
-    size = 'medium',
-    maxLength,
-    showCharacterCount,
-    disabled,
-    readOnly,
-    type = 'text',
-    className,
-    value,
-    defaultValue,
-    onChange,
-    ...props
-  },
-  ref) =>
-  {
+  ({ label, error, helperText, startAdornment, endAdornment, size = 'medium', maxLength, showCharacterCount, disabled, readOnly, type = 'text', className, value, defaultValue, onChange, ...props }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
     const [inputValue, setInputValue] = useState(value || defaultValue || '');
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setInputValue(e.target.value);
       onChange?.(e);
     };
-    const sizeClasses = {
-      small: 'h-8 text-sm',
-      medium: 'h-10 text-base',
-      large: 'h-12 text-lg'
-    };
+
+    const heights = { small: 'h-8 text-sm', medium: 'h-10 text-sm', large: 'h-12 text-base' };
     const isPassword = type === 'password';
     const currentType = isPassword && showPassword ? 'text' : type;
-    const characterCount = String(inputValue).length;
+
     return (
       <div className="w-full">
-        {label &&
-        <label
-          className={`block mb-1 text-sm font-medium ${disabled ? 'text-gray-400' : 'text-gray-700'}`}>
-          
+        {label && (
+          <label className="block mb-1.5 text-xs font-semibold text-silver-400 uppercase tracking-wider">
             {label}
           </label>
-        }
+        )}
         <div className="relative">
-          {startAdornment &&
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+          {startAdornment && (
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-silver-600">
               {startAdornment}
             </div>
-          }
+          )}
           <input
             {...props}
             ref={ref}
@@ -72,66 +49,36 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             readOnly={readOnly}
             maxLength={maxLength}
             className={`
-              w-full
-              ${sizeClasses[size]}
-              px-3
-              border
-              rounded-md
-              outline-none
-              transition-colors
+              input-field w-full ${heights[size]} px-3 rounded-xl
               ${startAdornment ? 'pl-10' : ''}
               ${endAdornment || isPassword ? 'pr-10' : ''}
-              ${error ? 'border-gray-900 bg-gray-50' : 'border-gray-300 hover:border-gray-400'}
-              ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}
-              ${readOnly ? 'bg-gray-50 cursor-default' : ''}
-              focus:border-gray-900
-              focus:ring-1
-              focus:ring-gray-900
-              ${className || ''}
+              ${error ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : ''}
+              ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+              ${className ?? ''}
             `}
-            aria-invalid={!!error}
-            aria-describedby={
-            error ?
-            `${props.id}-error` :
-            helperText ?
-            `${props.id}-helper` :
-            undefined
-            } />
-          
-          {(endAdornment || isPassword) &&
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
-              {isPassword ?
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="p-1 hover:text-gray-700"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}>
-              
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button> :
-
-            endAdornment
-            }
+          />
+          {(endAdornment || isPassword) && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-silver-600">
+              {isPassword ? (
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="hover:text-silver-300 transition-colors">
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              ) : endAdornment}
             </div>
-          }
+          )}
         </div>
-        <div className="mt-1 flex justify-between">
-          {(error || helperText) &&
-          <span
-            id={error ? `${props.id}-error` : `${props.id}-helper`}
-            className={`text-sm ${error ? 'text-gray-900' : 'text-gray-500'}`}>
-            
-              {error || helperText}
+        <div className="mt-1.5 flex justify-between">
+          {(error || helperText) && (
+            <span className={`text-xs ${error ? 'text-red-400' : 'text-silver-600'}`}>
+              {error ?? helperText}
             </span>
-          }
-          {showCharacterCount && maxLength &&
-          <span className="text-sm text-gray-500">
-              {characterCount}/{maxLength}
-            </span>
-          }
+          )}
+          {showCharacterCount && maxLength && (
+            <span className="text-xs text-silver-600 ml-auto">{String(inputValue).length}/{maxLength}</span>
+          )}
         </div>
-      </div>);
-
+      </div>
+    );
   }
 );
 Input.displayName = 'Input';

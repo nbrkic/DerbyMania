@@ -1,6 +1,6 @@
 {
-  "name": "magic-patterns-vite-template",
-  "version": "0.0.1",
+  "name": "goalstorm-tournament-manager",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,8 +15,7 @@
     "@emotion/react": "^11.13.3",
     "react-router-dom": "^6.26.2",
     "zustand": "latest",
-    "zustand/middleware": "latest",
-    "lucide-react": "0.522.0",
+    "lucide-react": "^0.475.0",
     "recharts": "^2.12.7",
     "framer-motion": "^11.5.4",
     "classnames": "latest",
@@ -24,8 +23,7 @@
     "class-variance-authority": "latest",
     "@floating-ui/react": "^0.27.4",
     "clsx": "latest",
-    "date-fns": "^4.0.0",
-    "date-fns/locale": "latest"
+    "date-fns": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.18",

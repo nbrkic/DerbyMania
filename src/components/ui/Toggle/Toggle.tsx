@@ -1,154 +1,31 @@
-import React, { useState, forwardRef } from 'react';
-import { cva, type VariantProps } from 'class-variance-authority';
-const toggleVariants = cva(
-  'relative inline-flex items-center rounded-full transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2',
-  {
-    variants: {
-      size: {
-        small: 'h-5 w-9',
-        medium: 'h-6 w-11',
-        large: 'h-7 w-14'
-      },
-      disabled: {
-        true: 'cursor-not-allowed opacity-50',
-        false: 'cursor-pointer'
-      }
-    },
-    defaultVariants: {
-      size: 'medium',
-      disabled: false
-    }
-  }
-);
-const thumbVariants = cva(
-  'pointer-events-none inline-block rounded-full bg-white shadow-lg ring-0 transition-transform duration-200 ease-in-out',
-  {
-    variants: {
-      size: {
-        small: 'h-4 w-4',
-        medium: 'h-5 w-5',
-        large: 'h-6 w-6'
-      },
-      checked: {
-        true: 'translate-x-full',
-        false: 'translate-x-0'
-      }
-    },
-    defaultVariants: {
-      size: 'medium',
-      checked: false
-    }
-  }
-);
-const labelVariants = cva('text-gray-700', {
-  variants: {
-    size: {
-      small: 'text-sm',
-      medium: 'text-base',
-      large: 'text-lg'
-    },
-    disabled: {
-      true: 'text-gray-400',
-      false: 'text-gray-700'
-    }
-  },
-  defaultVariants: {
-    size: 'medium',
-    disabled: false
-  }
-});
-export interface ToggleProps extends
-  React.ButtonHTMLAttributes<HTMLButtonElement>,
-  VariantProps<typeof toggleVariants> {
+import React, { useState } from 'react';
+
+interface ToggleProps {
   checked?: boolean;
-  defaultChecked?: boolean;
   onChange?: (checked: boolean) => void;
+  disabled?: boolean;
   label?: string;
-  labelPosition?: 'left' | 'right';
-  icon?: React.ReactNode;
 }
-export const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(
-  (
-  {
-    checked,
-    defaultChecked,
-    onChange,
-    size,
-    disabled,
-    label,
-    labelPosition = 'right',
-    icon,
-    className,
-    ...props
-  },
-  ref) =>
-  {
-    const [isChecked, setIsChecked] = useState(defaultChecked ?? false);
-    const isControlled = checked !== undefined;
-    const handleClick = () => {
-      if (disabled) return;
-      if (isControlled) {
-        onChange?.(!checked);
-      } else {
-        setIsChecked((prev) => !prev);
-        onChange?.(!isChecked);
-      }
-    };
-    const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        handleClick();
-      }
-    };
-    const currentChecked = isControlled ? checked : isChecked;
-    const toggleClasses = toggleVariants({
-      size,
-      disabled
-    });
-    const thumbClasses = thumbVariants({
-      size,
-      checked: currentChecked
-    });
-    const labelClasses = labelVariants({
-      size,
-      disabled
-    });
-    const renderToggle =
-    <button
-      ref={ref}
-      role="switch"
-      aria-checked={currentChecked}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      disabled={disabled}
-      className={toggleClasses}
-      tabIndex={0}
-      {...props}>
-      
-        <span
-        className={`absolute inset-0 ${currentChecked ? 'bg-gray-600' : 'bg-gray-300'} rounded-full transition-colors`} />
-      
-        <span className={thumbClasses}>
-          {icon &&
-        <span className="absolute inset-0 flex items-center justify-center">
-              {icon}
-            </span>
-        }
-        </span>
-      </button>;
 
-    if (!label) return renderToggle;
-    return (
-      <div className="flex items-center gap-2">
-        {labelPosition === 'left' &&
-        <span className={labelClasses}>{label}</span>
-        }
-        {renderToggle}
-        {labelPosition === 'right' &&
-        <span className={labelClasses}>{label}</span>
-        }
-      </div>);
-
-  }
-);
-Toggle.displayName = 'Toggle';
+export const Toggle: React.FC<ToggleProps> = ({ checked = false, onChange, disabled = false, label }) => {
+  const [isOn, setIsOn] = useState(checked);
+  const toggle = () => {
+    if (disabled) return;
+    const next = !isOn;
+    setIsOn(next);
+    onChange?.(next);
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={disabled}
+        className={`relative w-10 h-5 rounded-full transition-all duration-200 focus:outline-none ${isOn ? 'bg-blue-600' : 'bg-navy-600 border border-white/10'} ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${isOn ? 'translate-x-5' : 'translate-x-0'}`} />
+      </button>
+      {label && <span className="text-sm text-silver-400">{label}</span>}
+    </div>
+  );
+};

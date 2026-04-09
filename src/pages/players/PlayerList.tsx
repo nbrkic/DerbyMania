@@ -2,171 +2,145 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Users } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
+
 export default function PlayerList() {
   const { players, teams } = useStore();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
-  const filteredPlayers = players.filter((p) => {
+
+  const filtered = players.filter(p => {
     const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase());
-    const matchesTeam = teamFilter === 'all' || p.teamId === teamFilter;
-    return matchesSearch && matchesTeam;
+    return fullName.includes(searchTerm.toLowerCase()) && (teamFilter === 'all' || p.teamId === teamFilter);
   });
+
   const teamOptions = [
-  {
-    value: 'all',
-    label: 'Sve ekipe'
-  },
-  ...teams.map((t) => ({
-    value: t.id,
-    label: t.name
-  }))];
+    { value: 'all', label: 'Sve ekipe' },
+    ...teams.map(t => ({ value: t.id, label: t.name })),
+  ];
+
+  const positionColors: Record<string, string> = {
+    GK: 'text-amber-400 bg-amber-500/10 border-white/6/20',
+    CB: 'text-blue-400 bg-blue-600/10 border-white/6/20',
+    LB: 'text-blue-400 bg-blue-600/10 border-white/6/20',
+    RB: 'text-blue-400 bg-blue-600/10 border-white/6/20',
+    LWB: 'text-cyan-400 bg-navy-800/50/10 border-white/6/20',
+    RWB: 'text-cyan-400 bg-navy-800/50/10 border-white/6/20',
+    CDM: 'text-emerald-400 bg-emerald-500/10 border-white/6/20',
+    CM: 'text-emerald-400 bg-emerald-500/10 border-white/6/20',
+    CAM: 'text-emerald-400 bg-emerald-500/10 border-white/6/20',
+    LM: 'text-emerald-400 bg-emerald-500/10 border-white/6/20',
+    RM: 'text-emerald-400 bg-emerald-500/10 border-white/6/20',
+    LW: 'text-red-400 bg-navy-800/50/10 border-white/6/20',
+    RW: 'text-red-400 bg-navy-800/50/10 border-white/6/20',
+    CF: 'text-red-400 bg-navy-800/50/10 border-white/6/20',
+    ST: 'text-red-400 bg-navy-800/50/10 border-white/6/20',
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-up">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-heading font-bold text-white">Igrači</h1>
-          <p className="text-gs-text-secondary mt-1">
-            Baza svih registrovanih igrača.
-          </p>
+          <h1 className="font-display text-5xl font-bold tracking-tight text-ice-100">IGRAČI</h1>
+          <p className="text-silver-400 mt-1 text-sm">Baza svih registrovanih igrača.</p>
         </div>
-        <Button
-          onClick={() => navigate('/players/new')}
-          className="bg-gs-accent hover:bg-gs-highlight text-white border-none"
-          leftIcon={<Plus size={18} />}>
-          
+        <Button onClick={() => navigate('/app/players/new')} leftIcon={<Plus size={16} />}>
           Novi igrač
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-gs-secondary p-4 rounded-xl border border-gs-border">
+      <div className="flex flex-col sm:flex-row gap-3 p-4 rounded-xl bg-navy-800/60 border border-white/6">
         <div className="flex-1">
           <Input
             placeholder="Pretraži po imenu i prezimenu..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            startAdornment={
-            <Search size={18} className="text-gs-text-secondary" />
-            }
-            className="bg-gs-primary border-gs-border text-white" />
-          
+            onChange={e => setSearchTerm(e.target.value)}
+            startAdornment={<Search size={16} />}
+          />
         </div>
-        <div className="w-full sm:w-64">
-          <Select
-            value={teamFilter}
-            onChange={(val) => setTeamFilter(val as string)}
-            options={teamOptions} />
-          
+        <div className="w-full sm:w-56">
+          <Select value={teamFilter} onChange={val => setTeamFilter(val as string)} options={teamOptions} />
         </div>
       </div>
 
-      <Card className="bg-gs-secondary border-gs-border overflow-hidden">
+      {/* Table */}
+      <div className="rounded-xl border border-white/6 bg-navy-800/60 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="text-xs text-gs-text-secondary uppercase bg-gs-primary/30 border-b border-gs-border">
+            <thead className="text-[10px] text-silver-600 uppercase tracking-wider bg-navy-900/80 border-b border-white/6">
               <tr>
-                <th className="px-6 py-4">Igrač</th>
-                <th className="px-6 py-4">Broj</th>
-                <th className="px-6 py-4">Pozicija</th>
-                <th className="px-6 py-4">Ekipa</th>
-                <th className="px-6 py-4 text-right">Akcije</th>
+                <th className="px-5 py-4">Igrač</th>
+                <th className="px-4 py-4">Broj</th>
+                <th className="px-4 py-4">Pozicija</th>
+                <th className="px-4 py-4">Ekipa</th>
+                <th className="px-4 py-4 text-right">Akcije</th>
               </tr>
             </thead>
             <tbody>
-              {filteredPlayers.length > 0 ?
-              filteredPlayers.map((player) => {
-                const team = teams.find((t) => t.id === player.teamId);
+              {filtered.length > 0 ? filtered.map((player, i) => {
+                const team = teams.find(t => t.id === player.teamId);
+                const posClass = positionColors[player.position] ?? 'text-silver-400 bg-navy-900/80 border-white/6';
                 return (
-                  <tr
-                    key={player.id}
-                    className="border-b border-gs-border/50 hover:bg-gs-primary/30 transition-colors">
-                    
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gs-primary border border-gs-border flex items-center justify-center text-gs-text-secondary font-bold">
-                            {player.firstName.charAt(0)}
-                            {player.lastName.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-white flex items-center gap-2">
-                              {player.firstName} {player.lastName}
-                              {player.isCaptain &&
-                            <span className="text-[10px] bg-gs-gold text-gs-primary px-1 rounded font-bold">
-                                  C
-                                </span>
-                            }
-                            </p>
-                            <p className="text-xs text-gs-text-secondary">
-                              {new Date().getFullYear() -
-                            new Date(player.dateOfBirth).getFullYear()}{' '}
-                              god.
-                            </p>
-                          </div>
+                  <tr key={player.id} className={`border-t border-white/6 hover:bg-navy-700/50 transition-colors ${i % 2 === 0 ? '' : 'bg-navy-900/80/30'}`}>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-navy-900/80 border border-white/6 flex items-center justify-center font-bold text-sm text-blue-400 flex-shrink-0">
+                          {player.firstName.charAt(0)}{player.lastName.charAt(0)}
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="font-bold text-white">
-                          {player.jerseyNumber}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-1 bg-gs-primary rounded text-xs font-medium text-gs-text-secondary border border-gs-border">
-                          {player.position}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {team ?
-                      <div className="flex items-center gap-2">
-                            <div
-                          className="w-5 h-5 rounded-full bg-gs-primary flex items-center justify-center text-[8px] font-bold"
-                          style={{
-                            borderBottom: `2px solid ${team.primaryColor}`
-                          }}>
-                          
-                              {team.shortName.charAt(0)}
-                            </div>
-                            <span className="text-white">{team.name}</span>
-                          </div> :
-
-                      <span className="text-gs-text-secondary">-</span>
-                      }
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <Button
-                        size="small"
-                        variant="secondary"
-                        onClick={() => navigate(`/players/${player.id}`)}
-                        className="bg-gs-primary text-white border-gs-border hover:bg-gs-border">
-                        
-                          Detalji
-                        </Button>
-                      </td>
-                    </tr>);
-
-              }) :
-
-              <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
-                    <Users
-                    size={48}
-                    className="mx-auto text-gs-text-secondary opacity-50 mb-4" />
-                  
-                    <p className="text-gs-text-secondary">
-                      Nema pronađenih igrača.
-                    </p>
+                        <div>
+                          <p className="font-semibold text-ice-100 flex items-center gap-2">
+                            {player.firstName} {player.lastName}
+                            {player.isCaptain && <span className="text-[10px] bg-navy-800/50 text-silver-400 px-1.5 py-0.5 rounded font-bold">C</span>}
+                          </p>
+                          <p className="text-[11px] text-silver-600">
+                            {new Date().getFullYear() - new Date(player.dateOfBirth).getFullYear()} god.
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="stat-number text-lg text-ice-100 font-bold">#{player.jerseyNumber}</span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`text-[11px] font-bold px-2 py-1 rounded-md border ${posClass}`}>
+                        {player.position}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      {team ? (
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-5 h-5 rounded-md bg-navy-900/80 border border-white/6 flex items-center justify-center text-[9px] font-bold text-silver-400"
+                            style={{ borderBottomColor: team.primaryColor ?? '#1D6FE8', borderBottomWidth: 2 }}
+                          >
+                            {team.shortName.charAt(0)}
+                          </div>
+                          <span className="text-ice-100 text-sm">{team.name}</span>
+                        </div>
+                      ) : <span className="text-silver-600">—</span>}
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <Button size="small" variant="secondary" onClick={() => navigate(`/app/players/${player.id}`)}>
+                        Detalji
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td colSpan={5} className="px-5 py-16 text-center">
+                    <Users size={36} className="mx-auto text-silver-600 mb-3" />
+                    <p className="text-silver-400 text-sm">Nema pronađenih igrača.</p>
                   </td>
                 </tr>
-              }
+              )}
             </tbody>
           </table>
         </div>
-      </Card>
-    </div>);
-
+      </div>
+    </div>
+  );
 }
