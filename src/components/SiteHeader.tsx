@@ -3,6 +3,15 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { NAV_LINKS, isNavLinkActive } from '../lib/site-nav';
 
+function BellIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" />
+      <path d="M10 20a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}
+
 function UserIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -19,14 +28,29 @@ function getInitials(name: string) {
   return (first + last).toUpperCase();
 }
 
-export function UserAvatar({ name, avatarUrl, className }: { name: string; avatarUrl?: string | null; className?: string }) {
+export function UserAvatar({
+  name,
+  avatarUrl,
+  position,
+  className,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  position?: { x: number; y: number };
+  className?: string;
+}) {
   return (
     <div
       title={name}
       className={`shrink-0 rounded-full overflow-hidden bg-red-600 flex items-center justify-center font-bold text-paper-100 ${className}`}
     >
       {avatarUrl ? (
-        <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="w-full h-full object-cover"
+          style={{ objectPosition: `${position?.x ?? 50}% ${position?.y ?? 50}%` }}
+        />
       ) : (
         getInitials(name)
       )}
@@ -46,7 +70,7 @@ function LogoutIcon({ className }: { className?: string }) {
 
 export function SiteHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, unreadNotificationCount } = useAuth();
   const location = useLocation();
   const displayName = profile?.full_name || (user?.user_metadata?.full_name as string | undefined) || user?.email || '';
 
@@ -79,8 +103,21 @@ export function SiteHeader() {
 
           {user ? (
             <div className="hidden md:flex items-center gap-3">
+              <Link to="/obavestenja" title="Obaveštenja" className="relative text-paper-500 hover:text-paper-100 transition-colors">
+                <BellIcon className="w-5 h-5" />
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-paper-100 text-[10px] font-bold flex items-center justify-center">
+                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                  </span>
+                )}
+              </Link>
               <Link to="/profile" title="Tvoj profil">
-                <UserAvatar name={displayName} avatarUrl={profile?.avatar_url} className="w-9 h-9 text-xs hover:ring-2 hover:ring-red-400/60 transition-shadow" />
+                <UserAvatar
+                  name={displayName}
+                  avatarUrl={profile?.avatar_url}
+                  position={profile ? { x: profile.avatar_position_x, y: profile.avatar_position_y } : undefined}
+                  className="w-9 h-9 text-xs hover:ring-2 hover:ring-red-400/60 transition-shadow"
+                />
               </Link>
               <button
                 type="button"
@@ -128,11 +165,30 @@ export function SiteHeader() {
             {user ? (
               <>
                 <Link
+                  to="/obavestenja"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between px-3 py-3 mt-1 text-sm font-medium uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <BellIcon className="w-4 h-4" /> Obaveštenja
+                  </span>
+                  {unreadNotificationCount > 0 && (
+                    <span className="w-5 h-5 rounded-full bg-red-500 text-paper-100 text-[10px] font-bold flex items-center justify-center">
+                      {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                    </span>
+                  )}
+                </Link>
+                <Link
                   to="/profile"
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center gap-3 px-3 py-3 mt-1 hover:bg-ink-800 transition-colors"
                 >
-                  <UserAvatar name={displayName} avatarUrl={profile?.avatar_url} className="w-10 h-10 text-sm" />
+                  <UserAvatar
+                    name={displayName}
+                    avatarUrl={profile?.avatar_url}
+                    position={profile ? { x: profile.avatar_position_x, y: profile.avatar_position_y } : undefined}
+                    className="w-10 h-10 text-sm"
+                  />
                   <span className="text-sm font-medium text-paper-100 truncate">{displayName}</span>
                 </Link>
                 <button

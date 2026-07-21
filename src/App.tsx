@@ -9,6 +9,8 @@ import Profile from './pages/Profile';
 import Teams from './pages/Teams';
 import CreateTeam from './pages/CreateTeam';
 import TeamDetail from './pages/TeamDetail';
+import Notifications from './pages/Notifications';
+import Players from './pages/Players';
 
 export function App() {
   return (
@@ -44,6 +46,15 @@ export function App() {
             }
           />
           <Route path="/timovi/:id" element={<TeamDetail />} />
+          <Route path="/igraci" element={<Players />} />
+          <Route
+            path="/obavestenja"
+            element={
+              <ProtectedRoute>
+                <Notifications />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

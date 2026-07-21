@@ -12,12 +12,15 @@ export type Team = {
   owner_id: string;
   name: string;
   crest_url: string | null;
+  crest_position_x: number;
+  crest_position_y: number;
   banner_url: string | null;
   city: string | null;
   founded_year: number | null;
   sport_id: number;
   sports: { name: string } | null;
   founderName: string | null;
+  playerCount: number;
 };
 
 function SearchIcon({ className }: { className?: string }) {
@@ -30,6 +33,7 @@ function SearchIcon({ className }: { className?: string }) {
 }
 
 const RISE_CLASSES = ['rise-1', 'rise-2', 'rise-3', 'rise-4'];
+const PAGE_SIZE = 9;
 
 export function TeamCard({ team, index }: { team: Team; index: number }) {
   return (
@@ -55,7 +59,12 @@ export function TeamCard({ team, index }: { team: Team; index: number }) {
       <div className="px-5 pb-5 relative">
         <div className="relative z-10 w-16 h-16 -mt-8 mb-3 rounded-full overflow-hidden bg-ink-700 border-4 border-ink-900 ring-2 ring-red-500/30 flex items-center justify-center transition-colors duration-300 group-hover:ring-red-500/60">
           {team.crest_url ? (
-            <img src={team.crest_url} alt="" className="w-full h-full object-cover" />
+            <img
+              src={team.crest_url}
+              alt=""
+              className="w-full h-full object-cover"
+              style={{ objectPosition: `${team.crest_position_x}% ${team.crest_position_y}%` }}
+            />
           ) : (
             <span className="font-display text-lg text-paper-500">{team.name[0]?.toUpperCase()}</span>
           )}
@@ -77,7 +86,7 @@ export function TeamCard({ team, index }: { team: Team; index: number }) {
             Osnivač: <span className="text-paper-100">{team.founderName}</span>
           </p>
         )}
-        <p className="text-xs text-paper-700 uppercase tracking-widest mt-2">0 igrača</p>
+        <p className="text-xs text-paper-700 uppercase tracking-widest mt-2">{team.playerCount} igrača</p>
       </div>
     </Link>
   );
@@ -89,15 +98,16 @@ export default function Teams() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sportFilter, setSportFilter] = useState('');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     async function load() {
       const { data: teamRows } = await supabase
         .from('teams')
-        .select('id, owner_id, name, crest_url, banner_url, city, founded_year, sport_id, sports(name)')
+        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
         .order('created_at', { ascending: false });
 
-      const rows = (teamRows as unknown as Omit<Team, 'founderName'>[]) ?? [];
+      const rows = (teamRows as unknown as Omit<Team, 'founderName' | 'playerCount'>[]) ?? [];
 
       const ownerIds = [...new Set(rows.map((t) => t.owner_id))];
       const { data: founders } = ownerIds.length
@@ -106,7 +116,21 @@ export default function Teams() {
 
       const nameById = new Map((founders ?? []).map((f) => [f.id, f.full_name]));
 
-      setTeams(rows.map((t) => ({ ...t, founderName: nameById.get(t.owner_id) ?? null })));
+      const teamIds = rows.map((t) => t.id);
+      const { data: memberRows } = teamIds.length
+        ? await supabase.from('team_members').select('team_id').in('team_id', teamIds)
+        : { data: [] as { team_id: string }[] };
+
+      const countByTeam = new Map<string, number>();
+      (memberRows ?? []).forEach((m) => countByTeam.set(m.team_id, (countByTeam.get(m.team_id) ?? 0) + 1));
+
+      setTeams(
+        rows.map((t) => ({
+          ...t,
+          founderName: nameById.get(t.owner_id) ?? null,
+          playerCount: countByTeam.get(t.id) ?? 0,
+        }))
+      );
       setLoading(false);
     }
 
@@ -127,6 +151,13 @@ export default function Teams() {
       return matchesSearch && matchesSport;
     });
   }, [teams, search, sportFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, sportFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredTeams.length / PAGE_SIZE));
+  const pagedTeams = filteredTeams.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
@@ -185,20 +216,61 @@ export default function Teams() {
           </div>
         </section>
 
-        <section className="flex-1 max-w-6xl mx-auto px-6 py-16 sm:py-20 w-full">
-          {loading ? (
-            <p className="text-paper-500">Učitavanje…</p>
-          ) : teams.length === 0 ? (
-            <p className="text-paper-500">Još uvek nema timova. Budi prvi koji će ga napraviti.</p>
-          ) : filteredTeams.length === 0 ? (
-            <p className="text-paper-500">Nema timova koji odgovaraju pretrazi.</p>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredTeams.map((team, index) => (
-                <TeamCard key={team.id} team={team} index={index} />
-              ))}
-            </div>
-          )}
+        <section className="flex-1 bg-maroon-900">
+          <div className="max-w-6xl mx-auto px-6 py-16 sm:py-20 w-full">
+            {loading ? (
+              <p className="text-paper-500">Učitavanje…</p>
+            ) : teams.length === 0 ? (
+              <p className="text-paper-500">Još uvek nema timova. Budi prvi koji će ga napraviti.</p>
+            ) : filteredTeams.length === 0 ? (
+              <p className="text-paper-500">Nema timova koji odgovaraju pretrazi.</p>
+            ) : (
+              <>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {pagedTeams.map((team, index) => (
+                    <TeamCard key={team.id} team={team} index={index} />
+                  ))}
+                </div>
+
+                {pageCount > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-12">
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="w-9 h-9 flex items-center justify-center border border-ink-700 text-paper-500 hover:text-paper-100 hover:border-red-400/50 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                      aria-label="Prethodna strana"
+                    >
+                      ‹
+                    </button>
+                    {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPage(p)}
+                        className={`w-9 h-9 flex items-center justify-center text-sm transition-colors ${
+                          p === page
+                            ? 'bg-red-500 text-paper-100 font-semibold'
+                            : 'border border-ink-700 text-paper-500 hover:text-paper-100 hover:border-red-400/50'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                      disabled={page === pageCount}
+                      className="w-9 h-9 flex items-center justify-center border border-ink-700 text-paper-500 hover:text-paper-100 hover:border-red-400/50 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                      aria-label="Sledeća strana"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </section>
       </main>
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type PointerEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
@@ -19,6 +19,7 @@ function CameraIcon({ className }: { className?: string }) {
 }
 
 type Sport = { id: number; name: string };
+type Position = { x: number; y: number };
 
 function ImageField({
   n,
@@ -74,17 +75,124 @@ function ImageField({
   );
 }
 
+function CrestField({
+  n,
+  label,
+  previewUrl,
+  position,
+  onSelect,
+  onPositionChange,
+}: {
+  n: string;
+  label: string;
+  previewUrl: string | null;
+  position: Position;
+  onSelect: (file: File) => void;
+  onPositionChange: (position: Position) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+  const lastPointRef = useRef({ x: 0, y: 0 });
+
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) onSelect(file);
+  }
+
+  function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
+    if (!previewUrl) {
+      inputRef.current?.click();
+      return;
+    }
+    draggingRef.current = true;
+    lastPointRef.current = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handlePointerMove(e: PointerEvent<HTMLDivElement>) {
+    if (!draggingRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const deltaXPercent = ((e.clientX - lastPointRef.current.x) / rect.width) * 100;
+    const deltaYPercent = ((e.clientY - lastPointRef.current.y) / rect.height) * 100;
+    lastPointRef.current = { x: e.clientX, y: e.clientY };
+
+    onPositionChange({
+      x: Math.min(100, Math.max(0, position.x - deltaXPercent)),
+      y: Math.min(100, Math.max(0, position.y - deltaYPercent)),
+    });
+  }
+
+  function handlePointerUp() {
+    draggingRef.current = false;
+  }
+
+  return (
+    <div className="flex flex-col items-center text-center">
+      <label className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-3">
+        <span className="text-red-400 font-bold">{n}</span> {label}
+      </label>
+
+      <div
+        ref={containerRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        className={`relative w-24 h-24 rounded-full overflow-hidden bg-ink-800 border-2 border-dashed border-red-500/40 hover:border-red-400 transition-colors flex items-center justify-center touch-none ${
+          previewUrl ? 'cursor-move' : 'cursor-pointer'
+        }`}
+      >
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt=""
+            draggable={false}
+            className="w-full h-full object-cover select-none"
+            style={{ objectPosition: `${position.x}% ${position.y}%` }}
+          />
+        ) : (
+          <CameraIcon className="w-6 h-6 text-red-400 pointer-events-none" />
+        )}
+      </div>
+
+      <p className="text-xs text-paper-500 mt-2 leading-relaxed max-w-[14rem]">
+        {previewUrl ? 'Prevuci sliku da podesiš poziciju.' : 'JPG, PNG ili WEBP, maks. 5MB.'}
+      </p>
+      {previewUrl && (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="text-xs text-red-400 hover:text-red-300 transition-colors mt-1 uppercase tracking-widest"
+        >
+          Promeni sliku
+        </button>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={handleChange}
+        className="sr-only"
+      />
+    </div>
+  );
+}
+
 function TeamPreviewCard({
   name,
   sportName,
   city,
   crestUrl,
+  crestPosition,
   bannerUrl,
 }: {
   name: string;
   sportName: string | null;
   city: string;
   crestUrl: string | null;
+  crestPosition: Position;
   bannerUrl: string | null;
 }) {
   return (
@@ -96,7 +204,12 @@ function TeamPreviewCard({
       <div className="px-5 pb-5 relative">
         <div className="w-16 h-16 -mt-8 mb-3 rounded-full overflow-hidden bg-ink-800 border-4 border-ink-900 flex items-center justify-center">
           {crestUrl ? (
-            <img src={crestUrl} alt="" className="w-full h-full object-cover" />
+            <img
+              src={crestUrl}
+              alt=""
+              className="w-full h-full object-cover"
+              style={{ objectPosition: `${crestPosition.x}% ${crestPosition.y}%` }}
+            />
           ) : (
             <span className="font-display text-lg text-paper-500">{name ? name[0].toUpperCase() : '?'}</span>
           )}
@@ -125,6 +238,7 @@ export default function CreateTeam() {
   const [city, setCity] = useState('');
   const [crestFile, setCrestFile] = useState<File | null>(null);
   const [crestPreview, setCrestPreview] = useState<string | null>(null);
+  const [crestPosition, setCrestPosition] = useState<Position>({ x: 50, y: 50 });
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +267,7 @@ export default function CreateTeam() {
     setError(null);
     setCrestFile(file);
     setCrestPreview(URL.createObjectURL(file));
+    setCrestPosition({ x: 50, y: 50 });
   }
 
   function handleBannerSelect(file: File) {
@@ -203,6 +318,8 @@ export default function CreateTeam() {
         city: city.trim() || null,
         founded_year: CURRENT_YEAR,
         crest_url: crestUrl,
+        crest_position_x: Math.round(crestPosition.x),
+        crest_position_y: Math.round(crestPosition.y),
         banner_url: bannerUrl,
       });
 
@@ -222,7 +339,9 @@ export default function CreateTeam() {
       <div className="grain" />
       <SiteHeader />
 
-      <main className="flex-1 pt-16 flex flex-col lg:grid lg:grid-cols-2">
+      <main className="flex-1 pt-16 flex flex-col">
+        <div className="flex-1 flex flex-col max-w-6xl mx-auto w-full">
+          <div className="flex-1 flex flex-col lg:grid lg:grid-cols-2 mx-6 lg:border-x border-ink-700">
         {/* ── PREVIEW PANEL ───────────────────────────────────── */}
         <div className="order-2 lg:order-2 flex-1 relative overflow-hidden bg-ink-950 lg:border-l border-ink-700 flex flex-col items-center justify-center px-6 py-14 lg:py-20">
           <div
@@ -245,6 +364,7 @@ export default function CreateTeam() {
             sportName={selectedSportName}
             city={city}
             crestUrl={crestPreview}
+            crestPosition={crestPosition}
             bannerUrl={bannerPreview}
           />
         </div>
@@ -268,17 +388,17 @@ export default function CreateTeam() {
               <TicketField n="02" label="Naziv tima" id="name" type="text" required value={name} onChange={setName} />
               <TicketField n="03" label="Grad" id="city" type="text" value={city} onChange={setCity} />
 
-              <ImageField
+              <CrestField
                 n="04"
-                label="Grb tima (opciono)"
-                shape="circle"
+                label="Grb tima"
                 previewUrl={crestPreview}
+                position={crestPosition}
                 onSelect={handleCrestSelect}
-                hint="JPG, PNG ili WEBP, maks. 5MB."
+                onPositionChange={setCrestPosition}
               />
               <ImageField
                 n="05"
-                label="Baner tima (opciono)"
+                label="Baner tima"
                 shape="banner"
                 previewUrl={bannerPreview}
                 onSelect={handleBannerSelect}
@@ -304,6 +424,8 @@ export default function CreateTeam() {
                 Nazad na timove
               </Link>
             </form>
+          </div>
+        </div>
           </div>
         </div>
       </main>

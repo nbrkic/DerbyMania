@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type PointerEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
@@ -15,33 +15,90 @@ function CameraIcon({ className }: { className?: string }) {
   );
 }
 
-function AvatarField({ file, previewUrl, onSelect }: { file: File | null; previewUrl: string | null; onSelect: (file: File) => void }) {
+type Position = { x: number; y: number };
+
+function AvatarField({
+  file,
+  previewUrl,
+  position,
+  onSelect,
+  onPositionChange,
+}: {
+  file: File | null;
+  previewUrl: string | null;
+  position: Position;
+  onSelect: (file: File) => void;
+  onPositionChange: (position: Position) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+  const lastPointRef = useRef({ x: 0, y: 0 });
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files?.[0];
     if (picked) onSelect(picked);
   }
 
+  function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
+    if (!previewUrl) {
+      inputRef.current?.click();
+      return;
+    }
+    draggingRef.current = true;
+    lastPointRef.current = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handlePointerMove(e: PointerEvent<HTMLDivElement>) {
+    if (!draggingRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const deltaXPercent = ((e.clientX - lastPointRef.current.x) / rect.width) * 100;
+    const deltaYPercent = ((e.clientY - lastPointRef.current.y) / rect.height) * 100;
+    lastPointRef.current = { x: e.clientX, y: e.clientY };
+
+    onPositionChange({
+      x: Math.min(100, Math.max(0, position.x - deltaXPercent)),
+      y: Math.min(100, Math.max(0, position.y - deltaYPercent)),
+    });
+  }
+
+  function handlePointerUp() {
+    draggingRef.current = false;
+  }
+
   return (
     <div>
       <label className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-3">
-        <span className="text-red-400 font-bold">01</span> Profilna slika (opciono)
+        <span className="text-red-400 font-bold">01</span> Profilna slika
       </label>
       <div className="flex items-center gap-4">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="relative w-20 h-20 shrink-0 rounded-full overflow-hidden bg-ink-800 border-2 border-dashed border-red-500/40 hover:border-red-400 transition-colors flex items-center justify-center"
+        <div
+          ref={containerRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          className={`relative w-20 h-20 shrink-0 rounded-full overflow-hidden bg-ink-800 border-2 border-dashed border-red-500/40 hover:border-red-400 transition-colors flex items-center justify-center touch-none ${
+            previewUrl ? 'cursor-move' : 'cursor-pointer'
+          }`}
         >
           {previewUrl ? (
-            <img src={previewUrl} alt="Pregled profilne slike" className="w-full h-full object-cover" />
+            <img
+              src={previewUrl}
+              alt="Pregled profilne slike"
+              draggable={false}
+              className="w-full h-full object-cover select-none"
+              style={{ objectPosition: `${position.x}% ${position.y}%` }}
+            />
           ) : (
-            <CameraIcon className="w-6 h-6 text-red-400" />
+            <CameraIcon className="w-6 h-6 text-red-400 pointer-events-none" />
           )}
-        </button>
+        </div>
         <p className="text-xs text-paper-500 leading-relaxed">
-          {file ? file.name : 'Opciono — JPG, PNG ili WEBP, maks. 5MB. Možeš je dodati i kasnije iz svog naloga.'}
+          {file
+            ? 'Prevuci sliku da podesiš poziciju.'
+            : 'JPG, PNG ili WEBP, maks. 5MB. Možeš je dodati i kasnije iz svog naloga.'}
         </p>
       </div>
       <input
@@ -60,6 +117,7 @@ export default function Register() {
   const navigate = useNavigate();
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarPosition, setAvatarPosition] = useState<Position>({ x: 50, y: 50 });
   const [fullName, setFullName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
@@ -83,9 +141,10 @@ export default function Register() {
     setError(null);
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+    setAvatarPosition({ x: 50, y: 50 });
   }
 
-  async function uploadAvatar(userId: string, file: File) {
+  async function uploadAvatar(userId: string, file: File, position: Position) {
     const ext = file.name.split('.').pop() || 'jpg';
     const path = `${userId}/avatar.${ext}`;
     const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
@@ -95,7 +154,14 @@ export default function Register() {
     }
 
     const { data: publicUrl } = supabase.storage.from('avatars').getPublicUrl(path);
-    const { error: updateError } = await supabase.from('profiles').update({ avatar_url: publicUrl.publicUrl }).eq('id', userId);
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        avatar_url: publicUrl.publicUrl,
+        avatar_position_x: Math.round(position.x),
+        avatar_position_y: Math.round(position.y),
+      })
+      .eq('id', userId);
     if (updateError) {
       console.error('Saving avatar_url failed:', updateError);
       return { error: updateError.message };
@@ -108,7 +174,7 @@ export default function Register() {
   async function handleRetryAvatar() {
     if (!avatarFile || !createdUserId) return;
     setSubmitting(true);
-    const { error: retryError } = await uploadAvatar(createdUserId, avatarFile);
+    const { error: retryError } = await uploadAvatar(createdUserId, avatarFile, avatarPosition);
     setSubmitting(false);
     if (retryError) {
       setError(`Otpremanje slike nije uspelo: ${retryError}`);
@@ -146,7 +212,7 @@ export default function Register() {
       return;
     }
 
-    const { error: avatarError } = await uploadAvatar(user.id, avatarFile);
+    const { error: avatarError } = await uploadAvatar(user.id, avatarFile, avatarPosition);
     setSubmitting(false);
 
     if (avatarError) {
@@ -183,7 +249,13 @@ export default function Register() {
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-7">
-        <AvatarField file={avatarFile} previewUrl={avatarPreview} onSelect={handleAvatarSelect} />
+        <AvatarField
+          file={avatarFile}
+          previewUrl={avatarPreview}
+          position={avatarPosition}
+          onSelect={handleAvatarSelect}
+          onPositionChange={setAvatarPosition}
+        />
         <TicketField n="02" label="Ime i prezime" id="fullName" type="text" autoComplete="name" required value={fullName} onChange={setFullName} />
         <TicketField n="03" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" required value={birthDate} onChange={setBirthDate} />
         <TicketField n="04" label="Broj telefona" id="phone" type="tel" autoComplete="tel" required value={phone} onChange={setPhone} />

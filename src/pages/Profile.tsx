@@ -71,16 +71,29 @@ export default function Profile() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from('teams')
-      .select('id, owner_id, name, crest_url, banner_url, city, founded_year, sport_id, sports(name)')
-      .eq('owner_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        const rows = (data as unknown as Omit<Team, 'founderName'>[]) ?? [];
-        setMyTeams(rows.map((t) => ({ ...t, founderName: null })));
-        setLoadingTeams(false);
-      });
+
+    async function loadMyTeams() {
+      const { data } = await supabase
+        .from('teams')
+        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
+        .eq('owner_id', user!.id)
+        .order('created_at', { ascending: false });
+
+      const rows = (data as unknown as Omit<Team, 'founderName' | 'playerCount'>[]) ?? [];
+
+      const teamIds = rows.map((t) => t.id);
+      const { data: memberRows } = teamIds.length
+        ? await supabase.from('team_members').select('team_id').in('team_id', teamIds)
+        : { data: [] as { team_id: string }[] };
+
+      const countByTeam = new Map<string, number>();
+      (memberRows ?? []).forEach((m) => countByTeam.set(m.team_id, (countByTeam.get(m.team_id) ?? 0) + 1));
+
+      setMyTeams(rows.map((t) => ({ ...t, founderName: null, playerCount: countByTeam.get(t.id) ?? 0 })));
+      setLoadingTeams(false);
+    }
+
+    loadMyTeams();
   }, [user]);
 
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
@@ -125,6 +138,7 @@ export default function Profile() {
         birth_date: birthDate || null,
         phone,
         avatar_url: avatarUrl,
+        ...(avatarFile ? { avatar_position_x: 50, avatar_position_y: 50 } : {}),
         email,
       })
       .eq('id', user.id);
@@ -180,6 +194,13 @@ export default function Profile() {
                 <UserAvatar
                   name={displayName}
                   avatarUrl={avatarPreview ?? profile?.avatar_url}
+                  position={
+                    avatarPreview
+                      ? { x: 50, y: 50 }
+                      : profile
+                        ? { x: profile.avatar_position_x, y: profile.avatar_position_y }
+                        : undefined
+                  }
                   className="w-full h-full text-3xl ring-4 ring-ink-950"
                 />
                 <span className="absolute inset-0 rounded-full bg-ink-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-paper-100">

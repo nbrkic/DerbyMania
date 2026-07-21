@@ -17,7 +17,12 @@ export default function Dashboard() {
     <div className="min-h-screen bg-ink-950 text-paper-100 flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm text-center">
         <Link to="/profile" className="inline-block mb-6">
-          <UserAvatar name={displayName} avatarUrl={profile?.avatar_url} className="w-20 h-20 text-2xl mx-auto" />
+          <UserAvatar
+            name={displayName}
+            avatarUrl={profile?.avatar_url}
+            position={profile ? { x: profile.avatar_position_x, y: profile.avatar_position_y } : undefined}
+            className="w-20 h-20 text-2xl mx-auto"
+          />
         </Link>
 
         <h1 className="font-display text-3xl mb-3">Dobrodošli</h1>
