@@ -6,6 +6,9 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
+import Teams from './pages/Teams';
+import CreateTeam from './pages/CreateTeam';
+import TeamDetail from './pages/TeamDetail';
 
 export function App() {
   return (
@@ -31,6 +34,16 @@ export function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/timovi" element={<Teams />} />
+          <Route
+            path="/timovi/novi"
+            element={
+              <ProtectedRoute>
+                <CreateTeam />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/timovi/:id" element={<TeamDetail />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

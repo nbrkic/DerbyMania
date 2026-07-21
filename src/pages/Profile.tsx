@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { TicketField } from '../components/AuthShell';
+import { TeamCard, type Team } from './Teams';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 
@@ -34,6 +35,8 @@ export default function Profile() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [myTeams, setMyTeams] = useState<Team[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
 
   useEffect(() => {
     if (!seededRef.current && profile && user) {
@@ -65,6 +68,20 @@ export default function Profile() {
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     };
   }, [avatarPreview]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('teams')
+      .select('id, owner_id, name, crest_url, banner_url, city, founded_year, sport_id, sports(name)')
+      .eq('owner_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        const rows = (data as unknown as Omit<Team, 'founderName'>[]) ?? [];
+        setMyTeams(rows.map((t) => ({ ...t, founderName: null })));
+        setLoadingTeams(false);
+      });
+  }, [user]);
 
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -210,6 +227,34 @@ export default function Profile() {
                 Nazad na početnu
               </Link>
             </form>
+          </div>
+        </section>
+
+        <section className="bg-ink-950 border-t border-ink-700">
+          <div className="max-w-6xl mx-auto px-6 py-16 sm:py-20">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 mb-10">
+              <div>
+                <h2 className="font-display text-3xl sm:text-4xl mt-4 leading-tight">Moji timovi</h2>
+              </div>
+              <Link
+                to="/timovi/novi"
+                className="btn-solid px-6 py-3 text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                Napravi novi tim
+              </Link>
+            </div>
+
+            {loadingTeams ? (
+              <p className="text-paper-500">Učitavanje…</p>
+            ) : myTeams.length === 0 ? (
+              <p className="text-paper-500">Još uvek nisi napravio nijedan tim.</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                {myTeams.map((team, index) => (
+                  <TeamCard key={team.id} team={team} index={index} />
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </main>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { SiteHeader } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { DatePicker } from './DatePicker';
+import { Dropdown } from './Dropdown';
 
 // Matches the inset of the site nav's `max-w-6xl mx-auto px-6` container, so
 // content lines up with the logo/nav-button edges instead of floating in its half.
@@ -59,6 +60,28 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
           className="field-input w-full pb-2.5 text-base"
         />
       )}
+    </div>
+  );
+}
+
+type SelectFieldProps = {
+  n: string;
+  label: string;
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  required?: boolean;
+  placeholder?: string;
+};
+
+export function SelectField({ n, label, id, value, onChange, options, placeholder }: SelectFieldProps) {
+  return (
+    <div>
+      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        <span className="text-red-400 font-bold">{n}</span> {label}
+      </label>
+      <Dropdown id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} />
     </div>
   );
 }

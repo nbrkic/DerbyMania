@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
-import { NAV_LINKS } from '../lib/site-nav';
+import { NAV_LINKS, isNavLinkActive } from '../lib/site-nav';
 
 function UserIcon({ className }: { className?: string }) {
   return (
@@ -47,6 +47,7 @@ function LogoutIcon({ className }: { className?: string }) {
 export function SiteHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, profile, signOut } = useAuth();
+  const location = useLocation();
   const displayName = profile?.full_name || (user?.user_metadata?.full_name as string | undefined) || user?.email || '';
 
   async function handleLogout() {
@@ -67,7 +68,9 @@ export function SiteHeader() {
               <Link
                 key={l.label}
                 to={l.href}
-                className="text-xs font-medium uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors"
+                className={`text-xs font-medium uppercase tracking-widest transition-colors ${
+                  isNavLinkActive(l.href, location.pathname) ? 'text-red-400' : 'text-paper-500 hover:text-paper-100'
+                }`}
               >
                 {l.label}
               </Link>
@@ -115,7 +118,9 @@ export function SiteHeader() {
                 key={l.label}
                 to={l.href}
                 onClick={() => setMobileMenuOpen(false)}
-                className="px-3 py-3 text-sm font-medium uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors"
+                className={`px-3 py-3 text-sm font-medium uppercase tracking-widest transition-colors ${
+                  isNavLinkActive(l.href, location.pathname) ? 'text-red-400' : 'text-paper-500 hover:text-paper-100'
+                }`}
               >
                 {l.label}
               </Link>
