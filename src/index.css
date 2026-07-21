@@ -44,3 +44,84 @@ html, body, #root {
 ::-webkit-scrollbar-thumb:hover { background: rgba(194,31,46,0.7); }
 
 ::selection { background: rgba(194,31,46,0.45); color: #fff; }
+
+.btn-solid {
+  background: var(--red-500);
+  color: var(--paper-100);
+  font-weight: 600;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.btn-solid:hover { background: var(--red-400); transform: translateY(-2px); }
+.btn-solid:active { transform: translateY(0); }
+
+.btn-line {
+  background: transparent;
+  border: 1.5px solid var(--line);
+  color: var(--paper-100);
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.btn-line:hover { border-color: var(--paper-100); transform: translateY(-2px); }
+.btn-line:active { transform: translateY(0); }
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise-1 { animation: riseIn 0.6s cubic-bezier(0.16,1,0.3,1) 0.05s both; }
+.rise-2 { animation: riseIn 0.6s cubic-bezier(0.16,1,0.3,1) 0.15s both; }
+.rise-3 { animation: riseIn 0.6s cubic-bezier(0.16,1,0.3,1) 0.25s both; }
+.rise-4 { animation: riseIn 0.6s cubic-bezier(0.16,1,0.3,1) 0.35s both; }
+
+.grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.quote-mark {
+  font-family: Georgia, serif;
+  line-height: 0.6;
+}
+
+.field-input {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid rgba(244,235,225,0.18);
+  color: var(--paper-100);
+  color-scheme: dark;
+  transition: border-color 0.2s ease;
+}
+.field-input:focus {
+  outline: none;
+  border-bottom-color: var(--red-400);
+}
+.field-input::placeholder { color: rgba(244,235,225,0.3); }
+
+.field-input[type='date']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.9) brightness(1.4);
+}
+
+.field-input:-webkit-autofill,
+.field-input:-webkit-autofill:hover,
+.field-input:-webkit-autofill:focus,
+.field-input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--paper-100);
+  -webkit-box-shadow: 0 0 0 1000px var(--ink-900) inset;
+  box-shadow: 0 0 0 1000px var(--ink-900) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.ticket-submit {
+  background: var(--red-500);
+  color: var(--paper-100);
+  transition: background-color 0.3s ease, letter-spacing 0.3s ease;
+}
+.ticket-submit:hover:not(:disabled) {
+  background: var(--red-400);
+  letter-spacing: 0.08em;
+}
+.ticket-submit:disabled { opacity: 0.5; cursor: not-allowed; }
