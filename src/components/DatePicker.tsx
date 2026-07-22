@@ -23,14 +23,15 @@ type DatePickerProps = {
   id: string;
   value: string;
   onChange: (value: string) => void;
+  defaultViewYear?: number;
 };
 
-export function DatePicker({ id, value, onChange }: DatePickerProps) {
+export function DatePicker({ id, value, onChange, defaultViewYear }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const now = new Date();
   const [year, selectedMonth, selectedDay] = value ? value.split('-').map(Number) : [];
 
-  const [viewYear, setViewYear] = useState(year ?? now.getFullYear() - 25);
+  const [viewYear, setViewYear] = useState(year ?? defaultViewYear ?? now.getFullYear() - 25);
   const [viewMonth, setViewMonth] = useState(selectedMonth ? selectedMonth - 1 : 0);
 
   const containerRef = useRef<HTMLDivElement>(null);

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
+import { Dropdown } from '../components/Dropdown';
 
-type Player = {
+export type Player = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
@@ -13,8 +15,10 @@ type Player = {
   teamCount: number;
 };
 
+type Sport = { id: number; name: string };
+
 const RISE_CLASSES = ['rise-1', 'rise-2', 'rise-3', 'rise-4'];
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 12;
 
 function SearchIcon({ className }: { className?: string }) {
   return (
@@ -35,37 +39,52 @@ function teamWord(count: number) {
   return 'timova';
 }
 
-function PlayerCard({ player, index }: { player: Player; index: number }) {
+export function PlayerCard({ player, index }: { player: Player; index: number }) {
   const displayName = player.full_name || 'Igrač bez imena';
   return (
-    <div
-      className={`group relative bg-ink-800 border border-ink-700 border-t-2 border-t-red-500/40 overflow-hidden transition-colors duration-300 hover:bg-ink-700 hover:border-red-500/50 px-6 py-8 flex flex-col items-center text-center ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
+    <Link
+      to={`/igraci/${player.id}`}
+      className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
     >
-      <div className="relative">
-        <div className="absolute inset-0 rounded-full bg-red-500/30 blur-xl scale-0 opacity-0 group-hover:scale-150 group-hover:opacity-100 transition-all duration-500 ease-out" />
-        <UserAvatar
-          name={displayName}
-          avatarUrl={player.avatar_url}
-          position={{ x: player.avatar_position_x, y: player.avatar_position_y }}
-          className="relative w-20 h-20 text-xl ring-2 ring-red-500/30 group-hover:scale-110 transition-transform duration-300 ease-out"
-        />
+      <UserAvatar
+        name={displayName}
+        avatarUrl={player.avatar_url}
+        position={{ x: player.avatar_position_x, y: player.avatar_position_y }}
+        className="w-11 h-11 text-sm ring-1 ring-red-500/30 shrink-0"
+      />
+
+      <div className="min-w-0 flex-1">
+        <h3 className="font-display text-base leading-tight truncate transition-colors duration-200 group-hover:text-red-400">
+          {displayName}
+        </h3>
+        <p className="text-[11px] uppercase tracking-widest text-paper-700 mt-0.5 truncate">
+          Član od {memberSince(player.created_at)}
+        </p>
       </div>
 
-      <h3 className="font-display text-lg mt-4 leading-tight">{displayName}</h3>
-      <span className="block h-0.5 bg-red-500 w-0 group-hover:w-8 transition-all duration-300 mt-1.5" />
-      <p className="text-xs uppercase tracking-widest text-paper-700 mt-2.5">Član od {memberSince(player.created_at)}</p>
-      <p className="text-xs uppercase tracking-widest text-red-400 font-semibold mt-3">
+      <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold shrink-0 whitespace-nowrap">
         {player.teamCount} {teamWord(player.teamCount)}
-      </p>
-    </div>
+      </span>
+    </Link>
   );
 }
 
 export default function Players() {
   const [players, setPlayers] = useState<Player[]>([]);
+  const [sports, setSports] = useState<Sport[]>([]);
+  const [playerSports, setPlayerSports] = useState<Map<string, Set<number>>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [sportFilter, setSportFilter] = useState('');
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    supabase
+      .from('sports')
+      .select('id, name')
+      .order('name')
+      .then(({ data }) => setSports(data ?? []));
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -84,6 +103,17 @@ export default function Players() {
       const countByUser = new Map<string, number>();
       (memberRows ?? []).forEach((m) => countByUser.set(m.user_id, (countByUser.get(m.user_id) ?? 0) + 1));
 
+      const { data: preferredRows } = userIds.length
+        ? await supabase.from('profile_preferred_sports').select('profile_id, sport_id').in('profile_id', userIds)
+        : { data: [] as { profile_id: string; sport_id: number }[] };
+
+      const sportsByPlayer = new Map<string, Set<number>>();
+      (preferredRows ?? []).forEach((r) => {
+        if (!sportsByPlayer.has(r.profile_id)) sportsByPlayer.set(r.profile_id, new Set());
+        sportsByPlayer.get(r.profile_id)!.add(r.sport_id);
+      });
+      setPlayerSports(sportsByPlayer);
+
       setPlayers(rows.map((p) => ({ ...p, teamCount: countByUser.get(p.id) ?? 0 })));
       setLoading(false);
     }
@@ -93,13 +123,16 @@ export default function Players() {
 
   const filteredPlayers = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return players;
-    return players.filter((p) => (p.full_name ?? '').toLowerCase().includes(query));
-  }, [players, search]);
+    return players.filter((p) => {
+      const matchesQuery = !query || (p.full_name ?? '').toLowerCase().includes(query);
+      const matchesSport = !sportFilter || playerSports.get(p.id)?.has(Number(sportFilter));
+      return matchesQuery && matchesSport;
+    });
+  }, [players, search, sportFilter, playerSports]);
 
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, sportFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE));
   const pagedPlayers = filteredPlayers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -128,15 +161,27 @@ export default function Players() {
             </div>
 
             {!loading && players.length > 0 && (
-              <div className="rise-2 relative max-w-sm mt-16">
-                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-500 pointer-events-none" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Pretraži igrače po imenu…"
-                  className="w-full bg-ink-950 border border-ink-700 focus:border-red-400 focus:outline-none pl-10 pr-4 py-2.5 text-sm text-paper-100 placeholder:text-paper-500 transition-colors"
-                />
+              <div className="rise-2 flex flex-col sm:flex-row gap-3 mt-16 max-w-2xl">
+                <div className="relative flex-1 max-w-sm">
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-500 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Pretraži igrače po imenu…"
+                    className="w-full bg-ink-950 border border-ink-700 focus:border-red-400 focus:outline-none pl-10 pr-4 py-2.5 text-sm text-paper-100 placeholder:text-paper-500 transition-colors"
+                  />
+                </div>
+
+                <div className="w-full sm:w-56">
+                  <Dropdown
+                    id="sport-filter"
+                    value={sportFilter}
+                    onChange={setSportFilter}
+                    options={[{ value: '', label: 'Svi sportovi' }, ...sports.map((s) => ({ value: String(s.id), label: s.name }))]}
+                    triggerClassName="w-full bg-ink-950 border border-ink-700 hover:border-red-400/50 focus:border-red-400 focus:outline-none px-4 py-2.5 text-sm text-paper-100 transition-colors text-left flex items-center justify-between gap-3"
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -152,14 +197,14 @@ export default function Players() {
               <p className="text-paper-500">Nema igrača koji odgovaraju pretrazi.</p>
             ) : (
               <>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {pagedPlayers.map((player, index) => (
                     <PlayerCard key={player.id} player={player} index={index} />
                   ))}
                 </div>
 
                 {pageCount > 1 && (
-                  <div className="flex items-center justify-center gap-2 mt-12">
+                  <div className="flex items-center justify-center gap-2 mt-10">
                     <button
                       type="button"
                       onClick={() => setPage((p) => Math.max(1, p - 1))}

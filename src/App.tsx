@@ -11,6 +11,10 @@ import CreateTeam from './pages/CreateTeam';
 import TeamDetail from './pages/TeamDetail';
 import Notifications from './pages/Notifications';
 import Players from './pages/Players';
+import PlayerDetail from './pages/PlayerDetail';
+import Tournaments from './pages/Tournaments';
+import CreateTournament from './pages/CreateTournament';
+import TournamentDetail from './pages/TournamentDetail';
 
 export function App() {
   return (
@@ -47,6 +51,25 @@ export function App() {
           />
           <Route path="/timovi/:id" element={<TeamDetail />} />
           <Route path="/igraci" element={<Players />} />
+          <Route path="/igraci/:id" element={<PlayerDetail />} />
+          <Route path="/turniri" element={<Tournaments />} />
+          <Route
+            path="/turniri/novi"
+            element={
+              <ProtectedRoute>
+                <CreateTournament />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/turniri/:id" element={<TournamentDetail />} />
+          <Route
+            path="/turniri/:id/izmena"
+            element={
+              <ProtectedRoute>
+                <CreateTournament />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/obavestenja"
             element={

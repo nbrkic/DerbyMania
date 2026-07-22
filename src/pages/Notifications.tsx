@@ -13,6 +13,8 @@ type NotificationRow = {
   created_at: string;
   join_request_id: string | null;
   team_join_requests: { status: string } | null;
+  tournament_request_id: string | null;
+  tournament_team_requests: { status: string } | null;
 };
 
 function formatDate(iso: string) {
@@ -42,7 +44,9 @@ export default function Notifications() {
     if (!user) return;
     const { data } = await supabase
       .from('notifications')
-      .select('id, type, title, body, read, created_at, join_request_id, team_join_requests(status)')
+      .select(
+        'id, type, title, body, read, created_at, join_request_id, team_join_requests(status), tournament_request_id, tournament_team_requests(status)'
+      )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -62,14 +66,23 @@ export default function Notifications() {
   }, [user]);
 
   async function respond(notification: NotificationRow, status: 'accepted' | 'rejected') {
-    if (!notification.join_request_id) return;
-    setRespondingId(notification.id);
-    await supabase
-      .from('team_join_requests')
-      .update({ status, responded_at: new Date().toISOString() })
-      .eq('id', notification.join_request_id);
-    setRespondingId(null);
-    await load();
+    if (notification.join_request_id) {
+      setRespondingId(notification.id);
+      await supabase
+        .from('team_join_requests')
+        .update({ status, responded_at: new Date().toISOString() })
+        .eq('id', notification.join_request_id);
+      setRespondingId(null);
+      await load();
+    } else if (notification.tournament_request_id) {
+      setRespondingId(notification.id);
+      await supabase
+        .from('tournament_team_requests')
+        .update({ status, responded_at: new Date().toISOString() })
+        .eq('id', notification.tournament_request_id);
+      setRespondingId(null);
+      await load();
+    }
   }
 
   async function dismiss(id: string) {
@@ -95,10 +108,23 @@ export default function Notifications() {
             ) : (
               <div className="flex flex-col gap-4">
                 {notifications.map((n) => {
-                  const requestStatus = n.type === 'join_request' ? n.team_join_requests?.status : null;
-                  const isPendingJoinRequest = requestStatus === 'pending';
-                  const isAccepted = n.type === 'join_accepted' || requestStatus === 'accepted';
-                  const isRejected = n.type === 'join_rejected' || requestStatus === 'rejected';
+                  const requestStatus =
+                    n.type === 'join_request' || n.type === 'team_invite'
+                      ? n.team_join_requests?.status
+                      : n.type === 'tournament_request'
+                        ? n.tournament_team_requests?.status
+                        : null;
+                  const isPendingAction = requestStatus === 'pending';
+                  const isAccepted =
+                    n.type === 'join_accepted' ||
+                    n.type === 'invite_accepted' ||
+                    n.type === 'tournament_request_accepted' ||
+                    requestStatus === 'accepted';
+                  const isRejected =
+                    n.type === 'join_rejected' ||
+                    n.type === 'invite_rejected' ||
+                    n.type === 'tournament_request_rejected' ||
+                    requestStatus === 'rejected';
                   const accentClass = isAccepted
                     ? 'border-t-green-500/60'
                     : isRejected
@@ -136,7 +162,7 @@ export default function Notifications() {
                         </span>
                       </div>
 
-                      {isPendingJoinRequest && (
+                      {isPendingAction && (
                         <div className="flex gap-3 mt-4">
                           <button
                             type="button"

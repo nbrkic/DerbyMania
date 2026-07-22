@@ -9,6 +9,10 @@ type Profile = {
   avatar_position_y: number;
   birth_date: string | null;
   phone: string | null;
+  dominant_hand: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  preferred_positions: string[];
 };
 
 type AuthContextValue = {
@@ -52,7 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const requestId = ++profileRequestId.current;
     const { data } = await supabase
       .from('profiles')
-      .select('full_name, avatar_url, avatar_position_x, avatar_position_y, birth_date, phone')
+      .select(
+        'full_name, avatar_url, avatar_position_x, avatar_position_y, birth_date, phone, dominant_hand, height_cm, weight_kg, preferred_positions'
+      )
       .eq('id', userId)
       .single();
     // Discard results from a fetch that a newer one has since superseded,

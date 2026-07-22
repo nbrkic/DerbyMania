@@ -38,16 +38,17 @@ type TicketFieldProps = {
   autoComplete?: string;
   required?: boolean;
   minLength?: number;
+  dateDefaultViewYear?: number;
 };
 
-export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength }: TicketFieldProps) {
+export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength, dateDefaultViewYear }: TicketFieldProps) {
   return (
     <div>
       <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
         <span className="text-red-400 font-bold">{n}</span> {label}
       </label>
       {type === 'date' ? (
-        <DatePicker id={id} value={value} onChange={onChange} />
+        <DatePicker id={id} value={value} onChange={onChange} defaultViewYear={dateDefaultViewYear} />
       ) : (
         <input
           id={id}
@@ -60,6 +61,36 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
           className="field-input w-full pb-2.5 text-base"
         />
       )}
+    </div>
+  );
+}
+
+type TextAreaFieldProps = {
+  n: string;
+  label: string;
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  rows?: number;
+  placeholder?: string;
+};
+
+export function TextAreaField({ n, label, id, value, onChange, required, rows = 4, placeholder }: TextAreaFieldProps) {
+  return (
+    <div>
+      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        <span className="text-red-400 font-bold">{n}</span> {label}
+      </label>
+      <textarea
+        id={id}
+        required={required}
+        rows={rows}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="field-input w-full pb-2.5 text-base resize-none"
+      />
     </div>
   );
 }
@@ -82,6 +113,51 @@ export function SelectField({ n, label, id, value, onChange, options, placeholde
         <span className="text-red-400 font-bold">{n}</span> {label}
       </label>
       <Dropdown id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} />
+    </div>
+  );
+}
+
+type MultiSelectPillsProps = {
+  n: string;
+  label: string;
+  value: string[];
+  onChange: (value: string[]) => void;
+  options: { value: string; label: string }[];
+};
+
+export function MultiSelectPills({ n, label, value, onChange, options }: MultiSelectPillsProps) {
+  function toggle(optionValue: string) {
+    if (value.includes(optionValue)) {
+      onChange(value.filter((v) => v !== optionValue));
+    } else {
+      onChange([...value, optionValue]);
+    }
+  }
+
+  return (
+    <div>
+      <label className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-3">
+        <span className="text-red-400 font-bold">{n}</span> {label}
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => {
+          const selected = value.includes(o.value);
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => toggle(o.value)}
+              className={`px-4 py-2 text-xs uppercase tracking-widest border transition-colors ${
+                selected
+                  ? 'bg-red-500 border-red-500 text-paper-100 font-semibold'
+                  : 'border-ink-700 text-paper-500 hover:border-red-400/50 hover:text-paper-100'
+              }`}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

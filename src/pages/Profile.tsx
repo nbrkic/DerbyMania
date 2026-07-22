@@ -4,8 +4,17 @@ import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
-import { TicketField } from '../components/AuthShell';
+import { TicketField, SelectField, MultiSelectPills } from '../components/AuthShell';
+import {
+  FOOTBALL_SPORT_NAMES,
+  BASKETBALL_SPORT_NAMES,
+  FOOTBALL_POSITION_OPTIONS,
+  BASKETBALL_POSITION_OPTIONS,
+  FOOTBALL_POSITION_VALUES,
+  BASKETBALL_POSITION_VALUES,
+} from '../lib/positions';
 import { TeamCard, type Team } from './Teams';
+import { TournamentCard, type Tournament } from './Tournaments';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 
@@ -18,7 +27,33 @@ function CameraIcon({ className }: { className?: string }) {
   );
 }
 
-type SavedValues = { fullName: string; birthDate: string; phone: string; email: string };
+type SavedValues = {
+  fullName: string;
+  birthDate: string;
+  phone: string;
+  email: string;
+  dominantHand: string;
+  heightCm: string;
+  weightKg: string;
+  positions: string[];
+  sportIds: number[];
+};
+
+type Sport = { id: number; name: string };
+
+const HAND_OPTIONS = [
+  { value: 'levak', label: 'Levak' },
+  { value: 'desnjak', label: 'Dešnjak' },
+  { value: 'oba', label: 'Oba' },
+];
+
+function sameIds(a: number[], b: number[]) {
+  return a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
+}
+
+function samePositions(a: string[], b: string[]) {
+  return a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
+}
 
 export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
@@ -31,29 +66,69 @@ export default function Profile() {
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [dominantHand, setDominantHand] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+  const [weightKg, setWeightKg] = useState('');
+  const [positions, setPositions] = useState<string[]>([]);
+  const [sports, setSports] = useState<Sport[]>([]);
+  const [selectedSportIds, setSelectedSportIds] = useState<number[]>([]);
+  const [sportsLoaded, setSportsLoaded] = useState(false);
   const [saved, setSaved] = useState<SavedValues | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [myTeams, setMyTeams] = useState<Team[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
+  const [memberTeams, setMemberTeams] = useState<Team[]>([]);
+  const [loadingMemberTeams, setLoadingMemberTeams] = useState(true);
+  const [myTournaments, setMyTournaments] = useState<Tournament[]>([]);
+  const [loadingTournaments, setLoadingTournaments] = useState(true);
 
   useEffect(() => {
-    if (!seededRef.current && profile && user) {
-      const initial = {
+    supabase
+      .from('sports')
+      .select('id, name')
+      .order('name')
+      .then(({ data }) => setSports(data ?? []));
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('profile_preferred_sports')
+      .select('sport_id')
+      .eq('profile_id', user.id)
+      .then(({ data }) => {
+        setSelectedSportIds((data ?? []).map((r) => r.sport_id));
+        setSportsLoaded(true);
+      });
+  }, [user]);
+
+  useEffect(() => {
+    if (!seededRef.current && profile && user && sportsLoaded) {
+      const initial: SavedValues = {
         fullName: profile.full_name ?? '',
         birthDate: profile.birth_date ?? '',
         phone: profile.phone ?? '',
         email: user.email ?? '',
+        dominantHand: profile.dominant_hand ?? '',
+        heightCm: profile.height_cm != null ? String(profile.height_cm) : '',
+        weightKg: profile.weight_kg != null ? String(profile.weight_kg) : '',
+        positions: profile.preferred_positions ?? [],
+        sportIds: selectedSportIds,
       };
       setFullName(initial.fullName);
       setBirthDate(initial.birthDate);
       setPhone(initial.phone);
       setEmail(initial.email);
+      setDominantHand(initial.dominantHand);
+      setHeightCm(initial.heightCm);
+      setWeightKg(initial.weightKg);
+      setPositions(initial.positions);
       setSaved(initial);
       seededRef.current = true;
     }
-  }, [profile, user]);
+  }, [profile, user, sportsLoaded, selectedSportIds]);
 
   const hasChanges =
     !!avatarFile ||
@@ -61,7 +136,12 @@ export default function Profile() {
       (fullName !== saved.fullName ||
         birthDate !== saved.birthDate ||
         phone !== saved.phone ||
-        email !== saved.email));
+        email !== saved.email ||
+        dominantHand !== saved.dominantHand ||
+        heightCm !== saved.heightCm ||
+        weightKg !== saved.weightKg ||
+        !samePositions(positions, saved.positions) ||
+        !sameIds(selectedSportIds, saved.sportIds)));
 
   useEffect(() => {
     return () => {
@@ -96,6 +176,75 @@ export default function Profile() {
     loadMyTeams();
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    async function loadMemberTeams() {
+      const { data: membershipRows } = await supabase.from('team_members').select('team_id').eq('user_id', user!.id);
+      const teamIds = (membershipRows ?? []).map((m) => m.team_id);
+
+      if (!teamIds.length) {
+        setMemberTeams([]);
+        setLoadingMemberTeams(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('teams')
+        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
+        .in('id', teamIds)
+        .order('created_at', { ascending: false });
+
+      const rows = (data as unknown as Omit<Team, 'founderName' | 'playerCount'>[]) ?? [];
+
+      const ownerIds = [...new Set(rows.map((t) => t.owner_id))];
+      const { data: founders } = ownerIds.length
+        ? await supabase.from('public_profiles').select('id, full_name').in('id', ownerIds)
+        : { data: [] as { id: string; full_name: string | null }[] };
+      const nameById = new Map((founders ?? []).map((f) => [f.id, f.full_name]));
+
+      const { data: allMemberRows } = await supabase.from('team_members').select('team_id').in('team_id', teamIds);
+      const countByTeam = new Map<string, number>();
+      (allMemberRows ?? []).forEach((m) => countByTeam.set(m.team_id, (countByTeam.get(m.team_id) ?? 0) + 1));
+
+      setMemberTeams(
+        rows.map((t) => ({ ...t, founderName: nameById.get(t.owner_id) ?? null, playerCount: countByTeam.get(t.id) ?? 0 }))
+      );
+      setLoadingMemberTeams(false);
+    }
+
+    loadMemberTeams();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    async function loadMyTournaments() {
+      const { data: tournamentRows } = await supabase
+        .from('tournaments')
+        .select(
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, end_date, max_teams, sport_id, sports(name)'
+        )
+        .eq('owner_id', user!.id)
+        .order('created_at', { ascending: false });
+
+      const rows = (tournamentRows as unknown as Omit<Tournament, 'founderName' | 'teamCount'>[]) ?? [];
+
+      const tournamentIds = rows.map((t) => t.id);
+      const { data: teamRows } = tournamentIds.length
+        ? await supabase.from('tournament_teams').select('tournament_id').in('tournament_id', tournamentIds)
+        : { data: [] as { tournament_id: string }[] };
+
+      const countByTournament = new Map<string, number>();
+      (teamRows ?? []).forEach((t) => countByTournament.set(t.tournament_id, (countByTournament.get(t.tournament_id) ?? 0) + 1));
+
+      setMyTournaments(rows.map((t) => ({ ...t, founderName: null, teamCount: countByTournament.get(t.id) ?? 0 })));
+      setLoadingTournaments(false);
+    }
+
+    loadMyTournaments();
+  }, [user]);
+
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -111,6 +260,15 @@ export default function Profile() {
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
+
+    if (heightCm && (Number(heightCm) < 100 || Number(heightCm) > 250)) {
+      setError('Visina mora biti između 100 i 250 cm.');
+      return;
+    }
+    if (weightKg && (Number(weightKg) < 30 || Number(weightKg) > 250)) {
+      setError('Težina mora biti između 30 i 250 kg.');
+      return;
+    }
 
     setError(null);
     setSuccess(null);
@@ -140,6 +298,10 @@ export default function Profile() {
         avatar_url: avatarUrl,
         ...(avatarFile ? { avatar_position_x: 50, avatar_position_y: 50 } : {}),
         email,
+        dominant_hand: dominantHand || null,
+        height_cm: heightCm ? Number(heightCm) : null,
+        weight_kg: weightKg ? Number(weightKg) : null,
+        preferred_positions: positions,
       })
       .eq('id', user.id);
 
@@ -147,6 +309,18 @@ export default function Profile() {
       setSaving(false);
       setError(`Čuvanje podataka nije uspelo: ${updateError.message}`);
       return;
+    }
+
+    await supabase.from('profile_preferred_sports').delete().eq('profile_id', user.id);
+    if (selectedSportIds.length) {
+      const { error: sportsError } = await supabase
+        .from('profile_preferred_sports')
+        .insert(selectedSportIds.map((sportId) => ({ profile_id: user.id, sport_id: sportId })));
+      if (sportsError) {
+        setSaving(false);
+        setError(`Čuvanje sportova nije uspelo: ${sportsError.message}`);
+        return;
+      }
     }
 
     if (email !== user.email) {
@@ -160,12 +334,29 @@ export default function Profile() {
 
     await refreshProfile();
     setAvatarFile(null);
-    setSaved({ fullName, birthDate, phone, email });
+    setSaved({ fullName, birthDate, phone, email, dominantHand, heightCm, weightKg, positions, sportIds: selectedSportIds });
     setSaving(false);
     setSuccess('Promene su sačuvane.');
   }
 
   const displayName = fullName || user?.email || '';
+  const selectedSportNames = sports.filter((s) => selectedSportIds.includes(s.id)).map((s) => s.name);
+  const showFootballPositions = selectedSportNames.some((n) => FOOTBALL_SPORT_NAMES.includes(n));
+  const showBasketballPositions = selectedSportNames.some((n) => BASKETBALL_SPORT_NAMES.includes(n));
+  const footballPositionsN = '09';
+  const basketballPositionsN = showFootballPositions ? '10' : '09';
+
+  useEffect(() => {
+    if (!showFootballPositions) {
+      setPositions((prev) => prev.filter((p) => !FOOTBALL_POSITION_VALUES.includes(p)));
+    }
+  }, [showFootballPositions]);
+
+  useEffect(() => {
+    if (!showBasketballPositions) {
+      setPositions((prev) => prev.filter((p) => !BASKETBALL_POSITION_VALUES.includes(p)));
+    }
+  }, [showBasketballPositions]);
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
@@ -226,6 +417,51 @@ export default function Profile() {
               <TicketField n="03" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} />
               <TicketField n="04" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
 
+              <MultiSelectPills
+                n="05"
+                label="Preferirani sportovi"
+                value={selectedSportIds.map(String)}
+                onChange={(vals) => setSelectedSportIds(vals.map(Number))}
+                options={sports.map((s) => ({ value: String(s.id), label: s.name }))}
+              />
+
+              <SelectField
+                n="06"
+                label="Dominantna ruka"
+                id="dominantHand"
+                placeholder="Izaberi"
+                value={dominantHand}
+                onChange={setDominantHand}
+                options={HAND_OPTIONS}
+              />
+
+              <TicketField n="07" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} />
+              <TicketField n="08" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} />
+
+              {showFootballPositions && (
+                <MultiSelectPills
+                  n={footballPositionsN}
+                  label="Preferirane pozicije (Fudbal)"
+                  value={positions.filter((p) => FOOTBALL_POSITION_VALUES.includes(p))}
+                  onChange={(vals) =>
+                    setPositions((prev) => [...prev.filter((p) => !FOOTBALL_POSITION_VALUES.includes(p)), ...vals])
+                  }
+                  options={FOOTBALL_POSITION_OPTIONS}
+                />
+              )}
+
+              {showBasketballPositions && (
+                <MultiSelectPills
+                  n={basketballPositionsN}
+                  label="Preferirane pozicije (Košarka)"
+                  value={positions.filter((p) => BASKETBALL_POSITION_VALUES.includes(p))}
+                  onChange={(vals) =>
+                    setPositions((prev) => [...prev.filter((p) => !BASKETBALL_POSITION_VALUES.includes(p)), ...vals])
+                  }
+                  options={BASKETBALL_POSITION_OPTIONS}
+                />
+              )}
+
               {error && (
                 <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-2">{error}</p>
               )}
@@ -273,6 +509,44 @@ export default function Profile() {
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
                 {myTeams.map((team, index) => (
                   <TeamCard key={team.id} team={team} index={index} />
+                ))}
+              </div>
+            )}
+
+            <h2 className="font-display text-3xl sm:text-4xl mt-16 mb-10 leading-tight">Timovi u kojima si član</h2>
+
+            {loadingMemberTeams ? (
+              <p className="text-paper-500">Učitavanje…</p>
+            ) : memberTeams.length === 0 ? (
+              <p className="text-paper-500">Nisi još član nijednog tima koji nije tvoj.</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                {memberTeams.map((team, index) => (
+                  <TeamCard key={team.id} team={team} index={index} />
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 mt-16 mb-10">
+              <div>
+                <h2 className="font-display text-3xl sm:text-4xl leading-tight">Turniri koje si kreirao</h2>
+              </div>
+              <Link
+                to="/turniri/novi"
+                className="btn-solid px-6 py-3 text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                Napravi novi turnir
+              </Link>
+            </div>
+
+            {loadingTournaments ? (
+              <p className="text-paper-500">Učitavanje…</p>
+            ) : myTournaments.length === 0 ? (
+              <p className="text-paper-500">Još uvek nisi napravio nijedan turnir.</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                {myTournaments.map((tournament, index) => (
+                  <TournamentCard key={tournament.id} tournament={tournament} index={index} />
                 ))}
               </div>
             )}
