@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
@@ -31,6 +31,8 @@ function StatBlock({ label, value }: { label: string; value: string }) {
 
 export default function TeamDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const fromTournamentId = searchParams.get('turnir');
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -279,6 +281,15 @@ export default function TeamDetail() {
                 </p>
               )}
 
+              {fromTournamentId && (
+                <Link
+                  to={`/turniri/${fromTournamentId}`}
+                  className="btn-line px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 mb-10"
+                >
+                  Nazad na turnir
+                </Link>
+              )}
+
               {team.description && (
                 <div className="mb-10">
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">O timu</span>
@@ -295,7 +306,7 @@ export default function TeamDetail() {
                 ) : (
                   <div className="grid sm:grid-cols-2 gap-3">
                     {members.map((member, index) => (
-                      <PlayerCard key={member.id} player={member} index={index} />
+                      <PlayerCard key={member.id} player={member} index={index} isCaptain={member.id === team.owner_id} />
                     ))}
                   </div>
                 )}

@@ -13,6 +13,7 @@ export type Player = {
   avatar_position_y: number;
   created_at: string;
   teamCount: number;
+  career_football_goals: number;
 };
 
 type Sport = { id: number; name: string };
@@ -39,19 +40,37 @@ function teamWord(count: number) {
   return 'timova';
 }
 
-export function PlayerCard({ player, index }: { player: Player; index: number }) {
+export function PlayerCard({
+  player,
+  index,
+  isCaptain,
+}: {
+  player: Player;
+  index: number;
+  isCaptain?: boolean;
+}) {
   const displayName = player.full_name || 'Igrač bez imena';
   return (
     <Link
       to={`/igraci/${player.id}`}
       className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
     >
-      <UserAvatar
-        name={displayName}
-        avatarUrl={player.avatar_url}
-        position={{ x: player.avatar_position_x, y: player.avatar_position_y }}
-        className="w-11 h-11 text-sm ring-1 ring-red-500/30 shrink-0"
-      />
+      <div className="relative shrink-0">
+        <UserAvatar
+          name={displayName}
+          avatarUrl={player.avatar_url}
+          position={{ x: player.avatar_position_x, y: player.avatar_position_y }}
+          className="w-11 h-11 text-sm ring-1 ring-red-500/30"
+        />
+        {isCaptain && (
+          <span
+            title="Kapiten"
+            className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 ring-2 ring-ink-800 flex items-center justify-center text-[9px] font-bold text-ink-950"
+          >
+            C
+          </span>
+        )}
+      </div>
 
       <div className="min-w-0 flex-1">
         <h3 className="font-display text-base leading-tight truncate transition-colors duration-200 group-hover:text-red-400">
@@ -62,9 +81,14 @@ export function PlayerCard({ player, index }: { player: Player; index: number })
         </p>
       </div>
 
-      <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold shrink-0 whitespace-nowrap">
-        {player.teamCount} {teamWord(player.teamCount)}
-      </span>
+      <div className="flex flex-col items-end gap-0.5 shrink-0">
+        <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold whitespace-nowrap">
+          {player.teamCount} {teamWord(player.teamCount)}
+        </span>
+        <span className="text-[10px] uppercase tracking-widest text-paper-700 whitespace-nowrap">
+          {player.career_football_goals} {player.career_football_goals === 1 ? 'gol' : 'golova'}
+        </span>
+      </div>
     </Link>
   );
 }
@@ -76,6 +100,7 @@ export default function Players() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sportFilter, setSportFilter] = useState('');
+  const [goalSort, setGoalSort] = useState('');
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -90,7 +115,7 @@ export default function Players() {
     async function load() {
       const { data } = await supabase
         .from('public_profiles')
-        .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at')
+        .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, career_football_goals')
         .order('full_name', { ascending: true });
 
       const rows = (data as unknown as Omit<Player, 'teamCount'>[]) ?? [];
@@ -123,16 +148,24 @@ export default function Players() {
 
   const filteredPlayers = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return players.filter((p) => {
+    const filtered = players.filter((p) => {
       const matchesQuery = !query || (p.full_name ?? '').toLowerCase().includes(query);
       const matchesSport = !sportFilter || playerSports.get(p.id)?.has(Number(sportFilter));
       return matchesQuery && matchesSport;
     });
-  }, [players, search, sportFilter, playerSports]);
+
+    if (goalSort === 'desc') {
+      return [...filtered].sort((a, b) => b.career_football_goals - a.career_football_goals);
+    }
+    if (goalSort === 'asc') {
+      return [...filtered].sort((a, b) => a.career_football_goals - b.career_football_goals);
+    }
+    return filtered;
+  }, [players, search, sportFilter, playerSports, goalSort]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, sportFilter]);
+  }, [search, sportFilter, goalSort]);
 
   const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE));
   const pagedPlayers = filteredPlayers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -161,8 +194,8 @@ export default function Players() {
             </div>
 
             {!loading && players.length > 0 && (
-              <div className="rise-2 flex flex-col sm:flex-row gap-3 mt-16 max-w-2xl">
-                <div className="relative flex-1 max-w-sm">
+              <div className="rise-2 flex flex-col sm:flex-row sm:items-end gap-4 mt-16 w-full">
+                <div className="relative flex-1">
                   <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-500 pointer-events-none" />
                   <input
                     type="text"
@@ -174,11 +207,31 @@ export default function Players() {
                 </div>
 
                 <div className="w-full sm:w-56">
+                  <label htmlFor="sport-filter" className="block text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+                    Sport
+                  </label>
                   <Dropdown
                     id="sport-filter"
                     value={sportFilter}
                     onChange={setSportFilter}
                     options={[{ value: '', label: 'Svi sportovi' }, ...sports.map((s) => ({ value: String(s.id), label: s.name }))]}
+                    triggerClassName="w-full bg-ink-950 border border-ink-700 hover:border-red-400/50 focus:border-red-400 focus:outline-none px-4 py-2.5 text-sm text-paper-100 transition-colors text-left flex items-center justify-between gap-3"
+                  />
+                </div>
+
+                <div className="w-full sm:w-56">
+                  <label htmlFor="goal-sort" className="block text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+                    Sortiraj po golovima
+                  </label>
+                  <Dropdown
+                    id="goal-sort"
+                    value={goalSort}
+                    onChange={setGoalSort}
+                    options={[
+                      { value: '', label: 'Podrazumevano' },
+                      { value: 'desc', label: 'Golovi: najviše prvo' },
+                      { value: 'asc', label: 'Golovi: najmanje prvo' },
+                    ]}
                     triggerClassName="w-full bg-ink-950 border border-ink-700 hover:border-red-400/50 focus:border-red-400 focus:outline-none px-4 py-2.5 text-sm text-paper-100 transition-colors text-left flex items-center justify-between gap-3"
                   />
                 </div>

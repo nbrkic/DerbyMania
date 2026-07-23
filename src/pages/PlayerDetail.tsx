@@ -13,6 +13,7 @@ import {
   POSITION_LABELS,
 } from '../lib/positions';
 import { TeamCard, type Team } from './Teams';
+import { TournamentCard, type Tournament } from './Tournaments';
 
 type PlayerDetail = {
   id: string;
@@ -25,6 +26,8 @@ type PlayerDetail = {
   height_cm: number | null;
   weight_kg: number | null;
   age: number | null;
+  city: string | null;
+  career_football_goals: number;
   preferred_positions: string[];
 };
 
@@ -69,6 +72,7 @@ export default function PlayerDetail() {
   const [player, setPlayer] = useState<PlayerDetail | null>(null);
   const [sportNames, setSportNames] = useState<string[]>([]);
   const [memberTeams, setMemberTeams] = useState<Team[]>([]);
+  const [participatedTournaments, setParticipatedTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [ownedTeams, setOwnedTeams] = useState<OwnedTeam[]>([]);
@@ -84,7 +88,7 @@ export default function PlayerDetail() {
       const { data: playerRow } = await supabase
         .from('public_profiles')
         .select(
-          'id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, dominant_hand, height_cm, weight_kg, age, preferred_positions'
+          'id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, dominant_hand, height_cm, weight_kg, age, city, career_football_goals, preferred_positions'
         )
         .eq('id', id)
         .single();
@@ -129,6 +133,53 @@ export default function PlayerDetail() {
           );
         } else {
           setMemberTeams([]);
+        }
+
+        if (memberTeamIds.length) {
+          const { data: participationRows } = await supabase
+            .from('tournament_teams')
+            .select('tournament_id')
+            .in('team_id', memberTeamIds);
+          const tournamentIds = [...new Set((participationRows ?? []).map((p) => p.tournament_id))];
+
+          if (tournamentIds.length) {
+            const { data: tournamentRows } = await supabase
+              .from('tournaments')
+              .select(
+                'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, max_teams, sport_id, status, sports(name)'
+              )
+              .in('id', tournamentIds)
+              .order('created_at', { ascending: false });
+
+            const tRows = (tournamentRows as unknown as Omit<Tournament, 'founderName' | 'teamCount'>[]) ?? [];
+
+            const tOwnerIds = [...new Set(tRows.map((t) => t.owner_id))];
+            const { data: tFounders } = tOwnerIds.length
+              ? await supabase.from('public_profiles').select('id, full_name').in('id', tOwnerIds)
+              : { data: [] as { id: string; full_name: string | null }[] };
+            const tNameById = new Map((tFounders ?? []).map((f) => [f.id, f.full_name]));
+
+            const { data: allTournamentTeamRows } = await supabase
+              .from('tournament_teams')
+              .select('tournament_id')
+              .in('tournament_id', tournamentIds);
+            const countByTournament = new Map<string, number>();
+            (allTournamentTeamRows ?? []).forEach((t) =>
+              countByTournament.set(t.tournament_id, (countByTournament.get(t.tournament_id) ?? 0) + 1)
+            );
+
+            setParticipatedTournaments(
+              tRows.map((t) => ({
+                ...t,
+                founderName: tNameById.get(t.owner_id) ?? null,
+                teamCount: countByTournament.get(t.id) ?? 0,
+              }))
+            );
+          } else {
+            setParticipatedTournaments([]);
+          }
+        } else {
+          setParticipatedTournaments([]);
         }
       }
 
@@ -254,7 +305,10 @@ export default function PlayerDetail() {
                   {player.full_name || 'Igrač bez imena'}
                 </h1>
                 <div className="w-10 h-0.5 bg-red-500 mt-3 mb-3" />
-                <p className="text-xs uppercase tracking-widest text-paper-500">Član od {memberSince(player.created_at)}</p>
+                <p className="text-xs uppercase tracking-widest text-paper-500">
+                  Član od {memberSince(player.created_at)}
+                  {player.city ? ` · ${player.city}` : ''}
+                </p>
 
                 {ownedTeams.length > 0 && (
                   <div className="mt-6 w-full max-w-sm">
@@ -286,12 +340,13 @@ export default function PlayerDetail() {
             </section>
 
             <section className="flex-1 max-w-4xl mx-auto px-6 py-12 sm:py-16 w-full">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-6 mb-12">
                 <StatBlock label="Godina" value={player.age != null ? String(player.age) : '—'} />
                 <StatBlock label="Visina" value={player.height_cm ? `${player.height_cm} cm` : '—'} />
                 <StatBlock label="Težina" value={player.weight_kg ? `${player.weight_kg} kg` : '—'} />
                 <StatBlock label="Dominantna ruka" value={player.dominant_hand ? HAND_LABELS[player.dominant_hand] : '—'} />
                 <StatBlock label="Timova" value={String(memberTeams.length)} />
+                <StatBlock label="Golovi (fudbal)" value={String(player.career_football_goals)} />
               </div>
 
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
@@ -334,11 +389,22 @@ export default function PlayerDetail() {
               </div>
 
               {memberTeams.length > 0 && (
-                <div>
+                <div className="mb-12">
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Član timova</span>
                   <div className="grid sm:grid-cols-2 gap-6 mt-4">
                     {memberTeams.map((team, index) => (
                       <TeamCard key={team.id} team={team} index={index} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {participatedTournaments.length > 0 && (
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Turniri</span>
+                  <div className="grid sm:grid-cols-2 gap-6 mt-4">
+                    {participatedTournaments.map((tournament, index) => (
+                      <TournamentCard key={tournament.id} tournament={tournament} index={index} />
                     ))}
                   </div>
                 </div>

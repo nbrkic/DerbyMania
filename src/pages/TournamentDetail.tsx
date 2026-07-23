@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
-import { TeamCard, type Team } from './Teams';
+import { TeamRow, type Team } from './Teams';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -27,7 +27,6 @@ type TournamentDetail = {
   description: string | null;
   start_date: string | null;
   start_time: string | null;
-  end_date: string | null;
   max_teams: number | null;
   format: string;
   players_per_team: number;
@@ -35,6 +34,8 @@ type TournamentDetail = {
   match_duration_minutes: number;
   period_duration_minutes: number;
   sport_id: number;
+  status: string;
+  roster_locked: boolean;
   sports: { name: string } | null;
 };
 
@@ -81,6 +82,7 @@ export default function TournamentDetail() {
 
   const [withdrawingTeamId, setWithdrawingTeamId] = useState<string | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [groupsFormed, setGroupsFormed] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -89,7 +91,7 @@ export default function TournamentDetail() {
       const { data: tournamentRow } = await supabase
         .from('tournaments')
         .select(
-          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, description, start_date, start_time, end_date, max_teams, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, sport_id, sports(name)'
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, description, start_date, start_time, max_teams, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, sport_id, status, roster_locked, sports(name)'
         )
         .eq('id', id)
         .single();
@@ -104,6 +106,12 @@ export default function TournamentDetail() {
           .eq('id', row.owner_id)
           .single();
         setOrganizerName(organizer?.full_name ?? null);
+
+        const { count: groupCount } = await supabase
+          .from('tournament_groups')
+          .select('id', { count: 'exact', head: true })
+          .eq('tournament_id', row.id);
+        setGroupsFormed((groupCount ?? 0) > 0);
 
         const { data: participantRows } = await supabase
           .from('tournament_teams')
@@ -307,15 +315,13 @@ export default function TournamentDetail() {
           : 'Prijavi tim';
 
   const isFull = tournament?.max_teams != null && teams.length >= tournament.max_teams;
+  const isFinished = tournament?.status === 'finished';
+  const isLocked = isFinished || !!tournament?.roster_locked;
   const ownedParticipatingTeams = teams.filter((t) => t.owner_id === user?.id);
   const sportName = tournament?.sports?.name ?? null;
   const isBasketball = !!sportName && BASKETBALL_SPORT_NAMES.includes(sportName);
   const periodLabel = isBasketball ? 'Trajanje četvrtine' : 'Trajanje poluvremena';
   const startLabel = tournament?.start_date ? formatDate(tournament.start_date) : null;
-  const dateRange =
-    startLabel && tournament?.end_date
-      ? `${startLabel} – ${formatDate(tournament.end_date)}`
-      : startLabel || (tournament?.end_date ? formatDate(tournament.end_date) : null);
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
@@ -378,17 +384,19 @@ export default function TournamentDetail() {
                       <div className="flex flex-col items-end gap-3">
                         <div className="flex items-center gap-3">
                           <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
-                            Ovo je tvoj turnir
+                            {isFinished ? 'Turnir je završen' : isLocked ? 'Turnir je zaključan' : 'Ovo je tvoj turnir'}
                           </span>
-                          <Link
-                            to={`/turniri/${tournament.id}/izmena`}
-                            className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
-                          >
-                            Izmeni turnir
-                          </Link>
+                          {!isLocked && (
+                            <Link
+                              to={`/turniri/${tournament.id}/izmena`}
+                              className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                            >
+                              Izmeni turnir
+                            </Link>
+                          )}
                         </div>
 
-                        {ownedParticipatingTeams.length === 0 && ownerTeams.length > 0 && (
+                        {!isLocked && ownedParticipatingTeams.length === 0 && ownerTeams.length > 0 && (
                           <div className="w-full sm:max-w-sm">
                             <div className="flex flex-col sm:flex-row items-center gap-3">
                               {ownerTeams.length > 1 && (
@@ -420,6 +428,10 @@ export default function TournamentDetail() {
                           </div>
                         )}
                       </div>
+                    ) : isLocked ? (
+                      <span className="text-xs uppercase tracking-widest text-paper-500 border border-ink-700 px-4 py-2.5 inline-block">
+                        {isFinished ? 'Turnir je završen' : 'Prijave su zatvorene'}
+                      </span>
                     ) : ownedTeams.length > 0 ? (
                       <div className="w-full sm:max-w-sm">
                         <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -451,11 +463,66 @@ export default function TournamentDetail() {
               </div>
             </section>
 
+            {tournament.format === 'grupe_i_eliminacija' && (
+              <section className="bg-maroon-900 border-b border-ink-700">
+                <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col gap-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                    <div>
+                      <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Grupna faza</span>
+                      <p className="text-paper-200 text-sm mt-1">
+                        Ovaj turnir koristi format grupa. Pogledaj raspored grupa i timove u njima.
+                      </p>
+                    </div>
+                    <Link
+                      to={`/turniri/${tournament.id}/grupe`}
+                      className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                    >
+                      Pogledaj grupnu fazu
+                    </Link>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 pt-6 border-t border-ink-700">
+                    <div>
+                      <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Eliminaciona faza</span>
+                      <p className="text-paper-200 text-sm mt-1">
+                        Kada se zaključi grupna faza, ovde se prati eliminaciona faza i pobednik turnira.
+                      </p>
+                    </div>
+                    <Link
+                      to={`/turniri/${tournament.id}/eliminacija`}
+                      className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                    >
+                      Pogledaj eliminacionu fazu
+                    </Link>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {tournament.format === 'liga' && (
+              <section className="bg-maroon-900 border-b border-ink-700">
+                <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                  <div>
+                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Liga</span>
+                    <p className="text-paper-200 text-sm mt-1">
+                      Ovaj turnir koristi format lige. Pogledaj tabelu i utakmice svih prijavljenih timova.
+                    </p>
+                  </div>
+                  <Link
+                    to={`/turniri/${tournament.id}/liga`}
+                    className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                  >
+                    Pogledaj tabelu lige
+                  </Link>
+                </div>
+              </section>
+            )}
+
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
               <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
                 <StatBlock label="Grad" value={tournament.city || '—'} />
                 <StatBlock label="Lokacija" value={tournament.location || '—'} />
-                <StatBlock label="Termin" value={dateRange || '—'} />
+                <StatBlock label="Termin" value={startLabel || '—'} />
                 <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} />
                 <StatBlock
                   label="Timova"
@@ -491,9 +558,9 @@ export default function TournamentDetail() {
                 {teams.length === 0 ? (
                   <p className="text-sm text-paper-500">Nijedan tim se još nije prijavio na ovaj turnir.</p>
                 ) : (
-                  <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {teams.map((team, index) => (
-                      <TeamCard key={team.id} team={team} index={index} />
+                      <TeamRow key={team.id} team={team} index={index} fromTournamentId={tournament.id} />
                     ))}
                   </div>
                 )}
@@ -510,19 +577,27 @@ export default function TournamentDetail() {
                       <div key={team.id} className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
                           <p className="text-sm font-medium text-paper-100">Povuci tim „{team.name}“</p>
-                          <p className="text-xs text-paper-500 mt-1">Tim više neće učestvovati na ovom turniru.</p>
+                          <p className="text-xs text-paper-500 mt-1">
+                            {groupsFormed
+                              ? 'Grupe su već formirane – tim više ne može da se povuče sa turnira.'
+                              : tournament.roster_locked
+                                ? 'Tabela je već formirana – tim više ne može da se povuče sa turnira.'
+                                : 'Tim više neće učestvovati na ovom turniru.'}
+                          </p>
                           {withdrawError && withdrawingTeamId === null && (
                             <p className="text-xs text-red-400 mt-2">{withdrawError}</p>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleWithdraw(team.id)}
-                          disabled={withdrawingTeamId === team.id}
-                          className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors"
-                        >
-                          {withdrawingTeamId === team.id ? 'Povlačenje…' : 'Povuci tim'}
-                        </button>
+                        {!groupsFormed && !tournament.roster_locked && (
+                          <button
+                            type="button"
+                            onClick={() => handleWithdraw(team.id)}
+                            disabled={withdrawingTeamId === team.id}
+                            className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors"
+                          >
+                            {withdrawingTeamId === team.id ? 'Povlačenje…' : 'Povuci tim'}
+                          </button>
+                        )}
                       </div>
                     ))}
 

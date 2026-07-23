@@ -92,7 +92,6 @@ export default function CreateTournament() {
   const [periodDurationMinutes, setPeriodDurationMinutes] = useState('');
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
-  const [endDate, setEndDate] = useState('');
   const [maxTeams, setMaxTeams] = useState('');
   const [description, setDescription] = useState('');
   const [crestFile, setCrestFile] = useState<File | null>(null);
@@ -103,6 +102,7 @@ export default function CreateTournament() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(isEditMode);
+  const [isFinishedTournament, setIsFinishedTournament] = useState(false);
 
   useEffect(() => {
     supabase
@@ -119,12 +119,13 @@ export default function CreateTournament() {
       const { data } = await supabase
         .from('tournaments')
         .select(
-          'sport_id, name, city, location, description, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, start_date, start_time, end_date, max_teams, crest_url, crest_position_x, crest_position_y, banner_url'
+          'sport_id, name, city, location, description, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, start_date, start_time, max_teams, crest_url, crest_position_x, crest_position_y, banner_url, status'
         )
         .eq('id', tournamentId)
         .single();
 
       if (data) {
+        setIsFinishedTournament(data.status === 'finished');
         setSportId(String(data.sport_id));
         setName(data.name);
         setCity(data.city ?? '');
@@ -137,7 +138,6 @@ export default function CreateTournament() {
         setPeriodDurationMinutes(String(data.period_duration_minutes));
         setStartDate(data.start_date ?? '');
         setStartTime(data.start_time ? data.start_time.slice(0, 5) : '');
-        setEndDate(data.end_date ?? '');
         setMaxTeams(data.max_teams != null ? String(data.max_teams) : '');
         setCrestPreview(data.crest_url);
         setCrestPosition({ x: data.crest_position_x, y: data.crest_position_y });
@@ -222,10 +222,6 @@ export default function CreateTournament() {
       setError('Izaberi tačno vreme početka turnira.');
       return;
     }
-    if (startDate && endDate && endDate < startDate) {
-      setError('Datum završetka ne može biti pre datuma početka.');
-      return;
-    }
     if (maxTeams && Number(maxTeams) < 2) {
       setError('Maksimalan broj timova mora biti bar 2.');
       return;
@@ -252,7 +248,6 @@ export default function CreateTournament() {
         period_duration_minutes: Number(periodDurationMinutes),
         start_date: startDate || null,
         start_time: startTime || null,
-        end_date: endDate || null,
         max_teams: maxTeams ? Number(maxTeams) : null,
         crest_url: crestUrl,
         crest_position_x: Math.round(crestPosition.x),
@@ -284,6 +279,22 @@ export default function CreateTournament() {
         <SiteHeader />
         <main className="flex-1 pt-16 flex items-center justify-center">
           <p className="text-paper-500">Učitavanje…</p>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  if (isEditMode && isFinishedTournament) {
+    return (
+      <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+        <div className="grain" />
+        <SiteHeader />
+        <main className="flex-1 pt-16 flex flex-col items-center justify-center gap-6 px-6 text-center">
+          <p className="text-paper-500">Turnir je završen i ne može više da se menja.</p>
+          <Link to={`/turniri/${tournamentId}`} className="btn-line px-6 py-3 text-sm uppercase tracking-widest">
+            Nazad na turnir
+          </Link>
         </main>
         <SiteFooter />
       </div>
@@ -422,16 +433,6 @@ export default function CreateTournament() {
 
               <TicketField
                 n="12"
-                label="Datum završetka"
-                id="end-date"
-                type="date"
-                value={endDate}
-                onChange={setEndDate}
-                dateDefaultViewYear={CURRENT_YEAR}
-              />
-
-              <TicketField
-                n="13"
                 label="Maks. broj timova"
                 id="max-teams"
                 type="number"
@@ -440,7 +441,7 @@ export default function CreateTournament() {
               />
 
               <TextAreaField
-                n="14"
+                n="13"
                 label="O turniru (opciono)"
                 id="description"
                 value={description}
@@ -449,7 +450,7 @@ export default function CreateTournament() {
               />
 
               <CrestField
-                n="15"
+                n="14"
                 label="Logo turnira"
                 previewUrl={crestPreview}
                 position={crestPosition}
@@ -457,7 +458,7 @@ export default function CreateTournament() {
                 onPositionChange={setCrestPosition}
               />
               <ImageField
-                n="16"
+                n="15"
                 label="Baner turnira"
                 shape="banner"
                 previewUrl={bannerPreview}

@@ -92,6 +92,42 @@ export function TeamCard({ team, index }: { team: Team; index: number }) {
   );
 }
 
+export function TeamRow({ team, index, fromTournamentId }: { team: Team; index: number; fromTournamentId?: string }) {
+  return (
+    <Link
+      to={fromTournamentId ? `/timovi/${team.id}?turnir=${fromTournamentId}` : `/timovi/${team.id}`}
+      className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
+    >
+      <div className="w-11 h-11 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center">
+        {team.crest_url ? (
+          <img
+            src={team.crest_url}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ objectPosition: `${team.crest_position_x}% ${team.crest_position_y}%` }}
+          />
+        ) : (
+          <span className="font-display text-sm text-paper-500">{team.name[0]?.toUpperCase()}</span>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <h3 className="font-display text-base leading-tight truncate transition-colors duration-200 group-hover:text-red-400">
+          {team.name}
+        </h3>
+        <p className="text-[11px] uppercase tracking-widest text-paper-700 mt-0.5 truncate">
+          {team.sports?.name ?? ''}
+          {team.city ? ` · ${team.city}` : ''}
+        </p>
+      </div>
+
+      <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold shrink-0 whitespace-nowrap">
+        {team.playerCount} igrača
+      </span>
+    </Link>
+  );
+}
+
 export default function Teams() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [sports, setSports] = useState<Sport[]>([]);

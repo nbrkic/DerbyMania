@@ -48,7 +48,7 @@ export function Dropdown({ id, value, onChange, options, placeholder, triggerCla
         onClick={() => setOpen((v) => !v)}
         className={triggerClassName ?? 'field-input w-full pb-2.5 text-base text-left flex items-center justify-between gap-3'}
       >
-        <span className={selected ? 'text-paper-100' : 'text-[rgba(244,235,225,0.3)]'}>
+        <span className={`flex-1 min-w-0 truncate ${selected ? 'text-paper-100' : 'text-[rgba(244,235,225,0.3)]'}`}>
           {selected ? selected.label : placeholder}
         </span>
         <svg

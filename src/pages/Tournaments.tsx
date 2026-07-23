@@ -18,9 +18,9 @@ export type Tournament = {
   city: string | null;
   location: string | null;
   start_date: string | null;
-  end_date: string | null;
   max_teams: number | null;
   sport_id: number;
+  status: string;
   sports: { name: string } | null;
   founderName: string | null;
   teamCount: number;
@@ -35,18 +35,16 @@ function SearchIcon({ className }: { className?: string }) {
   );
 }
 
-function formatDateRange(start: string | null, end: string | null) {
-  if (!start && !end) return null;
-  const fmt = (iso: string) => new Date(iso).toLocaleDateString('sr-RS', { day: 'numeric', month: 'short', year: 'numeric' });
-  if (start && end) return `${fmt(start)} – ${fmt(end)}`;
-  return fmt(start || end!);
+function formatStartDate(start: string | null) {
+  if (!start) return null;
+  return new Date(start).toLocaleDateString('sr-RS', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 const RISE_CLASSES = ['rise-1', 'rise-2', 'rise-3', 'rise-4'];
 const PAGE_SIZE = 9;
 
 export function TournamentCard({ tournament, index }: { tournament: Tournament; index: number }) {
-  const dateRange = formatDateRange(tournament.start_date, tournament.end_date);
+  const dateRange = formatStartDate(tournament.start_date);
   return (
     <Link
       to={`/turniri/${tournament.id}`}
@@ -61,6 +59,11 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
           />
         )}
         <div className="absolute inset-0 bg-red-600/0 group-hover:bg-red-600/10 transition-colors duration-300" />
+        {tournament.status === 'finished' && (
+          <span className="absolute top-3 right-3 text-[10px] uppercase tracking-widest text-paper-100 bg-ink-950/80 border border-ink-700 px-2.5 py-1">
+            Završen
+          </span>
+        )}
       </div>
 
       <div className="px-5 pb-5 relative">
@@ -109,6 +112,7 @@ export default function Tournaments() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sportFilter, setSportFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -116,7 +120,7 @@ export default function Tournaments() {
       const { data: tournamentRows } = await supabase
         .from('tournaments')
         .select(
-          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, end_date, max_teams, sport_id, sports(name)'
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, max_teams, sport_id, status, sports(name)'
         )
         .order('created_at', { ascending: false });
 
@@ -161,13 +165,14 @@ export default function Tournaments() {
     return tournaments.filter((t) => {
       const matchesSearch = !query || t.name.toLowerCase().includes(query);
       const matchesSport = !sportFilter || String(t.sport_id) === sportFilter;
-      return matchesSearch && matchesSport;
+      const matchesStatus = !statusFilter || t.status === statusFilter;
+      return matchesSearch && matchesSport && matchesStatus;
     });
-  }, [tournaments, search, sportFilter]);
+  }, [tournaments, search, sportFilter, statusFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, sportFilter]);
+  }, [search, sportFilter, statusFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filteredTournaments.length / PAGE_SIZE));
   const pagedTournaments = filteredTournaments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -221,6 +226,19 @@ export default function Tournaments() {
                     value={sportFilter}
                     onChange={setSportFilter}
                     options={[{ value: '', label: 'Svi sportovi' }, ...sports.map((s) => ({ value: String(s.id), label: s.name }))]}
+                    triggerClassName="w-full h-full bg-ink-950 border border-ink-700 hover:border-red-400/50 focus:border-red-400 focus:outline-none px-4 py-2.5 text-sm text-paper-100 text-left flex items-center justify-between gap-3 transition-colors"
+                  />
+                </div>
+                <div className="sm:w-56 shrink-0">
+                  <Dropdown
+                    id="status-filter"
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                    options={[
+                      { value: '', label: 'Svi turniri' },
+                      { value: 'active', label: 'Aktivni' },
+                      { value: 'finished', label: 'Završeni' },
+                    ]}
                     triggerClassName="w-full h-full bg-ink-950 border border-ink-700 hover:border-red-400/50 focus:border-red-400 focus:outline-none px-4 py-2.5 text-sm text-paper-100 text-left flex items-center justify-between gap-3 transition-colors"
                   />
                 </div>

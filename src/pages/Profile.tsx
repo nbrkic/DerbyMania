@@ -31,6 +31,7 @@ type SavedValues = {
   fullName: string;
   birthDate: string;
   phone: string;
+  city: string;
   email: string;
   dominantHand: string;
   heightCm: string;
@@ -65,6 +66,7 @@ export default function Profile() {
   const [fullName, setFullName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
   const [email, setEmail] = useState('');
   const [dominantHand, setDominantHand] = useState('');
   const [heightCm, setHeightCm] = useState('');
@@ -83,6 +85,8 @@ export default function Profile() {
   const [loadingMemberTeams, setLoadingMemberTeams] = useState(true);
   const [myTournaments, setMyTournaments] = useState<Tournament[]>([]);
   const [loadingTournaments, setLoadingTournaments] = useState(true);
+  const [participatedTournaments, setParticipatedTournaments] = useState<Tournament[]>([]);
+  const [loadingParticipatedTournaments, setLoadingParticipatedTournaments] = useState(true);
 
   useEffect(() => {
     supabase
@@ -110,6 +114,7 @@ export default function Profile() {
         fullName: profile.full_name ?? '',
         birthDate: profile.birth_date ?? '',
         phone: profile.phone ?? '',
+        city: profile.city ?? '',
         email: user.email ?? '',
         dominantHand: profile.dominant_hand ?? '',
         heightCm: profile.height_cm != null ? String(profile.height_cm) : '',
@@ -120,6 +125,7 @@ export default function Profile() {
       setFullName(initial.fullName);
       setBirthDate(initial.birthDate);
       setPhone(initial.phone);
+      setCity(initial.city);
       setEmail(initial.email);
       setDominantHand(initial.dominantHand);
       setHeightCm(initial.heightCm);
@@ -136,6 +142,7 @@ export default function Profile() {
       (fullName !== saved.fullName ||
         birthDate !== saved.birthDate ||
         phone !== saved.phone ||
+        city !== saved.city ||
         email !== saved.email ||
         dominantHand !== saved.dominantHand ||
         heightCm !== saved.heightCm ||
@@ -223,7 +230,7 @@ export default function Profile() {
       const { data: tournamentRows } = await supabase
         .from('tournaments')
         .select(
-          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, end_date, max_teams, sport_id, sports(name)'
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, max_teams, sport_id, status, sports(name)'
         )
         .eq('owner_id', user!.id)
         .order('created_at', { ascending: false });
@@ -243,6 +250,65 @@ export default function Profile() {
     }
 
     loadMyTournaments();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    async function loadParticipatedTournaments() {
+      const { data: membershipRows } = await supabase.from('team_members').select('team_id').eq('user_id', user!.id);
+      const memberTeamIds = (membershipRows ?? []).map((m) => m.team_id);
+
+      if (!memberTeamIds.length) {
+        setParticipatedTournaments([]);
+        setLoadingParticipatedTournaments(false);
+        return;
+      }
+
+      const { data: participationRows } = await supabase
+        .from('tournament_teams')
+        .select('tournament_id')
+        .in('team_id', memberTeamIds);
+      const tournamentIds = [...new Set((participationRows ?? []).map((p) => p.tournament_id))];
+
+      if (!tournamentIds.length) {
+        setParticipatedTournaments([]);
+        setLoadingParticipatedTournaments(false);
+        return;
+      }
+
+      const { data: tournamentRows } = await supabase
+        .from('tournaments')
+        .select(
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, max_teams, sport_id, status, sports(name)'
+        )
+        .in('id', tournamentIds)
+        .order('created_at', { ascending: false });
+
+      const rows = (tournamentRows as unknown as Omit<Tournament, 'founderName' | 'teamCount'>[]) ?? [];
+
+      const ownerIds = [...new Set(rows.map((t) => t.owner_id))];
+      const { data: founders } = ownerIds.length
+        ? await supabase.from('public_profiles').select('id, full_name').in('id', ownerIds)
+        : { data: [] as { id: string; full_name: string | null }[] };
+      const nameById = new Map((founders ?? []).map((f) => [f.id, f.full_name]));
+
+      const { data: allTournamentTeamRows } = await supabase
+        .from('tournament_teams')
+        .select('tournament_id')
+        .in('tournament_id', tournamentIds);
+      const countByTournament = new Map<string, number>();
+      (allTournamentTeamRows ?? []).forEach((t) =>
+        countByTournament.set(t.tournament_id, (countByTournament.get(t.tournament_id) ?? 0) + 1)
+      );
+
+      setParticipatedTournaments(
+        rows.map((t) => ({ ...t, founderName: nameById.get(t.owner_id) ?? null, teamCount: countByTournament.get(t.id) ?? 0 }))
+      );
+      setLoadingParticipatedTournaments(false);
+    }
+
+    loadParticipatedTournaments();
   }, [user]);
 
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
@@ -295,6 +361,7 @@ export default function Profile() {
         full_name: fullName,
         birth_date: birthDate || null,
         phone,
+        city: city.trim() || null,
         avatar_url: avatarUrl,
         ...(avatarFile ? { avatar_position_x: 50, avatar_position_y: 50 } : {}),
         email,
@@ -334,7 +401,7 @@ export default function Profile() {
 
     await refreshProfile();
     setAvatarFile(null);
-    setSaved({ fullName, birthDate, phone, email, dominantHand, heightCm, weightKg, positions, sportIds: selectedSportIds });
+    setSaved({ fullName, birthDate, phone, city, email, dominantHand, heightCm, weightKg, positions, sportIds: selectedSportIds });
     setSaving(false);
     setSuccess('Promene su sačuvane.');
   }
@@ -343,8 +410,8 @@ export default function Profile() {
   const selectedSportNames = sports.filter((s) => selectedSportIds.includes(s.id)).map((s) => s.name);
   const showFootballPositions = selectedSportNames.some((n) => FOOTBALL_SPORT_NAMES.includes(n));
   const showBasketballPositions = selectedSportNames.some((n) => BASKETBALL_SPORT_NAMES.includes(n));
-  const footballPositionsN = '09';
-  const basketballPositionsN = showFootballPositions ? '10' : '09';
+  const footballPositionsN = '10';
+  const basketballPositionsN = showFootballPositions ? '11' : '10';
 
   useEffect(() => {
     if (!showFootballPositions) {
@@ -415,10 +482,11 @@ export default function Profile() {
               <TicketField n="01" label="Ime i prezime" id="fullName" type="text" autoComplete="name" required value={fullName} onChange={setFullName} />
               <TicketField n="02" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} />
               <TicketField n="03" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} />
-              <TicketField n="04" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
+              <TicketField n="04" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
+              <TicketField n="05" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
 
               <MultiSelectPills
-                n="05"
+                n="06"
                 label="Preferirani sportovi"
                 value={selectedSportIds.map(String)}
                 onChange={(vals) => setSelectedSportIds(vals.map(Number))}
@@ -426,7 +494,7 @@ export default function Profile() {
               />
 
               <SelectField
-                n="06"
+                n="07"
                 label="Dominantna ruka"
                 id="dominantHand"
                 placeholder="Izaberi"
@@ -435,8 +503,8 @@ export default function Profile() {
                 options={HAND_OPTIONS}
               />
 
-              <TicketField n="07" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} />
-              <TicketField n="08" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} />
+              <TicketField n="08" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} />
+              <TicketField n="09" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} />
 
               {showFootballPositions && (
                 <MultiSelectPills
@@ -546,6 +614,20 @@ export default function Profile() {
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
                 {myTournaments.map((tournament, index) => (
+                  <TournamentCard key={tournament.id} tournament={tournament} index={index} />
+                ))}
+              </div>
+            )}
+
+            <h2 className="font-display text-3xl sm:text-4xl mt-16 mb-10 leading-tight">Turniri na kojima si učestvovao</h2>
+
+            {loadingParticipatedTournaments ? (
+              <p className="text-paper-500">Učitavanje…</p>
+            ) : participatedTournaments.length === 0 ? (
+              <p className="text-paper-500">Još uvek nisi učestvovao ni na jednom turniru.</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                {participatedTournaments.map((tournament, index) => (
                   <TournamentCard key={tournament.id} tournament={tournament} index={index} />
                 ))}
               </div>

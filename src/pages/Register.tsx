@@ -121,6 +121,7 @@ export default function Register() {
   const [fullName, setFullName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -199,7 +200,7 @@ export default function Register() {
 
     setSubmitting(true);
 
-    const { error, user } = await signUp(email, password, fullName, birthDate, phone);
+    const { error, user } = await signUp(email, password, fullName, birthDate, phone, city);
     if (error || !user) {
       setSubmitting(false);
       setError(error ?? 'Došlo je do greške pri registraciji.');
@@ -259,9 +260,10 @@ export default function Register() {
         <TicketField n="02" label="Ime i prezime" id="fullName" type="text" autoComplete="name" required value={fullName} onChange={setFullName} />
         <TicketField n="03" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" required value={birthDate} onChange={setBirthDate} />
         <TicketField n="04" label="Broj telefona" id="phone" type="tel" autoComplete="tel" required value={phone} onChange={setPhone} />
-        <TicketField n="05" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
+        <TicketField n="05" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
+        <TicketField n="06" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
         <TicketField
-          n="06"
+          n="07"
           label="Lozinka"
           id="password"
           type="password"
