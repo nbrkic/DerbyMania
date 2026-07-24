@@ -7,6 +7,7 @@ import { SiteFooter } from '../components/SiteFooter';
 import { TicketField, SelectField, TextAreaField } from '../components/AuthShell';
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
+import { FormSkeleton } from '../components/Skeleton';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -277,8 +278,8 @@ export default function CreateTournament() {
       <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
         <div className="grain" />
         <SiteHeader />
-        <main className="flex-1 pt-16 flex items-center justify-center">
-          <p className="text-paper-500">Učitavanje…</p>
+        <main className="flex-1 pt-16 flex items-center py-16">
+          <FormSkeleton fields={8} />
         </main>
         <SiteFooter />
       </div>

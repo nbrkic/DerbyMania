@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
+import { FOOTBALL_POSITION_OPTIONS, BASKETBALL_POSITION_OPTIONS } from '../lib/positions';
+import { RowSkeletonGrid, RowSkeleton } from '../components/Skeleton';
 
 export type Player = {
   id: string;
@@ -15,6 +17,7 @@ export type Player = {
   teamCount: number;
   career_football_goals: number;
   career_basketball_points: number;
+  preferred_positions: string[];
 };
 
 type Sport = { id: number; name: string };
@@ -194,7 +197,8 @@ export default function Players() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sportFilter, setSportFilter] = useState('');
-  const [goalSort, setGoalSort] = useState('');
+  const [positionFilter, setPositionFilter] = useState('');
+  const [statSort, setStatSort] = useState('');
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -209,7 +213,7 @@ export default function Players() {
     async function load() {
       const { data } = await supabase
         .from('public_profiles')
-        .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, career_football_goals, career_basketball_points')
+        .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, career_football_goals, career_basketball_points, preferred_positions')
         .order('full_name', { ascending: true });
 
       const rows = (data as unknown as Omit<Player, 'teamCount'>[]) ?? [];
@@ -245,17 +249,24 @@ export default function Players() {
     const filtered = players.filter((p) => {
       const matchesQuery = !query || (p.full_name ?? '').toLowerCase().includes(query);
       const matchesSport = !sportFilter || playerSports.get(p.id)?.has(Number(sportFilter));
-      return matchesQuery && matchesSport;
+      const matchesPosition = !positionFilter || p.preferred_positions?.includes(positionFilter);
+      return matchesQuery && matchesSport && matchesPosition;
     });
 
-    if (goalSort === 'desc') {
+    if (statSort === 'goals_desc') {
       return [...filtered].sort((a, b) => b.career_football_goals - a.career_football_goals);
     }
-    if (goalSort === 'asc') {
+    if (statSort === 'goals_asc') {
       return [...filtered].sort((a, b) => a.career_football_goals - b.career_football_goals);
     }
+    if (statSort === 'points_desc') {
+      return [...filtered].sort((a, b) => b.career_basketball_points - a.career_basketball_points);
+    }
+    if (statSort === 'points_asc') {
+      return [...filtered].sort((a, b) => a.career_basketball_points - b.career_basketball_points);
+    }
     return filtered;
-  }, [players, search, sportFilter, playerSports, goalSort]);
+  }, [players, search, sportFilter, positionFilter, playerSports, statSort]);
 
   const topScorers = useMemo(
     () =>
@@ -277,7 +288,7 @@ export default function Players() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, sportFilter, goalSort]);
+  }, [search, sportFilter, positionFilter, statSort]);
 
   const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE));
   const pagedPlayers = filteredPlayers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -305,6 +316,16 @@ export default function Players() {
               <h1 className="font-display text-4xl sm:text-5xl mt-4 leading-tight">Igrači</h1>
             </div>
 
+            {loading && (
+              <div className="rise-2 mt-10 flex gap-3 overflow-x-auto pb-1">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <div key={i} className="w-56 shrink-0">
+                    <RowSkeleton />
+                  </div>
+                ))}
+              </div>
+            )}
+
             {!loading && (
               <>
                 <TopScorersStrip
@@ -327,8 +348,8 @@ export default function Players() {
             )}
 
             {!loading && players.length > 0 && (
-              <div className="rise-4 flex flex-col sm:flex-row sm:items-end gap-4 mt-16 w-full">
-                <div className="relative flex-1">
+              <div className="rise-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-4 mt-16 w-full">
+                <div className="relative flex-1 min-w-[12rem]">
                   <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-500 pointer-events-none" />
                   <input
                     type="text"
@@ -353,17 +374,36 @@ export default function Players() {
                 </div>
 
                 <div className="w-full sm:w-56">
-                  <label htmlFor="goal-sort" className="block text-[11px] uppercase tracking-widest text-paper-500 mb-2">
-                    Sortiraj po golovima
+                  <label htmlFor="position-filter" className="block text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+                    Pozicija
                   </label>
                   <Dropdown
-                    id="goal-sort"
-                    value={goalSort}
-                    onChange={setGoalSort}
+                    id="position-filter"
+                    value={positionFilter}
+                    onChange={setPositionFilter}
+                    options={[
+                      { value: '', label: 'Sve pozicije' },
+                      ...FOOTBALL_POSITION_OPTIONS.map((o) => ({ value: o.value, label: `Fudbal: ${o.label}` })),
+                      ...BASKETBALL_POSITION_OPTIONS.map((o) => ({ value: o.value, label: `Košarka: ${o.label}` })),
+                    ]}
+                    triggerClassName="w-full bg-ink-950 border border-ink-700 hover:border-red-400/50 focus:border-red-400 focus:outline-none px-4 py-2.5 text-sm text-paper-100 transition-colors text-left flex items-center justify-between gap-3"
+                  />
+                </div>
+
+                <div className="w-full sm:w-56">
+                  <label htmlFor="stat-sort" className="block text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+                    Sortiraj
+                  </label>
+                  <Dropdown
+                    id="stat-sort"
+                    value={statSort}
+                    onChange={setStatSort}
                     options={[
                       { value: '', label: 'Podrazumevano' },
-                      { value: 'desc', label: 'Golovi: najviše prvo' },
-                      { value: 'asc', label: 'Golovi: najmanje prvo' },
+                      { value: 'goals_desc', label: 'Golovi: najviše prvo' },
+                      { value: 'goals_asc', label: 'Golovi: najmanje prvo' },
+                      { value: 'points_desc', label: 'Poeni: najviše prvo' },
+                      { value: 'points_asc', label: 'Poeni: najmanje prvo' },
                     ]}
                     triggerClassName="w-full bg-ink-950 border border-ink-700 hover:border-red-400/50 focus:border-red-400 focus:outline-none px-4 py-2.5 text-sm text-paper-100 transition-colors text-left flex items-center justify-between gap-3"
                   />
@@ -376,7 +416,7 @@ export default function Players() {
         <section className="flex-1 bg-maroon-900">
           <div className="max-w-6xl mx-auto px-6 py-16 sm:py-20 w-full">
             {loading ? (
-              <p className="text-paper-500">Učitavanje…</p>
+              <RowSkeletonGrid count={9} />
             ) : players.length === 0 ? (
               <p className="text-paper-500">Još uvek nema registrovanih igrača.</p>
             ) : filteredPlayers.length === 0 ? (

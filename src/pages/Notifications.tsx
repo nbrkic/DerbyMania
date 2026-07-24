@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
+import { TextCardSkeletonList } from '../components/Skeleton';
 
 type NotificationRow = {
   id: string;
@@ -102,7 +103,7 @@ export default function Notifications() {
             <h1 className="font-display text-4xl sm:text-5xl mt-4 mb-10 leading-tight">Obaveštenja</h1>
 
             {loading ? (
-              <p className="text-paper-500">Učitavanje…</p>
+              <TextCardSkeletonList count={4} />
             ) : notifications.length === 0 ? (
               <p className="text-paper-500">Nemaš još nijedno obaveštenje.</p>
             ) : (

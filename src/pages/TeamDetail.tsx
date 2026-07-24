@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { PlayerCard, type Player } from './Players';
+import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
 
 type TeamDetail = {
   id: string;
@@ -20,12 +21,97 @@ type TeamDetail = {
   sports: { name: string } | null;
 };
 
+type PlacementTone = 'champion' | 'runnerup' | 'default' | 'pending';
+type Placement = { label: string; tone: PlacementTone };
+
+type TeamTournamentInfo = {
+  id: string;
+  name: string;
+  crest_url: string | null;
+  crest_position_x: number;
+  crest_position_y: number;
+  format: string;
+  status: string;
+  start_date: string | null;
+};
+
+type TeamTournamentEntry = TeamTournamentInfo & { placement: Placement };
+
+const RISE_CLASSES = ['rise-1', 'rise-2', 'rise-3', 'rise-4'];
+
+const FORMAT_LABELS: Record<string, string> = {
+  grupe_i_eliminacija: 'Grupna faza + eliminacija',
+  liga: 'Liga',
+  kup: 'Kup',
+};
+
+function eliminatedInRoundLabel(round: number, totalRounds: number) {
+  const fromEnd = totalRounds - round;
+  if (fromEnd === 0) return 'finalu';
+  if (fromEnd === 1) return 'polufinalu';
+  if (fromEnd === 2) return 'četvrtfinalu';
+  if (fromEnd === 3) return 'osmini finala';
+  if (fromEnd === 4) return 'šesnaestini finala';
+  return `${round}. kolu`;
+}
+
 function StatBlock({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-5 py-4">
       <p className="text-[11px] uppercase tracking-widest text-paper-500 mb-1">{label}</p>
       <p className="font-display text-xl leading-tight">{value}</p>
     </div>
+  );
+}
+
+function TeamTournamentRow({ tournament, index }: { tournament: TeamTournamentEntry; index: number }) {
+  const startLabel = tournament.start_date
+    ? new Date(tournament.start_date).toLocaleDateString('sr-RS', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+
+  const toneClass =
+    tournament.placement.tone === 'champion'
+      ? 'text-red-400 border-red-500/40'
+      : tournament.placement.tone === 'runnerup'
+        ? 'text-paper-300 border-paper-300/40'
+        : tournament.placement.tone === 'pending'
+          ? 'text-paper-700 border-ink-700'
+          : 'text-paper-500 border-ink-700';
+
+  return (
+    <Link
+      to={`/turniri/${tournament.id}`}
+      className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
+    >
+      <div className="w-11 h-11 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center">
+        {tournament.crest_url ? (
+          <img
+            src={tournament.crest_url}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ objectPosition: `${tournament.crest_position_x}% ${tournament.crest_position_y}%` }}
+          />
+        ) : (
+          <span className="font-display text-sm text-paper-500">{tournament.name[0]?.toUpperCase()}</span>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <h3 className="font-display text-base leading-tight truncate transition-colors duration-200 group-hover:text-red-400">
+          {tournament.name}
+        </h3>
+        <p className="text-[11px] uppercase tracking-widest text-paper-700 mt-0.5 truncate">
+          {FORMAT_LABELS[tournament.format] ?? tournament.format}
+          {startLabel ? ` · ${startLabel}` : ''}
+        </p>
+      </div>
+
+      <span
+        className={`text-[11px] uppercase tracking-widest font-semibold shrink-0 whitespace-nowrap border px-2.5 py-1 ${toneClass}`}
+      >
+        {tournament.placement.label}
+      </span>
+    </Link>
   );
 }
 
@@ -51,6 +137,9 @@ export default function TeamDetail() {
   const [confirmingLeave, setConfirmingLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
+
+  const [teamTournaments, setTeamTournaments] = useState<TeamTournamentEntry[]>([]);
+  const [loadingTournaments, setLoadingTournaments] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -131,6 +220,161 @@ export default function TeamDetail() {
     load();
   }, [id, user]);
 
+  useEffect(() => {
+    if (!team) {
+      setTeamTournaments([]);
+      return;
+    }
+
+    async function loadTournaments() {
+      const { data: participantRows } = await supabase
+        .from('tournament_teams')
+        .select('tournament_id')
+        .eq('team_id', team!.id);
+      const tournamentIds = (participantRows ?? []).map((p) => p.tournament_id);
+
+      if (!tournamentIds.length) {
+        setTeamTournaments([]);
+        setLoadingTournaments(false);
+        return;
+      }
+
+      const { data: tournamentRows } = await supabase
+        .from('tournaments')
+        .select('id, name, crest_url, crest_position_x, crest_position_y, format, status, start_date')
+        .in('id', tournamentIds)
+        .order('created_at', { ascending: false });
+
+      const tournaments = (tournamentRows as unknown as TeamTournamentInfo[]) ?? [];
+      const placementByTournament = new Map<string, Placement>();
+
+      const bracketFormatIds = tournaments.filter((t) => t.format !== 'liga').map((t) => t.id);
+      const leagueFormatIds = tournaments.filter((t) => t.format === 'liga').map((t) => t.id);
+
+      if (bracketFormatIds.length) {
+        const { data: bracketRows } = await supabase
+          .from('tournament_bracket_matches')
+          .select('tournament_id, round, team_a_id, team_b_id, winner_team_id, status')
+          .in('tournament_id', bracketFormatIds);
+
+        const byTournament = new Map<string, NonNullable<typeof bracketRows>>();
+        (bracketRows ?? []).forEach((r) => {
+          if (!byTournament.has(r.tournament_id)) byTournament.set(r.tournament_id, []);
+          byTournament.get(r.tournament_id)!.push(r);
+        });
+
+        bracketFormatIds.forEach((tid) => {
+          const rows = byTournament.get(tid) ?? [];
+          if (!rows.length) {
+            placementByTournament.set(tid, { label: 'U toku', tone: 'pending' });
+            return;
+          }
+
+          const maxRound = Math.max(...rows.map((r) => r.round));
+          const finalMatch = rows.find((r) => r.round === maxRound);
+          const teamMatches = rows.filter((r) => r.team_a_id === team!.id || r.team_b_id === team!.id);
+
+          if (finalMatch && finalMatch.winner_team_id === team!.id) {
+            placementByTournament.set(tid, { label: 'Šampion', tone: 'champion' });
+          } else if (
+            finalMatch &&
+            finalMatch.status === 'finished' &&
+            (finalMatch.team_a_id === team!.id || finalMatch.team_b_id === team!.id)
+          ) {
+            placementByTournament.set(tid, { label: 'Finalista', tone: 'runnerup' });
+          } else {
+            const lostMatch = teamMatches
+              .filter((r) => r.status === 'finished' && r.winner_team_id && r.winner_team_id !== team!.id)
+              .sort((a, b) => b.round - a.round)[0];
+
+            placementByTournament.set(
+              tid,
+              lostMatch
+                ? { label: `Ispao u ${eliminatedInRoundLabel(lostMatch.round, maxRound)}`, tone: 'default' }
+                : { label: 'U toku', tone: 'pending' }
+            );
+          }
+        });
+      }
+
+      if (leagueFormatIds.length) {
+        const { data: leagueTeamsRows } = await supabase
+          .from('tournament_teams')
+          .select('tournament_id, team_id')
+          .in('tournament_id', leagueFormatIds);
+        const { data: leagueMatchRows } = await supabase
+          .from('tournament_league_matches')
+          .select('tournament_id, team_a_id, team_b_id, team_a_goals, team_b_goals, status')
+          .in('tournament_id', leagueFormatIds);
+
+        const teamIdsInvolved = [...new Set((leagueTeamsRows ?? []).map((r) => r.team_id))];
+        const { data: teamNameRows } = teamIdsInvolved.length
+          ? await supabase.from('teams').select('id, name').in('id', teamIdsInvolved)
+          : { data: [] as { id: string; name: string }[] };
+        const nameById = new Map((teamNameRows ?? []).map((t) => [t.id, t.name]));
+
+        leagueFormatIds.forEach((tid) => {
+          const teamsInTournament = (leagueTeamsRows ?? []).filter((r) => r.tournament_id === tid).map((r) => r.team_id);
+          const matches = (leagueMatchRows ?? []).filter((m) => m.tournament_id === tid);
+
+          const stats = new Map<string, { points: number; scored: number; conceded: number }>();
+          teamsInTournament.forEach((tid2) => stats.set(tid2, { points: 0, scored: 0, conceded: 0 }));
+
+          matches.forEach((m) => {
+            const a = stats.get(m.team_a_id);
+            const b = stats.get(m.team_b_id);
+            if (!a || !b || m.status !== 'finished') return;
+
+            a.scored += m.team_a_goals;
+            a.conceded += m.team_b_goals;
+            b.scored += m.team_b_goals;
+            b.conceded += m.team_a_goals;
+
+            if (m.team_a_goals > m.team_b_goals) a.points += 3;
+            else if (m.team_a_goals < m.team_b_goals) b.points += 3;
+            else {
+              a.points += 1;
+              b.points += 1;
+            }
+          });
+
+          const ordered = teamsInTournament
+            .map((tid2) => ({ teamId: tid2, ...(stats.get(tid2) ?? { points: 0, scored: 0, conceded: 0 }) }))
+            .sort((x, y) => {
+              if (y.points !== x.points) return y.points - x.points;
+              const diffX = x.scored - x.conceded;
+              const diffY = y.scored - y.conceded;
+              if (diffY !== diffX) return diffY - diffX;
+              if (y.scored !== x.scored) return y.scored - x.scored;
+              return (nameById.get(x.teamId) ?? '').localeCompare(nameById.get(y.teamId) ?? '');
+            });
+
+          const rank = ordered.findIndex((o) => o.teamId === team!.id) + 1;
+          const tournamentInfo = tournaments.find((t) => t.id === tid);
+
+          if (!tournamentInfo || tournamentInfo.status !== 'finished') {
+            placementByTournament.set(tid, { label: 'U toku', tone: 'pending' });
+          } else if (rank === 1) {
+            placementByTournament.set(tid, { label: 'Šampion', tone: 'champion' });
+          } else if (rank === 2) {
+            placementByTournament.set(tid, { label: '2. mesto', tone: 'runnerup' });
+          } else if (rank > 0) {
+            placementByTournament.set(tid, { label: `${rank}. mesto`, tone: 'default' });
+          } else {
+            placementByTournament.set(tid, { label: 'U toku', tone: 'pending' });
+          }
+        });
+      }
+
+      setTeamTournaments(
+        tournaments.map((t) => ({ ...t, placement: placementByTournament.get(t.id) ?? { label: 'U toku', tone: 'pending' } }))
+      );
+      setLoadingTournaments(false);
+    }
+
+    loadTournaments();
+  }, [team]);
+
   async function handleJoinRequest() {
     if (!user) {
       navigate('/login');
@@ -194,9 +438,17 @@ export default function TeamDetail() {
 
       <main className="flex-1 pt-16 flex flex-col">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-paper-500">Učitavanje…</p>
-          </div>
+          <>
+            <DetailHeroSkeleton />
+            <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
+              <div className="grid sm:grid-cols-3 gap-6 mb-10">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <StatBlockSkeleton key={i} />
+                ))}
+              </div>
+              <RowSkeletonGrid count={4} className="grid sm:grid-cols-2 gap-3" />
+            </section>
+          </>
         ) : !team ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
             <p className="text-paper-500">Tim nije pronađen.</p>
@@ -312,6 +564,22 @@ export default function TeamDetail() {
                   <div className="grid sm:grid-cols-2 gap-3">
                     {members.map((member, index) => (
                       <PlayerCard key={member.id} player={member} index={index} isCaptain={member.id === team.owner_id} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-10">
+                <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Turniri</span>
+                <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
+                {loadingTournaments ? (
+                  <RowSkeletonGrid count={3} className="flex flex-col gap-3" />
+                ) : teamTournaments.length === 0 ? (
+                  <p className="text-sm text-paper-500">Ovaj tim se još uvek nije prijavio ni na jedan turnir.</p>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {teamTournaments.map((tournament, index) => (
+                      <TeamTournamentRow key={tournament.id} tournament={tournament} index={index} />
                     ))}
                   </div>
                 )}

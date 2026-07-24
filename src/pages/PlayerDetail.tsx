@@ -12,8 +12,9 @@ import {
   BASKETBALL_POSITION_VALUES,
   POSITION_LABELS,
 } from '../lib/positions';
-import { TeamCard, type Team } from './Teams';
-import { TournamentCard, type Tournament } from './Tournaments';
+import { TeamRow, type Team } from './Teams';
+import { TournamentRow, type Tournament } from './Tournaments';
+import { PlayerHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
 
 type PlayerDetail = {
   id: string;
@@ -276,9 +277,17 @@ export default function PlayerDetail() {
 
       <main className="flex-1 pt-16 flex flex-col">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-paper-500">Učitavanje…</p>
-          </div>
+          <>
+            <PlayerHeroSkeleton />
+            <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-6 mb-12">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <StatBlockSkeleton key={i} />
+                ))}
+              </div>
+              <RowSkeletonGrid count={4} className="grid sm:grid-cols-2 gap-3" />
+            </section>
+          </>
         ) : !player ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
             <p className="text-paper-500">Igrač nije pronađen.</p>
@@ -393,9 +402,9 @@ export default function PlayerDetail() {
               {memberTeams.length > 0 && (
                 <div className="mb-12">
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Član timova</span>
-                  <div className="grid sm:grid-cols-2 gap-6 mt-4">
+                  <div className="grid sm:grid-cols-2 gap-3 mt-4">
                     {memberTeams.map((team, index) => (
-                      <TeamCard key={team.id} team={team} index={index} />
+                      <TeamRow key={team.id} team={team} index={index} />
                     ))}
                   </div>
                 </div>
@@ -404,9 +413,9 @@ export default function PlayerDetail() {
               {participatedTournaments.length > 0 && (
                 <div>
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Turniri</span>
-                  <div className="grid sm:grid-cols-2 gap-6 mt-4">
+                  <div className="grid sm:grid-cols-2 gap-3 mt-4">
                     {participatedTournaments.map((tournament, index) => (
-                      <TournamentCard key={tournament.id} tournament={tournament} index={index} />
+                      <TournamentRow key={tournament.id} tournament={tournament} index={index} />
                     ))}
                   </div>
                 </div>

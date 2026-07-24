@@ -13,8 +13,9 @@ import {
   FOOTBALL_POSITION_VALUES,
   BASKETBALL_POSITION_VALUES,
 } from '../lib/positions';
-import { TeamCard, type Team } from './Teams';
-import { TournamentCard, type Tournament } from './Tournaments';
+import { TeamRow, type Team } from './Teams';
+import { TournamentRow, type Tournament } from './Tournaments';
+import { RowSkeletonGrid } from '../components/Skeleton';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 
@@ -497,7 +498,7 @@ export default function Profile() {
 
               <SelectField
                 n="07"
-                label="Dominantna ruka"
+                label="Dominantna ruka/noga"
                 id="dominantHand"
                 placeholder="Izaberi"
                 value={dominantHand}
@@ -572,13 +573,13 @@ export default function Profile() {
             </div>
 
             {loadingTeams ? (
-              <p className="text-paper-500">Učitavanje…</p>
+              <RowSkeletonGrid count={3} />
             ) : myTeams.length === 0 ? (
               <p className="text-paper-500">Još uvek nisi napravio nijedan tim.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {myTeams.map((team, index) => (
-                  <TeamCard key={team.id} team={team} index={index} />
+                  <TeamRow key={team.id} team={team} index={index} />
                 ))}
               </div>
             )}
@@ -586,13 +587,13 @@ export default function Profile() {
             <h2 className="font-display text-3xl sm:text-4xl mt-16 mb-10 leading-tight">Timovi u kojima si član</h2>
 
             {loadingMemberTeams ? (
-              <p className="text-paper-500">Učitavanje…</p>
+              <RowSkeletonGrid count={3} />
             ) : memberTeams.length === 0 ? (
               <p className="text-paper-500">Nisi još član nijednog tima koji nije tvoj.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {memberTeams.map((team, index) => (
-                  <TeamCard key={team.id} team={team} index={index} />
+                  <TeamRow key={team.id} team={team} index={index} />
                 ))}
               </div>
             )}
@@ -610,13 +611,13 @@ export default function Profile() {
             </div>
 
             {loadingTournaments ? (
-              <p className="text-paper-500">Učitavanje…</p>
+              <RowSkeletonGrid count={3} />
             ) : myTournaments.length === 0 ? (
               <p className="text-paper-500">Još uvek nisi napravio nijedan turnir.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {myTournaments.map((tournament, index) => (
-                  <TournamentCard key={tournament.id} tournament={tournament} index={index} />
+                  <TournamentRow key={tournament.id} tournament={tournament} index={index} />
                 ))}
               </div>
             )}
@@ -624,13 +625,13 @@ export default function Profile() {
             <h2 className="font-display text-3xl sm:text-4xl mt-16 mb-10 leading-tight">Turniri na kojima si učestvovao</h2>
 
             {loadingParticipatedTournaments ? (
-              <p className="text-paper-500">Učitavanje…</p>
+              <RowSkeletonGrid count={3} />
             ) : participatedTournaments.length === 0 ? (
               <p className="text-paper-500">Još uvek nisi učestvovao ni na jednom turniru.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {participatedTournaments.map((tournament, index) => (
-                  <TournamentCard key={tournament.id} tournament={tournament} index={index} />
+                  <TournamentRow key={tournament.id} tournament={tournament} index={index} />
                 ))}
               </div>
             )}

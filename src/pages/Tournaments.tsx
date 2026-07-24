@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
+import { CardSkeletonGrid } from '../components/Skeleton';
 
 type Sport = { id: number; name: string };
 
@@ -102,6 +103,49 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
           {tournament.max_teams ? ` / ${tournament.max_teams}` : ''} timova
         </p>
       </div>
+    </Link>
+  );
+}
+
+export function TournamentRow({ tournament, index }: { tournament: Tournament; index: number }) {
+  const dateRange = formatStartDate(tournament.start_date);
+  return (
+    <Link
+      to={`/turniri/${tournament.id}`}
+      className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
+    >
+      <div className="w-11 h-11 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center">
+        {tournament.crest_url ? (
+          <img
+            src={tournament.crest_url}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ objectPosition: `${tournament.crest_position_x}% ${tournament.crest_position_y}%` }}
+          />
+        ) : (
+          <span className="font-display text-sm text-paper-500">{tournament.name[0]?.toUpperCase()}</span>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <h3 className="font-display text-base leading-tight truncate transition-colors duration-200 group-hover:text-red-400">
+          {tournament.name}
+        </h3>
+        <p className="text-[11px] uppercase tracking-widest text-paper-700 mt-0.5 truncate">
+          {tournament.sports?.name ?? ''}
+          {dateRange ? ` · ${dateRange}` : ''}
+        </p>
+      </div>
+
+      <span
+        className={`text-[11px] uppercase tracking-widest font-semibold shrink-0 whitespace-nowrap ${
+          tournament.status === 'finished' ? 'text-paper-500' : 'text-red-400'
+        }`}
+      >
+        {tournament.status === 'finished'
+          ? 'Završen'
+          : `${tournament.teamCount}${tournament.max_teams ? ` / ${tournament.max_teams}` : ''} timova`}
+      </span>
     </Link>
   );
 }
@@ -250,7 +294,7 @@ export default function Tournaments() {
         <section className="flex-1 bg-maroon-900">
           <div className="max-w-6xl mx-auto px-6 py-16 sm:py-20 w-full">
             {loading ? (
-              <p className="text-paper-500">Učitavanje…</p>
+              <CardSkeletonGrid count={9} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8" />
             ) : tournaments.length === 0 ? (
               <p className="text-paper-500">Još uvek nema turnira. Budi prvi koji će ga napraviti.</p>
             ) : filteredTournaments.length === 0 ? (

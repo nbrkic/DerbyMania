@@ -176,6 +176,21 @@ html, body, #root {
 }
 .ring-expand { animation: ringExpand 1.3s cubic-bezier(0.16,1,0.3,1) 0.15s both; }
 
+@keyframes skeletonSweep {
+  0%   { transform: translateX(-130%) skewX(-12deg); }
+  100% { transform: translateX(230%) skewX(-12deg); }
+}
+.skeleton-sweep {
+  animation: skeletonSweep 1.8s cubic-bezier(0.4,0,0.2,1) infinite;
+}
+@keyframes skeletonBreathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.85; }
+}
+.skeleton-breathe {
+  animation: skeletonBreathe 1.8s ease-in-out infinite;
+}
+
 @keyframes podiumRise {
   from { opacity: 0; transform: translateY(48px) scaleY(0.85); }
   to   { opacity: 1; transform: translateY(0) scaleY(1); }

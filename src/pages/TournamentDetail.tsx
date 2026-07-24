@@ -7,6 +7,7 @@ import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
 import { TeamRow, type Team } from './Teams';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
+import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
 
 const FORMAT_LABELS: Record<string, string> = {
   grupe_i_eliminacija: 'Grupna faza + eliminacija',
@@ -412,9 +413,22 @@ export default function TournamentDetail() {
 
       <main className="flex-1 pt-16 flex flex-col">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-paper-500">Učitavanje…</p>
-          </div>
+          <>
+            <DetailHeroSkeleton />
+            <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <StatBlockSkeleton key={i} />
+                ))}
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <StatBlockSkeleton key={i} />
+                ))}
+              </div>
+              <RowSkeletonGrid count={6} />
+            </section>
+          </>
         ) : !tournament ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
             <p className="text-paper-500">Turnir nije pronađen.</p>

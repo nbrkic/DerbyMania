@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
+import { CardSkeletonGrid } from '../components/Skeleton';
 
 type Sport = { id: number; name: string };
 
@@ -276,7 +277,7 @@ export default function Teams() {
         <section className="flex-1 bg-maroon-900">
           <div className="max-w-6xl mx-auto px-6 py-16 sm:py-20 w-full">
             {loading ? (
-              <p className="text-paper-500">Učitavanje…</p>
+              <CardSkeletonGrid count={9} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8" />
             ) : teams.length === 0 ? (
               <p className="text-paper-500">Još uvek nema timova. Budi prvi koji će ga napraviti.</p>
             ) : filteredTeams.length === 0 ? (

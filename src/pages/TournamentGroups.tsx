@@ -6,6 +6,7 @@ import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
+import { CompactHeroSkeleton, TableSkeletonGrid, Skeleton } from '../components/Skeleton';
 
 type TournamentInfo = {
   id: string;
@@ -875,9 +876,12 @@ export default function TournamentGroups() {
 
       <main className="flex-1 pt-16 flex flex-col">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-paper-500">Učitavanje…</p>
-          </div>
+          <>
+            <CompactHeroSkeleton />
+            <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
+              <TableSkeletonGrid count={3} />
+            </section>
+          </>
         ) : !tournament ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
             <p className="text-paper-500">Turnir nije pronađen.</p>
@@ -919,7 +923,7 @@ export default function TournamentGroups() {
 
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
               {loadingGroups ? (
-                <p className="text-sm text-paper-500">Učitavanje…</p>
+                <TableSkeletonGrid count={3} />
               ) : groups.length > 0 ? (
                 <>
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1067,7 +1071,7 @@ export default function TournamentGroups() {
                       <div className="w-10 h-0.5 bg-red-500 mt-3 mb-6" />
 
                       {loadingBracketStatus ? (
-                        <p className="text-sm text-paper-500">Učitavanje…</p>
+                        <Skeleton className="h-20 w-full max-w-md" />
                       ) : bracketExists ? (
                         <div className="bg-ink-900 border border-ink-700 px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <p className="text-sm text-paper-300">
