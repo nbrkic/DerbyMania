@@ -60,6 +60,7 @@ export default function TeamDetail() {
         .from('teams')
         .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, description, founded_year, sports(name)')
         .eq('id', id)
+        .is('deleted_at', null)
         .single();
 
       const row = (teamRow as unknown as TeamDetail) ?? null;
@@ -172,10 +173,14 @@ export default function TeamDetail() {
     if (!team) return;
     setDeleting(true);
     setDeleteError(null);
-    const { error } = await supabase.from('teams').delete().eq('id', team.id);
+    const { data, error } = await supabase
+      .from('teams')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', team.id)
+      .select('id');
     setDeleting(false);
 
-    if (error) {
+    if (error || !data || data.length === 0) {
       setDeleteError('Brisanje tima nije uspelo. Pokušaj ponovo.');
       return;
     }
@@ -362,7 +367,8 @@ export default function TeamDetail() {
                         <div>
                           <p className="text-sm font-medium text-paper-100">Obriši tim</p>
                           <p className="text-xs text-paper-500 mt-1">
-                            Ovo trajno briše tim, njegove igrače i sve zahteve za pridruživanje.
+                            Tim više neće biti vidljiv niti dostupan za nove prijave, ali istorija turnira i
+                            utakmica u kojima je učestvovao ostaje sačuvana.
                           </p>
                           {deleteError && <p className="text-xs text-red-400 mt-2">{deleteError}</p>}
                         </div>

@@ -21,6 +21,7 @@ export type Team = {
   sports: { name: string } | null;
   founderName: string | null;
   playerCount: number;
+  deleted_at: string | null;
 };
 
 function SearchIcon({ className }: { className?: string }) {
@@ -93,11 +94,10 @@ export function TeamCard({ team, index }: { team: Team; index: number }) {
 }
 
 export function TeamRow({ team, index, fromTournamentId }: { team: Team; index: number; fromTournamentId?: string }) {
-  return (
-    <Link
-      to={fromTournamentId ? `/timovi/${team.id}?turnir=${fromTournamentId}` : `/timovi/${team.id}`}
-      className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
-    >
+  const isDeleted = !!team.deleted_at;
+
+  const content = (
+    <>
       <div className="w-11 h-11 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center">
         {team.crest_url ? (
           <img
@@ -112,18 +112,38 @@ export function TeamRow({ team, index, fromTournamentId }: { team: Team; index: 
       </div>
 
       <div className="min-w-0 flex-1">
-        <h3 className="font-display text-base leading-tight truncate transition-colors duration-200 group-hover:text-red-400">
+        <h3 className={`font-display text-base leading-tight truncate transition-colors duration-200 ${isDeleted ? '' : 'group-hover:text-red-400'}`}>
           {team.name}
         </h3>
         <p className="text-[11px] uppercase tracking-widest text-paper-700 mt-0.5 truncate">
-          {team.sports?.name ?? ''}
-          {team.city ? ` · ${team.city}` : ''}
+          {isDeleted ? 'Tim obrisan' : `${team.sports?.name ?? ''}${team.city ? ` · ${team.city}` : ''}`}
         </p>
       </div>
 
-      <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold shrink-0 whitespace-nowrap">
-        {team.playerCount} igrača
-      </span>
+      {!isDeleted && (
+        <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold shrink-0 whitespace-nowrap">
+          {team.playerCount} igrača
+        </span>
+      )}
+    </>
+  );
+
+  if (isDeleted) {
+    return (
+      <div
+        className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-paper-700/50 px-4 py-3 opacity-60 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={fromTournamentId ? `/timovi/${team.id}?turnir=${fromTournamentId}` : `/timovi/${team.id}`}
+      className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
+    >
+      {content}
     </Link>
   );
 }
@@ -140,7 +160,8 @@ export default function Teams() {
     async function load() {
       const { data: teamRows } = await supabase
         .from('teams')
-        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
+        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name), deleted_at')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       const rows = (teamRows as unknown as Omit<Team, 'founderName' | 'playerCount'>[]) ?? [];

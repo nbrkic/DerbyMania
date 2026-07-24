@@ -164,6 +164,7 @@ export default function Profile() {
         .from('teams')
         .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
         .eq('owner_id', user!.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       const rows = (data as unknown as Omit<Team, 'founderName' | 'playerCount'>[]) ?? [];
@@ -200,6 +201,7 @@ export default function Profile() {
         .from('teams')
         .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
         .in('id', teamIds)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       const rows = (data as unknown as Omit<Team, 'founderName' | 'playerCount'>[]) ?? [];

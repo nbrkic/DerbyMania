@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
@@ -14,6 +14,7 @@ export type Player = {
   created_at: string;
   teamCount: number;
   career_football_goals: number;
+  career_basketball_points: number;
 };
 
 type Sport = { id: number; name: string };
@@ -29,6 +30,41 @@ function SearchIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+function TrophyIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M8 4h8v4.5a4 4 0 0 1-4 4 4 4 0 0 1-4-4V4Z" />
+      <path d="M8 5H5.5a2 2 0 0 0 0 4H7" />
+      <path d="M16 5h2.5a2 2 0 0 1 0 4H17" />
+      <path d="M12 12.5V16" />
+      <path d="M9.5 20h5" />
+      <path d="M10.2 16.5h3.6l.6 3.5h-4.8l.6-3.5Z" />
+    </svg>
+  );
+}
+
+function BasketballIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18M3 12h18" />
+      <path d="M5.3 5.3c2.4 2.4 2.4 11 0 13.4M18.7 5.3c-2.4 2.4-2.4 11 0 13.4" />
+    </svg>
+  );
+}
+
+const RANK_ACCENT: Record<number, string> = {
+  1: 'border-l-red-400',
+  2: 'border-l-paper-300',
+  3: 'border-l-paper-700',
+};
+
+const RANK_TEXT: Record<number, string> = {
+  1: 'text-red-400',
+  2: 'text-paper-300',
+  3: 'text-paper-500',
+};
 
 function memberSince(iso: string) {
   return new Date(iso).toLocaleDateString('sr-RS', { month: 'long', year: 'numeric' });
@@ -93,6 +129,64 @@ export function PlayerCard({
   );
 }
 
+function TopScorersStrip({
+  title,
+  icon,
+  players,
+  getValue,
+  unitWord,
+  riseClass,
+}: {
+  title: string;
+  icon: ReactNode;
+  players: Player[];
+  getValue: (player: Player) => number;
+  unitWord: (value: number) => string;
+  riseClass: string;
+}) {
+  if (!players.length) return null;
+
+  return (
+    <div className={`${riseClass} mt-10`}>
+      <div className="flex items-center gap-2 mb-4">
+        {icon}
+        <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">{title}</span>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-1">
+        {players.map((player, index) => {
+          const rank = index + 1;
+          const accent = RANK_ACCENT[rank] ?? 'border-l-red-500/40';
+          const rankText = RANK_TEXT[rank] ?? 'text-paper-700';
+          const displayName = player.full_name || 'Igrač bez imena';
+          const value = getValue(player);
+
+          return (
+            <Link
+              key={player.id}
+              to={`/igraci/${player.id}`}
+              className={`group shrink-0 flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 ${accent} pl-4 pr-5 py-2.5 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50`}
+            >
+              <span className={`font-display text-lg w-5 text-center shrink-0 ${rankText}`}>{rank}</span>
+              <UserAvatar
+                name={displayName}
+                avatarUrl={player.avatar_url}
+                position={{ x: player.avatar_position_x, y: player.avatar_position_y }}
+                className="w-8 h-8 text-xs ring-1 ring-red-500/30 shrink-0"
+              />
+              <span className="text-sm text-paper-100 whitespace-nowrap transition-colors duration-200 group-hover:text-red-400">
+                {displayName}
+              </span>
+              <span className="text-xs text-paper-500 whitespace-nowrap">
+                {value} {unitWord(value)}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Players() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [sports, setSports] = useState<Sport[]>([]);
@@ -115,7 +209,7 @@ export default function Players() {
     async function load() {
       const { data } = await supabase
         .from('public_profiles')
-        .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, career_football_goals')
+        .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, career_football_goals, career_basketball_points')
         .order('full_name', { ascending: true });
 
       const rows = (data as unknown as Omit<Player, 'teamCount'>[]) ?? [];
@@ -163,6 +257,24 @@ export default function Players() {
     return filtered;
   }, [players, search, sportFilter, playerSports, goalSort]);
 
+  const topScorers = useMemo(
+    () =>
+      players
+        .filter((p) => p.career_football_goals > 0)
+        .sort((a, b) => b.career_football_goals - a.career_football_goals || (a.full_name ?? '').localeCompare(b.full_name ?? ''))
+        .slice(0, 5),
+    [players]
+  );
+
+  const topBasketballScorers = useMemo(
+    () =>
+      players
+        .filter((p) => p.career_basketball_points > 0)
+        .sort((a, b) => b.career_basketball_points - a.career_basketball_points || (a.full_name ?? '').localeCompare(b.full_name ?? ''))
+        .slice(0, 5),
+    [players]
+  );
+
   useEffect(() => {
     setPage(1);
   }, [search, sportFilter, goalSort]);
@@ -193,8 +305,29 @@ export default function Players() {
               <h1 className="font-display text-4xl sm:text-5xl mt-4 leading-tight">Igrači</h1>
             </div>
 
+            {!loading && (
+              <>
+                <TopScorersStrip
+                  title="Najbolji strelci"
+                  icon={<TrophyIcon className="w-4 h-4 text-red-400" />}
+                  players={topScorers}
+                  getValue={(p) => p.career_football_goals}
+                  unitWord={(v) => (v === 1 ? 'gol' : 'golova')}
+                  riseClass="rise-2"
+                />
+                <TopScorersStrip
+                  title="Top poenteri (košarka)"
+                  icon={<BasketballIcon className="w-4 h-4 text-red-400" />}
+                  players={topBasketballScorers}
+                  getValue={(p) => p.career_basketball_points}
+                  unitWord={(v) => (v === 1 ? 'poen' : 'poena')}
+                  riseClass="rise-3"
+                />
+              </>
+            )}
+
             {!loading && players.length > 0 && (
-              <div className="rise-2 flex flex-col sm:flex-row sm:items-end gap-4 mt-16 w-full">
+              <div className="rise-4 flex flex-col sm:flex-row sm:items-end gap-4 mt-16 w-full">
                 <div className="relative flex-1">
                   <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-500 pointer-events-none" />
                   <input
@@ -250,6 +383,9 @@ export default function Players() {
               <p className="text-paper-500">Nema igrača koji odgovaraju pretrazi.</p>
             ) : (
               <>
+                <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Svi DerbyMania igrači</span>
+                <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
+
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {pagedPlayers.map((player, index) => (
                     <PlayerCard key={player.id} player={player} index={index} />

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
+import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 
 type TournamentInfo = {
   id: string;
@@ -14,6 +15,7 @@ type TournamentInfo = {
   crest_position_x: number;
   crest_position_y: number;
   format: string;
+  sports: { name: string } | null;
 };
 
 type GroupTeam = {
@@ -39,6 +41,23 @@ type BracketMatch = {
 
 type RosterPlayer = { id: string; full_name: string | null };
 
+function nextPowerOfTwo(n: number) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
+}
+
+function standardBracketOrder(size: number): number[] {
+  let order = [1, 2];
+  while (order.length < size) {
+    const n = order.length * 2 + 1;
+    const next: number[] = [];
+    for (const seed of order) next.push(seed, n - seed);
+    order = next;
+  }
+  return order;
+}
+
 function roundLabel(round: number, totalRounds: number) {
   const fromEnd = totalRounds - round;
   if (fromEnd === 0) return 'Finale';
@@ -55,6 +74,16 @@ function BallIcon({ className }: { className?: string }) {
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7.5 8.2 10.2l1.5 4.5h4.6l1.5-4.5Z" strokeLinejoin="round" />
       <path d="M12 3v4.5M6.2 8l2 2.2M17.8 8l-2 2.2M9.7 14.7 8 19M14.3 14.7 16 19" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BasketballIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18M3 12h18" />
+      <path d="M5.3 5.3c2.4 2.4 2.4 11 0 13.4M18.7 5.3c-2.4 2.4-2.4 11 0 13.4" />
     </svg>
   );
 }
@@ -171,28 +200,71 @@ function ScorerPicker({
   roster,
   onPick,
   idPrefix,
+  isBasketball,
 }: {
   roster: RosterPlayer[];
-  onPick: (playerId: string) => void | Promise<void>;
+  onPick: (playerId: string, points: number) => void | Promise<void>;
   idPrefix: string;
+  isBasketball: boolean;
 }) {
   const [selectedId, setSelectedId] = useState('');
+  const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null);
 
   if (!roster.length) {
     return <p className="text-[11px] text-paper-700 mt-1">Nema igrača u timu</p>;
   }
 
+  if (isBasketball && pendingPlayerId) {
+    const pendingName = roster.find((p) => p.id === pendingPlayerId)?.full_name || 'Igrač';
+    return (
+      <div className="w-full max-w-[10.5rem] mt-1">
+        <p className="text-[10px] text-paper-500 truncate mb-1.5">{pendingName}</p>
+        <div className="flex gap-1.5">
+          {[1, 2, 3].map((points) => (
+            <button
+              key={points}
+              type="button"
+              onClick={() => {
+                onPick(pendingPlayerId, points);
+                setPendingPlayerId(null);
+              }}
+              className="flex-1 py-2 text-xs font-semibold border border-red-500/30 hover:bg-red-500/10 hover:border-red-400/60 transition-colors"
+            >
+              +{points}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setPendingPlayerId(null)}
+          className="text-[10px] text-paper-700 hover:text-paper-100 transition-colors mt-1.5"
+        >
+          Otkaži
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-[10.5rem] mt-1 relative">
-      <BallIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-red-400 pointer-events-none" />
+      {isBasketball ? (
+        <BasketballIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-red-400 pointer-events-none" />
+      ) : (
+        <BallIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-red-400 pointer-events-none" />
+      )}
       <Dropdown
         id={idPrefix}
         value={selectedId}
         onChange={(playerId) => {
-          onPick(playerId);
-          setSelectedId('');
+          if (isBasketball) {
+            setPendingPlayerId(playerId);
+            setSelectedId('');
+          } else {
+            onPick(playerId, 1);
+            setSelectedId('');
+          }
         }}
-        placeholder="Strelac"
+        placeholder={isBasketball ? 'Igrač' : 'Strelac'}
         options={roster.map((p) => ({ value: p.id, label: p.full_name || 'Igrač' }))}
         triggerClassName="w-full pl-8 pr-3 py-2 text-xs uppercase tracking-widest border border-red-500/30 hover:bg-red-500/10 hover:border-red-400/60 transition-colors flex items-center justify-between gap-2 overflow-hidden"
       />
@@ -244,6 +316,7 @@ function BracketOutcomeBox({
   isOwner,
   rosterA,
   rosterB,
+  isBasketball,
   onStart,
   onAddGoal,
   onFinish,
@@ -254,8 +327,9 @@ function BracketOutcomeBox({
   isOwner: boolean;
   rosterA: RosterPlayer[];
   rosterB: RosterPlayer[];
+  isBasketball: boolean;
   onStart: (matchId: string) => void;
-  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string) => void;
+  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) => void;
   onFinish: (matchId: string) => void;
   finishError: string | null;
 }) {
@@ -371,12 +445,14 @@ function BracketOutcomeBox({
           <ScorerPicker
             idPrefix={`tree-scorer-a-${match.id}`}
             roster={rosterA}
-            onPick={(playerId) => onAddGoal(match.id, 'a', match.team_a_id!, playerId)}
+            isBasketball={isBasketball}
+            onPick={(playerId, points) => onAddGoal(match.id, 'a', match.team_a_id!, playerId, points)}
           />
           <ScorerPicker
             idPrefix={`tree-scorer-b-${match.id}`}
             roster={rosterB}
-            onPick={(playerId) => onAddGoal(match.id, 'b', match.team_b_id!, playerId)}
+            isBasketball={isBasketball}
+            onPick={(playerId, points) => onAddGoal(match.id, 'b', match.team_b_id!, playerId, points)}
           />
           <button
             type="button"
@@ -408,6 +484,7 @@ function BracketTree({
   teamsById,
   isOwner,
   rosters,
+  isBasketball,
   onStart,
   onAddGoal,
   onFinish,
@@ -418,8 +495,9 @@ function BracketTree({
   teamsById: Map<string, GroupTeam>;
   isOwner: boolean;
   rosters: Map<string, RosterPlayer[]>;
+  isBasketball: boolean;
   onStart: (matchId: string) => void;
-  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string) => void;
+  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) => void;
   onFinish: (matchId: string) => void;
   finishError: string | null;
 }) {
@@ -487,6 +565,7 @@ function BracketTree({
                       isOwner={isOwner}
                       rosterA={m.team_a_id ? rosters.get(m.team_a_id) ?? [] : []}
                       rosterB={m.team_b_id ? rosters.get(m.team_b_id) ?? [] : []}
+                      isBasketball={isBasketball}
                       onStart={onStart}
                       onAddGoal={onAddGoal}
                       onFinish={onFinish}
@@ -518,13 +597,17 @@ export default function TournamentElimination() {
   const [rosters, setRosters] = useState<Map<string, RosterPlayer[]>>(new Map());
   const [finishError, setFinishError] = useState<string | null>(null);
 
+  const [confirmingDraw, setConfirmingDraw] = useState(false);
+  const [drawingBracket, setDrawingBracket] = useState(false);
+  const [drawError, setDrawError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id) return;
 
     async function load() {
       const { data: tournamentRow } = await supabase
         .from('tournaments')
-        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, format')
+        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, format, sports(name)')
         .eq('id', id)
         .single();
 
@@ -608,6 +691,7 @@ export default function TournamentElimination() {
   const teamsById = new Map(teams.map((t) => [t.id, t]));
   const isOwner = user?.id === tournament?.owner_id;
   const bracketExists = bracketMatches.length > 0;
+  const isBasketball = !!tournament?.sports?.name && BASKETBALL_SPORT_NAMES.includes(tournament.sports.name);
 
   async function handleStartBracketMatch(matchId: string) {
     const { error } = await supabase
@@ -619,17 +703,17 @@ export default function TournamentElimination() {
     }
   }
 
-  async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string) {
+  async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) {
     const match = bracketMatches.find((m) => m.id === matchId);
     if (!match) return;
 
     const { error: goalError } = await supabase
       .from('tournament_bracket_goals')
-      .insert({ match_id: matchId, team_id: teamId, player_id: playerId });
+      .insert({ match_id: matchId, team_id: teamId, player_id: playerId, points });
     if (goalError) return;
 
     const field = side === 'a' ? 'team_a_goals' : 'team_b_goals';
-    const newValue = (side === 'a' ? match.team_a_goals : match.team_b_goals) + 1;
+    const newValue = (side === 'a' ? match.team_a_goals : match.team_b_goals) + points;
 
     const { error } = await supabase.from('tournament_bracket_matches').update({ [field]: newValue }).eq('id', matchId);
     if (!error) {
@@ -680,6 +764,94 @@ export default function TournamentElimination() {
     }
   }
 
+  async function handleSetDraw() {
+    if (!tournament) return;
+    if (teams.length < 2) {
+      setDrawError('Potrebna su bar 2 prijavljena tima za žreb.');
+      return;
+    }
+
+    setDrawingBracket(true);
+    setDrawError(null);
+
+    const shuffled = [...teams];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    const totalTeams = shuffled.length;
+    const bracketSize = nextPowerOfTwo(totalTeams);
+    const order = standardBracketOrder(bracketSize);
+    const slotTeams: (GroupTeam | null)[] = order.map((seed) => (seed <= totalTeams ? shuffled[seed - 1] : null));
+
+    const totalBracketRounds = Math.log2(bracketSize);
+    let currentRoundTeams: (GroupTeam | null)[] = slotTeams;
+    const rows: {
+      tournament_id: string;
+      round: number;
+      bracket_slot: number;
+      team_a_id: string | null;
+      team_b_id: string | null;
+      status: string;
+      is_bye: boolean;
+      winner_team_id: string | null;
+      finished_at: string | null;
+    }[] = [];
+
+    for (let round = 1; round <= totalBracketRounds; round++) {
+      const matchCount = currentRoundTeams.length / 2;
+      const nextRoundTeams: (GroupTeam | null)[] = [];
+
+      for (let slot = 0; slot < matchCount; slot++) {
+        const teamA = currentRoundTeams[slot * 2];
+        const teamB = currentRoundTeams[slot * 2 + 1];
+
+        let isBye = false;
+        let winner: GroupTeam | null = null;
+
+        if (round === 1) {
+          const bothPresent = !!teamA && !!teamB;
+          isBye = !bothPresent && !!(teamA || teamB);
+          winner = isBye ? teamA ?? teamB ?? null : null;
+        }
+
+        rows.push({
+          tournament_id: tournament.id,
+          round,
+          bracket_slot: slot,
+          team_a_id: teamA?.id ?? null,
+          team_b_id: teamB?.id ?? null,
+          status: isBye ? 'finished' : 'pending',
+          is_bye: isBye,
+          winner_team_id: winner?.id ?? null,
+          finished_at: isBye ? new Date().toISOString() : null,
+        });
+
+        nextRoundTeams.push(round === 1 && isBye ? winner : null);
+      }
+
+      currentRoundTeams = nextRoundTeams;
+    }
+
+    const { data: inserted, error } = await supabase
+      .from('tournament_bracket_matches')
+      .insert(rows)
+      .select('id, round, bracket_slot, team_a_id, team_b_id, team_a_goals, team_b_goals, status, is_bye, winner_team_id');
+
+    if (error || !inserted) {
+      setDrawingBracket(false);
+      setDrawError('Postavljanje žreba nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    await supabase.from('tournaments').update({ roster_locked: true }).eq('id', tournament.id);
+
+    setDrawingBracket(false);
+    setBracketMatches(inserted as BracketMatch[]);
+    setConfirmingDraw(false);
+  }
+
   const totalRounds = bracketMatches.length ? Math.max(...bracketMatches.map((m) => m.round)) : 0;
   const matchesByRound = new Map<number, BracketMatch[]>();
   bracketMatches.forEach((m) => {
@@ -724,7 +896,9 @@ export default function TournamentElimination() {
                     )}
                   </div>
                   <div>
-                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Eliminaciona faza</span>
+                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
+                      {tournament.format === 'kup' ? 'Kup' : 'Eliminaciona faza'}
+                    </span>
                     <h1 className="font-display text-2xl sm:text-3xl leading-tight">{tournament.name}</h1>
                   </div>
                 </div>
@@ -751,12 +925,59 @@ export default function TournamentElimination() {
                     teamsById={teamsById}
                     isOwner={isOwner}
                     rosters={rosters}
+                    isBasketball={isBasketball}
                     onStart={handleStartBracketMatch}
                     onAddGoal={handleAddGoal}
                     onFinish={handleFinishBracketMatch}
                     finishError={finishError}
                   />
                 </>
+              ) : tournament.format === 'kup' ? (
+                isOwner ? (
+                  teams.length < 2 ? (
+                    <p className="text-sm text-paper-500 text-center">
+                      Potrebno je najmanje 2 prijavljena tima da bi se postavio žreb.
+                    </p>
+                  ) : (
+                    <div className="max-w-md mx-auto text-center">
+                      <p className="text-sm text-paper-300 mb-4">
+                        Kada su svi timovi prijavljeni, postavi žreb. Timovi će nasumično biti raspoređeni jedni
+                        protiv drugih. Nakon toga, prijave, izmene turnira i povlačenja timova više neće biti mogući.
+                      </p>
+                      {confirmingDraw ? (
+                        <div className="flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={handleSetDraw}
+                            disabled={drawingBracket}
+                            className="px-5 py-2.5 text-xs uppercase tracking-widest text-paper-100 bg-red-500 hover:bg-red-400 transition-colors"
+                          >
+                            {drawingBracket ? 'Kreiranje…' : 'Potvrdi'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDraw(false)}
+                            disabled={drawingBracket}
+                            className="text-xs uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors"
+                          >
+                            Otkaži
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingDraw(true)}
+                          className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                        >
+                          Postavi žreb
+                        </button>
+                      )}
+                      {drawError && <p className="text-sm text-red-400 mt-3">{drawError}</p>}
+                    </div>
+                  )
+                ) : (
+                  <p className="text-sm text-paper-500 text-center">Žreb za kup još uvek nije postavljen.</p>
+                )
               ) : (
                 <div className="flex flex-col items-center text-center gap-6">
                   <p className="text-sm text-paper-500">

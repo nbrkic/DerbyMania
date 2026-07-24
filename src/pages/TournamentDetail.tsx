@@ -41,6 +41,27 @@ type TournamentDetail = {
 
 type OwnedTeam = { id: string; name: string; sport_id: number };
 type RequestStatus = 'none' | 'pending' | 'member';
+type TopScorer = { playerId: string; fullName: string | null; teamId: string; goals: number };
+
+function BallIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5 8.2 10.2l1.5 4.5h4.6l1.5-4.5Z" strokeLinejoin="round" />
+      <path d="M12 3v4.5M6.2 8l2 2.2M17.8 8l-2 2.2M9.7 14.7 8 19M14.3 14.7 16 19" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BasketballIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18M3 12h18" />
+      <path d="M5.3 5.3c2.4 2.4 2.4 11 0 13.4M18.7 5.3c-2.4 2.4-2.4 11 0 13.4" />
+    </svg>
+  );
+}
 
 function StatBlock({ label, value }: { label: string; value: string }) {
   return (
@@ -84,6 +105,8 @@ export default function TournamentDetail() {
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [groupsFormed, setGroupsFormed] = useState(false);
 
+  const [topScorer, setTopScorer] = useState<TopScorer | null>(null);
+
   useEffect(() => {
     if (!id) return;
 
@@ -122,7 +145,7 @@ export default function TournamentDetail() {
         if (teamIds.length) {
           const { data: teamRows } = await supabase
             .from('teams')
-            .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
+            .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name), deleted_at')
             .in('id', teamIds);
 
           const rows = (teamRows as unknown as Omit<Team, 'founderName' | 'playerCount'>[]) ?? [];
@@ -152,6 +175,62 @@ export default function TournamentDetail() {
   }, [id]);
 
   useEffect(() => {
+    if (!tournament || tournament.status !== 'finished') {
+      setTopScorer(null);
+      return;
+    }
+
+    const tournamentId = tournament.id;
+    const format = tournament.format;
+
+    async function countGoals(matchTable: string, goalsTable: string, counts: Map<string, { teamId: string; goals: number }>) {
+      const { data: matchRows } = await supabase.from(matchTable).select('id').eq('tournament_id', tournamentId);
+      const matchIds = (matchRows ?? []).map((m: { id: string }) => m.id);
+      if (!matchIds.length) return;
+
+      const { data: goalRows } = await supabase.from(goalsTable).select('player_id, team_id, points').in('match_id', matchIds);
+      (goalRows ?? []).forEach((g: { player_id: string; team_id: string; points: number }) => {
+        const entry = counts.get(g.player_id) ?? { teamId: g.team_id, goals: 0 };
+        entry.goals += g.points;
+        counts.set(g.player_id, entry);
+      });
+    }
+
+    async function loadTopScorer() {
+      const counts = new Map<string, { teamId: string; goals: number }>();
+
+      if (format === 'liga') {
+        await countGoals('tournament_league_matches', 'tournament_league_goals', counts);
+      } else if (format === 'kup') {
+        await countGoals('tournament_bracket_matches', 'tournament_bracket_goals', counts);
+      } else {
+        await countGoals('tournament_matches', 'tournament_match_goals', counts);
+        await countGoals('tournament_bracket_matches', 'tournament_bracket_goals', counts);
+      }
+
+      if (!counts.size) {
+        setTopScorer(null);
+        return;
+      }
+
+      let bestPlayerId = '';
+      let best = { teamId: '', goals: -1 };
+      counts.forEach((value, playerId) => {
+        if (value.goals > best.goals) {
+          best = value;
+          bestPlayerId = playerId;
+        }
+      });
+
+      const { data: profile } = await supabase.from('public_profiles').select('full_name').eq('id', bestPlayerId).single();
+
+      setTopScorer({ playerId: bestPlayerId, fullName: profile?.full_name ?? null, teamId: best.teamId, goals: best.goals });
+    }
+
+    loadTopScorer();
+  }, [tournament]);
+
+  useEffect(() => {
     if (!user || !tournament || user.id === tournament.owner_id) {
       setOwnedTeams([]);
       return;
@@ -163,6 +242,7 @@ export default function TournamentDetail() {
         .select('id, name, sport_id')
         .eq('owner_id', user!.id)
         .eq('sport_id', tournament!.sport_id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       const owned = data ?? [];
@@ -207,6 +287,7 @@ export default function TournamentDetail() {
       .select('id, name, sport_id')
       .eq('owner_id', user.id)
       .eq('sport_id', tournament.sport_id)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         const owned = data ?? [];
@@ -232,7 +313,7 @@ export default function TournamentDetail() {
 
     const { data: teamRow } = await supabase
       .from('teams')
-      .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
+      .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name), deleted_at')
       .eq('id', selectedOwnerTeamId)
       .single();
 
@@ -322,6 +403,7 @@ export default function TournamentDetail() {
   const isBasketball = !!sportName && BASKETBALL_SPORT_NAMES.includes(sportName);
   const periodLabel = isBasketball ? 'Trajanje četvrtine' : 'Trajanje poluvremena';
   const startLabel = tournament?.start_date ? formatDate(tournament.start_date) : null;
+  const topScorerTeam = topScorer ? teams.find((t) => t.id === topScorer.teamId) ?? null : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
@@ -499,6 +581,25 @@ export default function TournamentDetail() {
               </section>
             )}
 
+            {tournament.format === 'kup' && (
+              <section className="bg-maroon-900 border-b border-ink-700">
+                <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                  <div>
+                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Kup</span>
+                    <p className="text-paper-200 text-sm mt-1">
+                      Ovaj turnir koristi kup format. Pogledaj žreb i eliminacionu fazu.
+                    </p>
+                  </div>
+                  <Link
+                    to={`/turniri/${tournament.id}/eliminacija`}
+                    className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                  >
+                    Pogledaj kup
+                  </Link>
+                </div>
+              </section>
+            )}
+
             {tournament.format === 'liga' && (
               <section className="bg-maroon-900 border-b border-ink-700">
                 <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
@@ -537,6 +638,39 @@ export default function TournamentDetail() {
                 <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} />
                 <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
               </div>
+
+              {isFinished && topScorer && (
+                <div className="mb-10">
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
+                    Najbolji strelac turnira
+                  </span>
+                  <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
+                  <Link
+                    to={`/igraci/${topScorer.playerId}`}
+                    className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 max-w-md transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
+                  >
+                    <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
+                      {isBasketball ? (
+                        <BasketballIcon className="w-5 h-5 text-red-400" />
+                      ) : (
+                        <BallIcon className="w-5 h-5 text-red-400" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-paper-100 font-medium truncate transition-colors duration-200 group-hover:text-red-400">
+                        {topScorer.fullName || 'Igrač'}
+                      </p>
+                      {topScorerTeam && <p className="text-xs text-paper-500 truncate">{topScorerTeam.name}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-display text-2xl leading-none">{topScorer.goals}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-paper-500 mt-1">
+                        {isBasketball ? (topScorer.goals === 1 ? 'poen' : 'poena') : 'golova'}
+                      </p>
+                    </div>
+                  </Link>
+                </div>
+              )}
 
               {organizerName && (
                 <p className="text-sm text-paper-500 mb-10">

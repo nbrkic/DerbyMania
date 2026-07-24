@@ -114,7 +114,8 @@ export default function PlayerDetail() {
           const { data: teamRows } = await supabase
             .from('teams')
             .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name)')
-            .in('id', memberTeamIds);
+            .in('id', memberTeamIds)
+            .is('deleted_at', null);
 
           const rows = (teamRows as unknown as Omit<Team, 'founderName' | 'playerCount'>[]) ?? [];
 
@@ -200,6 +201,7 @@ export default function PlayerDetail() {
         .from('teams')
         .select('id, name')
         .eq('owner_id', user!.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       const owned = data ?? [];
@@ -287,7 +289,7 @@ export default function PlayerDetail() {
         ) : (
           <>
             <section className="bg-ink-900 border-b border-ink-700">
-              <div className="max-w-4xl mx-auto px-6 pt-8 sm:pt-10 pb-10 flex flex-col items-center text-center">
+              <div className="max-w-6xl mx-auto px-6 pt-8 sm:pt-10 pb-10 flex flex-col items-center text-center">
                 <Link
                   to="/igraci"
                   className="self-start mb-8 btn-line px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2"
@@ -339,7 +341,7 @@ export default function PlayerDetail() {
               </div>
             </section>
 
-            <section className="flex-1 max-w-4xl mx-auto px-6 py-12 sm:py-16 w-full">
+            <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
               <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-6 mb-12">
                 <StatBlock label="Godina" value={player.age != null ? String(player.age) : '—'} />
                 <StatBlock label="Visina" value={player.height_cm ? `${player.height_cm} cm` : '—'} />

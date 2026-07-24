@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
+import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 
 type TournamentInfo = {
   id: string;
@@ -25,6 +26,7 @@ type LeagueTeam = {
   crest_url: string | null;
   crest_position_x: number;
   crest_position_y: number;
+  deleted_at: string | null;
 };
 
 type MatchStatus = 'in_progress' | 'finished';
@@ -87,6 +89,16 @@ function BallIcon({ className }: { className?: string }) {
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7.5 8.2 10.2l1.5 4.5h4.6l1.5-4.5Z" strokeLinejoin="round" />
       <path d="M12 3v4.5M6.2 8l2 2.2M17.8 8l-2 2.2M9.7 14.7 8 19M14.3 14.7 16 19" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BasketballIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18M3 12h18" />
+      <path d="M5.3 5.3c2.4 2.4 2.4 11 0 13.4M18.7 5.3c-2.4 2.4-2.4 11 0 13.4" />
     </svg>
   );
 }
@@ -250,7 +262,15 @@ function PodiumSection({
   );
 }
 
-function StandingsTable({ teams, matches }: { teams: LeagueTeam[]; matches: LeagueMatch[] }) {
+function StandingsTable({
+  teams,
+  matches,
+  isBasketball,
+}: {
+  teams: LeagueTeam[];
+  matches: LeagueMatch[];
+  isBasketball: boolean;
+}) {
   const standings = computeStandings(teams, matches);
 
   return (
@@ -265,9 +285,15 @@ function StandingsTable({ teams, matches }: { teams: LeagueTeam[]; matches: Leag
               <th className="text-left font-medium pl-5 pr-2 py-2 w-7">#</th>
               <th className="text-left font-medium px-2 py-2">Tim</th>
               <th className="text-center font-medium px-2 py-2" title="Odigrane utakmice">OU</th>
-              <th className="text-center font-medium px-2 py-2" title="Dati golovi">DG</th>
-              <th className="text-center font-medium px-2 py-2" title="Primljeni golovi">PG</th>
-              <th className="text-center font-medium pl-2 pr-5 py-2" title="Poeni">P</th>
+              <th className="text-center font-medium px-2 py-2" title={isBasketball ? 'Dati poeni' : 'Dati golovi'}>
+                {isBasketball ? 'DP' : 'DG'}
+              </th>
+              <th className="text-center font-medium px-2 py-2" title={isBasketball ? 'Primljeni poeni' : 'Primljeni golovi'}>
+                {isBasketball ? 'PP' : 'PG'}
+              </th>
+              <th className="text-center font-medium pl-2 pr-5 py-2" title={isBasketball ? 'Bodovi' : 'Poeni'}>
+                {isBasketball ? 'Bod' : 'P'}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-800">
@@ -275,12 +301,19 @@ function StandingsTable({ teams, matches }: { teams: LeagueTeam[]; matches: Leag
               <tr key={s.team.id} className="hover:bg-ink-800 transition-colors">
                 <td className="pl-5 pr-2 py-2.5 text-paper-500">{index + 1}</td>
                 <td className="px-2 py-2.5 min-w-0">
-                  <Link to={`/timovi/${s.team.id}`} className="group flex items-center gap-2 min-w-0">
-                    <TeamBadge team={s.team} />
-                    <span className="truncate text-paper-100 transition-colors duration-200 group-hover:text-red-400">
-                      {s.team.name}
-                    </span>
-                  </Link>
+                  {s.team.deleted_at ? (
+                    <div className="flex items-center gap-2 min-w-0 opacity-60">
+                      <TeamBadge team={s.team} />
+                      <span className="truncate text-paper-500">{s.team.name}</span>
+                    </div>
+                  ) : (
+                    <Link to={`/timovi/${s.team.id}`} className="group flex items-center gap-2 min-w-0">
+                      <TeamBadge team={s.team} />
+                      <span className="truncate text-paper-100 transition-colors duration-200 group-hover:text-red-400">
+                        {s.team.name}
+                      </span>
+                    </Link>
+                  )}
                 </td>
                 <td className="text-center px-2 py-2.5 text-paper-300">{s.played}</td>
                 <td className="text-center px-2 py-2.5 text-paper-300">{s.scored}</td>
@@ -299,28 +332,71 @@ function ScorerPicker({
   roster,
   onPick,
   idPrefix,
+  isBasketball,
 }: {
   roster: RosterPlayer[];
-  onPick: (playerId: string) => void | Promise<void>;
+  onPick: (playerId: string, points: number) => void | Promise<void>;
   idPrefix: string;
+  isBasketball: boolean;
 }) {
   const [selectedId, setSelectedId] = useState('');
+  const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null);
 
   if (!roster.length) {
     return <p className="text-[11px] text-paper-700 mt-1">Nema igrača u timu</p>;
   }
 
+  if (isBasketball && pendingPlayerId) {
+    const pendingName = roster.find((p) => p.id === pendingPlayerId)?.full_name || 'Igrač';
+    return (
+      <div className="w-full max-w-[10.5rem] mt-1">
+        <p className="text-[10px] text-paper-500 truncate mb-1.5">{pendingName}</p>
+        <div className="flex gap-1.5">
+          {[1, 2, 3].map((points) => (
+            <button
+              key={points}
+              type="button"
+              onClick={() => {
+                onPick(pendingPlayerId, points);
+                setPendingPlayerId(null);
+              }}
+              className="flex-1 py-2 text-xs font-semibold border border-red-500/30 hover:bg-red-500/10 hover:border-red-400/60 transition-colors"
+            >
+              +{points}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setPendingPlayerId(null)}
+          className="text-[10px] text-paper-700 hover:text-paper-100 transition-colors mt-1.5"
+        >
+          Otkaži
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-[10.5rem] mt-1 relative">
-      <BallIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-red-400 pointer-events-none" />
+      {isBasketball ? (
+        <BasketballIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-red-400 pointer-events-none" />
+      ) : (
+        <BallIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-red-400 pointer-events-none" />
+      )}
       <Dropdown
         id={idPrefix}
         value={selectedId}
         onChange={(playerId) => {
-          onPick(playerId);
-          setSelectedId('');
+          if (isBasketball) {
+            setPendingPlayerId(playerId);
+            setSelectedId('');
+          } else {
+            onPick(playerId, 1);
+            setSelectedId('');
+          }
         }}
-        placeholder="Strelac"
+        placeholder={isBasketball ? 'Igrač' : 'Strelac'}
         options={roster.map((p) => ({ value: p.id, label: p.full_name || 'Igrač' }))}
         triggerClassName="w-full pl-8 pr-3 py-2 text-xs uppercase tracking-widest border border-red-500/30 hover:bg-red-500/10 hover:border-red-400/60 transition-colors flex items-center justify-between gap-2 overflow-hidden"
       />
@@ -335,6 +411,7 @@ function LiveMatchCard({
   isOwner,
   rosterA,
   rosterB,
+  isBasketball,
   onAddGoal,
   onFinishMatch,
 }: {
@@ -344,7 +421,8 @@ function LiveMatchCard({
   isOwner: boolean;
   rosterA: RosterPlayer[];
   rosterB: RosterPlayer[];
-  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string) => void;
+  isBasketball: boolean;
+  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) => void;
   onFinishMatch: (matchId: string) => void;
 }) {
   return (
@@ -367,7 +445,8 @@ function LiveMatchCard({
               <ScorerPicker
                 idPrefix={`league-scorer-a-${match.id}`}
                 roster={rosterA}
-                onPick={(playerId) => onAddGoal(match.id, 'a', match.team_a_id, playerId)}
+                isBasketball={isBasketball}
+                onPick={(playerId, points) => onAddGoal(match.id, 'a', match.team_a_id, playerId, points)}
               />
             )}
           </div>
@@ -385,7 +464,8 @@ function LiveMatchCard({
               <ScorerPicker
                 idPrefix={`league-scorer-b-${match.id}`}
                 roster={rosterB}
-                onPick={(playerId) => onAddGoal(match.id, 'b', match.team_b_id, playerId)}
+                isBasketball={isBasketball}
+                onPick={(playerId, points) => onAddGoal(match.id, 'b', match.team_b_id, playerId, points)}
               />
             )}
           </div>
@@ -475,7 +555,7 @@ export default function TournamentLeague() {
         if (teamIds.length) {
           const { data: teamRows } = await supabase
             .from('teams')
-            .select('id, name, crest_url, crest_position_x, crest_position_y')
+            .select('id, name, crest_url, crest_position_x, crest_position_y, deleted_at')
             .in('id', teamIds);
           setTeams((teamRows as LeagueTeam[]) ?? []);
         } else {
@@ -579,17 +659,17 @@ export default function TournamentLeague() {
     setTeamBId('');
   }
 
-  async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string) {
+  async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) {
     const match = matches.find((m) => m.id === matchId);
     if (!match) return;
 
     const { error: goalError } = await supabase
       .from('tournament_league_goals')
-      .insert({ match_id: matchId, team_id: teamId, player_id: playerId });
+      .insert({ match_id: matchId, team_id: teamId, player_id: playerId, points });
     if (goalError) return;
 
     const field = side === 'a' ? 'team_a_goals' : 'team_b_goals';
-    const newValue = (side === 'a' ? match.team_a_goals : match.team_b_goals) + 1;
+    const newValue = (side === 'a' ? match.team_a_goals : match.team_b_goals) + points;
 
     const { error } = await supabase.from('tournament_league_matches').update({ [field]: newValue }).eq('id', matchId);
     if (!error) {
@@ -627,6 +707,7 @@ export default function TournamentLeague() {
   const teamsById = new Map(teams.map((t) => [t.id, t]));
   const isOwner = user?.id === tournament?.owner_id;
   const isTournamentFinished = tournament?.status === 'finished';
+  const isBasketball = !!tournament?.sports?.name && BASKETBALL_SPORT_NAMES.includes(tournament.sports.name);
 
   const teamAOptions = teams.map((t) => ({ value: t.id, label: t.name }));
   const teamBOptions = teamAId ? teams.filter((t) => t.id !== teamAId).map((t) => ({ value: t.id, label: t.name })) : [];
@@ -695,7 +776,7 @@ export default function TournamentLeague() {
                     />
                   )}
 
-                  <StandingsTable teams={teams} matches={matches} />
+                  <StandingsTable teams={teams} matches={matches} isBasketball={isBasketball} />
 
                   <div className="mt-16">
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Utakmice</span>
@@ -781,6 +862,7 @@ export default function TournamentLeague() {
                               isOwner={isOwner && !isTournamentFinished}
                               rosterA={rosters.get(m.team_a_id) ?? []}
                               rosterB={rosters.get(m.team_b_id) ?? []}
+                              isBasketball={isBasketball}
                               onAddGoal={handleAddGoal}
                               onFinishMatch={handleFinishMatch}
                             />

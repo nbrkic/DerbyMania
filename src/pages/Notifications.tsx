@@ -125,11 +125,14 @@ export default function Notifications() {
                     n.type === 'invite_rejected' ||
                     n.type === 'tournament_request_rejected' ||
                     requestStatus === 'rejected';
-                  const accentClass = isAccepted
-                    ? 'border-t-green-500/60'
-                    : isRejected
-                      ? 'border-t-red-500/60'
-                      : 'border-t-red-500/40';
+                  const isChampion = n.type === 'tournament_champion';
+                  const accentClass = isChampion
+                    ? 'border-t-red-400'
+                    : isAccepted
+                      ? 'border-t-green-500/60'
+                      : isRejected
+                        ? 'border-t-red-500/60'
+                        : 'border-t-red-500/40';
 
                   return (
                     <div key={n.id} className={`relative bg-ink-800 border border-ink-700 border-t-2 ${accentClass} px-5 py-4`}>
@@ -145,6 +148,11 @@ export default function Notifications() {
                       <div className="pr-6">
                         <div className="flex items-center gap-3 flex-wrap">
                           <p className="font-display text-lg leading-tight">{n.title}</p>
+                          {isChampion && (
+                            <span className="text-[10px] uppercase tracking-widest text-red-400 border border-red-500/30 px-2 py-0.5">
+                              Pobednik
+                            </span>
+                          )}
                           {isAccepted && (
                             <span className="text-[10px] uppercase tracking-widest text-green-400 border border-green-500/30 px-2 py-0.5">
                               Prihvaćeno
