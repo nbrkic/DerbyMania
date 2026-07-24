@@ -1,9 +1,26 @@
-import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
 import { SiteHeader } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { DatePicker } from './DatePicker';
 import { Dropdown } from './Dropdown';
+
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <path d="M1 1l22 22" />
+    </svg>
+  );
+}
 
 // Matches the inset of the site nav's `max-w-6xl mx-auto px-6` container, so
 // content lines up with the logo/nav-button edges instead of floating in its half.
@@ -42,6 +59,9 @@ type TicketFieldProps = {
 };
 
 export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength, dateDefaultViewYear }: TicketFieldProps) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === 'password';
+
   return (
     <div>
       <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
@@ -49,6 +69,27 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
       </label>
       {type === 'date' ? (
         <DatePicker id={id} value={value} onChange={onChange} defaultViewYear={dateDefaultViewYear} />
+      ) : isPassword ? (
+        <div className="relative">
+          <input
+            id={id}
+            type={showPassword ? 'text' : 'password'}
+            required={required}
+            autoComplete={autoComplete}
+            minLength={minLength}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="field-input w-full pb-2.5 pr-9 text-base"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? 'Sakrij lozinku' : 'Prikaži lozinku'}
+            className="absolute right-0 bottom-2 text-paper-500 hover:text-paper-100 transition-colors"
+          >
+            {showPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+          </button>
+        </div>
       ) : (
         <input
           id={id}
@@ -209,13 +250,6 @@ export function AuthShell({ flip, headline, blurb, quote, formTitle, children, f
             {children}
 
             <div className="mt-10 pt-6 border-t border-paper-100/10 text-sm text-paper-500">{footer}</div>
-
-            <Link
-              to="/"
-              className="btn-line w-full mt-6 py-3.5 text-sm uppercase tracking-widest flex items-center justify-center"
-            >
-              Nazad na početnu
-            </Link>
           </div>
         </div>
       </main>

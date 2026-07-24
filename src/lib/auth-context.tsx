@@ -2,6 +2,15 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
+function translateAuthError(message: string): string {
+  const known: Record<string, string> = {
+    'Invalid login credentials': 'Pogrešan email ili lozinka.',
+    'Email not confirmed': 'Nalog nije potvrđen. Proveri email za link za potvrdu.',
+    'User already registered': 'Nalog sa ovim emailom već postoji.',
+  };
+  return known[message] ?? message;
+}
+
 type Profile = {
   full_name: string | null;
   avatar_url: string | null;
@@ -96,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    return { error: error ? translateAuthError(error.message) : null };
   }
 
   async function signUp(email: string, password: string, fullName: string, birthDate: string, phone: string, city: string) {

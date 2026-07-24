@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { AuthShell, TicketField } from '../components/AuthShell';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function CameraIcon({ className }: { className?: string }) {
   return (
@@ -70,7 +71,7 @@ function AvatarField({
   return (
     <div>
       <label className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-3">
-        <span className="text-red-400 font-bold">01</span> Profilna slika
+        <span className="text-red-400 font-bold">1</span> Profilna slika
       </label>
       <div className="flex items-center gap-4">
         <div
@@ -95,11 +96,22 @@ function AvatarField({
             <CameraIcon className="w-6 h-6 text-red-400 pointer-events-none" />
           )}
         </div>
-        <p className="text-xs text-paper-500 leading-relaxed">
-          {file
-            ? 'Prevuci sliku da podesiš poziciju.'
-            : 'JPG, PNG ili WEBP, maks. 5MB. Možeš je dodati i kasnije iz svog naloga.'}
-        </p>
+        <div className="flex flex-col gap-2 items-start">
+          <p className="text-xs text-paper-500 leading-relaxed">
+            {file
+              ? 'Prevuci sliku da podesiš poziciju.'
+              : 'JPG, PNG ili WEBP, maksimalno 5MB. Možeš je dodati i kasnije.'}
+          </p>
+          {previewUrl && (
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="ticket-submit px-4 py-1.5 text-[11px] uppercase tracking-widest"
+            >
+              Promeni sliku
+            </button>
+          )}
+        </div>
       </div>
       <input
         ref={inputRef}
@@ -135,8 +147,12 @@ export default function Register() {
   }, [avatarPreview]);
 
   function handleAvatarSelect(file: File) {
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setError('Slika nije ispravnog formata. Dozvoljeni formati su JPG, PNG ili WEBP.');
+      return;
+    }
     if (file.size > MAX_AVATAR_SIZE) {
-      setError('Slika je prevelika (maks. 5MB).');
+      setError('Slika je prevelika (maksimalno 5MB).');
       return;
     }
     setError(null);
@@ -184,17 +200,35 @@ export default function Register() {
     navigate('/');
   }
 
+  function getValidationProblems(): string[] {
+    const problems: string[] = [];
+    if (!fullName.trim()) problems.push('ime i prezime');
+    if (!birthDate) problems.push('datum rođenja');
+    if (!phone.trim()) problems.push('broj telefona');
+    if (!email.trim()) {
+      problems.push('email');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      problems.push('ispravan email');
+    }
+    if (!password) {
+      problems.push('lozinku');
+    } else if (password.length < 6) {
+      problems.push('lozinku (bar 6 karaktera)');
+    }
+    return problems;
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!birthDate) {
-      setError('Unesi datum rođenja.');
+    const problems = getValidationProblems();
+    if (problems.length === 1) {
+      setError(`Niste uneli ${problems[0]}.`);
       return;
     }
-
-    if (password.length < 6) {
-      setError('Lozinka mora imati bar 6 karaktera.');
+    if (problems.length > 1) {
+      setError(`Niste uneli: ${problems.join(', ')}.`);
       return;
     }
 
@@ -230,14 +264,13 @@ export default function Register() {
       flip
       headline={
         <>
-          Uđi u
-          <br /><span className="text-red-400">ekipu.</span>
+          Uđi u <span className="text-red-400">ekipu.</span>
         </>
       }
-      blurb="Napravi nalog i pokreni prvi turnir za manje od pet minuta — bez Excel tabela za raspored, bez Viber grupe za svaki rezultat."
+      blurb="Napravi nalog i pokreni prvi turnir za manje od pet minuta. Bez Excel tabela za raspored, bez Viber grupe za svaki rezultat."
       quote={{
         text: 'Napravili smo turnir za dvadeset ekipa za jedno veče.',
-        author: 'Organizator, Ulična liga',
+        author: 'Organizator, Turnira',
       }}
       formTitle="Napravi nalog"
       footer={
@@ -249,7 +282,7 @@ export default function Register() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-7">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-7">
         <AvatarField
           file={avatarFile}
           previewUrl={avatarPreview}
@@ -257,19 +290,17 @@ export default function Register() {
           onSelect={handleAvatarSelect}
           onPositionChange={setAvatarPosition}
         />
-        <TicketField n="02" label="Ime i prezime" id="fullName" type="text" autoComplete="name" required value={fullName} onChange={setFullName} />
-        <TicketField n="03" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" required value={birthDate} onChange={setBirthDate} />
-        <TicketField n="04" label="Broj telefona" id="phone" type="tel" autoComplete="tel" required value={phone} onChange={setPhone} />
-        <TicketField n="05" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
-        <TicketField n="06" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
+        <TicketField n="2" label="Ime i prezime" id="fullName" type="text" autoComplete="name" value={fullName} onChange={setFullName} />
+        <TicketField n="3" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} />
+        <TicketField n="4" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} />
+        <TicketField n="5" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
+        <TicketField n="6" label="Email" id="email" type="email" autoComplete="email" value={email} onChange={setEmail} />
         <TicketField
-          n="07"
+          n="7"
           label="Lozinka"
           id="password"
           type="password"
           autoComplete="new-password"
-          required
-          minLength={6}
           value={password}
           onChange={setPassword}
         />
