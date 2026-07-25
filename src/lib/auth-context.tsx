@@ -13,6 +13,7 @@ function translateAuthError(message: string): string {
 
 type Profile = {
   full_name: string | null;
+  username: string | null;
   avatar_url: string | null;
   avatar_position_x: number;
   avatar_position_y: number;
@@ -33,13 +34,14 @@ type AuthContextValue = {
   loading: boolean;
   unreadNotificationCount: number;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithUsername: (username: string, password: string) => Promise<{ error: string | null }>;
   signUp: (
     email: string,
     password: string,
     fullName: string,
     birthDate: string,
     phone: string,
-    city: string
+    username: string
   ) => Promise<{ error: string | null; user: User | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -69,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase
       .from('profiles')
       .select(
-        'full_name, avatar_url, avatar_position_x, avatar_position_y, birth_date, phone, city, dominant_hand, dominant_leg, height_cm, weight_kg, preferred_positions'
+        'full_name, username, avatar_url, avatar_position_x, avatar_position_y, birth_date, phone, city, dominant_hand, dominant_leg, height_cm, weight_kg, preferred_positions'
       )
       .eq('id', userId)
       .single();
@@ -109,13 +111,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? translateAuthError(error.message) : null };
   }
 
-  async function signUp(email: string, password: string, fullName: string, birthDate: string, phone: string, city: string) {
+  async function signInWithUsername(username: string, password: string) {
+    const { data: email, error: lookupError } = await supabase.rpc('email_for_username', {
+      p_username: username,
+    });
+    if (lookupError || !email) {
+      return { error: 'Pogrešno korisničko ime ili lozinka.' };
+    }
+    return signIn(email, password);
+  }
+
+  async function signUp(
+    email: string,
+    password: string,
+    fullName: string,
+    birthDate: string,
+    phone: string,
+    username: string
+  ) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, birth_date: birthDate, phone, city } },
+      options: { data: { full_name: fullName, birth_date: birthDate, phone, username } },
     });
-    return { error: error?.message ?? null, user: data.user };
+    if (error || !data.user) return { error: error?.message ?? null, user: data.user };
+
+    const { error: usernameError } = await supabase.from('profiles').update({ username }).eq('id', data.user.id);
+    if (usernameError) {
+      const message =
+        usernameError.code === '23505'
+          ? 'Ovo korisničko ime je u međuvremenu zauzeto.'
+          : usernameError.message;
+      return { error: message, user: data.user };
+    }
+
+    // onAuthStateChange already loaded the profile before this update finished,
+    // so the cached profile is missing the username — reload it now.
+    await loadProfile(data.user.id);
+
+    return { error: null, user: data.user };
   }
 
   async function signOut() {
@@ -141,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         unreadNotificationCount,
         signIn,
+        signInWithUsername,
         signUp,
         signOut,
         refreshProfile,

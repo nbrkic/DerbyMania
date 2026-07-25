@@ -23,26 +23,29 @@ type PlayerDetail = {
   avatar_position_x: number;
   avatar_position_y: number;
   created_at: string;
-  dominant_hand: string | null;
   height_cm: number | null;
   weight_kg: number | null;
   age: number | null;
   city: string | null;
+  dominant_hand: string | null;
   career_football_goals: number;
+  career_basketball_points: number;
   preferred_positions: string[];
 };
 
 type OwnedTeam = { id: string; name: string };
 type InviteStatus = 'none' | 'pending' | 'member';
 
-const HAND_LABELS: Record<string, string> = {
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const DOMINANT_LABELS: Record<string, string> = {
   levak: 'Leva',
   desnjak: 'Desna',
   oba: 'Obe',
 };
 
 function memberSince(iso: string) {
-  return new Date(iso).toLocaleDateString('sr-RS', { month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('sr-Latn-RS', { month: 'long', year: 'numeric' });
 }
 
 function StatBlock({ label, value }: { label: string; value: string }) {
@@ -50,6 +53,15 @@ function StatBlock({ label, value }: { label: string; value: string }) {
     <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-5 py-4">
       <p className="text-[11px] uppercase tracking-widest text-paper-500 mb-1">{label}</p>
       <p className="font-display text-xl leading-tight">{value}</p>
+    </div>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5 border-b border-ink-800 last:border-b-0">
+      <span className="text-xs text-paper-500">{label}</span>
+      <span className="text-sm font-semibold text-paper-100 text-right">{value}</span>
     </div>
   );
 }
@@ -68,7 +80,7 @@ function PillList({ items }: { items: string[] }) {
 }
 
 export default function PlayerDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { handle } = useParams<{ handle: string }>();
   const { user } = useAuth();
   const [player, setPlayer] = useState<PlayerDetail | null>(null);
   const [sportNames, setSportNames] = useState<string[]>([]);
@@ -83,13 +95,24 @@ export default function PlayerDetail() {
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!handle) return;
 
     async function load() {
+      let id = handle;
+      if (handle && !UUID_REGEX.test(handle)) {
+        const { data: lookup } = await supabase.from('player_usernames').select('id').eq('username', handle).single();
+        if (!lookup) {
+          setPlayer(null);
+          setLoading(false);
+          return;
+        }
+        id = lookup.id;
+      }
+
       const { data: playerRow } = await supabase
         .from('public_profiles')
         .select(
-          'id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, dominant_hand, height_cm, weight_kg, age, city, career_football_goals, preferred_positions'
+          'id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, height_cm, weight_kg, age, city, dominant_hand, career_football_goals, career_basketball_points, preferred_positions'
         )
         .eq('id', id)
         .single();
@@ -189,7 +212,7 @@ export default function PlayerDetail() {
     }
 
     load();
-  }, [id]);
+  }, [handle]);
 
   useEffect(() => {
     if (!user || !player || user.id === player.id) {
@@ -256,8 +279,10 @@ export default function PlayerDetail() {
     setTeamStatus((prev) => new Map(prev).set(selectedInviteTeamId, 'pending'));
   }
 
-  const showFootballPositions = sportNames.some((n) => FOOTBALL_SPORT_NAMES.includes(n));
-  const showBasketballPositions = sportNames.some((n) => BASKETBALL_SPORT_NAMES.includes(n));
+  const footballSubSports = sportNames.filter((n) => FOOTBALL_SPORT_NAMES.includes(n));
+  const basketballSubSports = sportNames.filter((n) => BASKETBALL_SPORT_NAMES.includes(n));
+  const showFootballPositions = footballSubSports.length > 0;
+  const showBasketballPositions = basketballSubSports.length > 0;
 
   const currentInviteStatus = teamStatus.get(selectedInviteTeamId) ?? 'none';
   const inviteLabel = inviting
@@ -280,8 +305,8 @@ export default function PlayerDetail() {
           <>
             <PlayerHeroSkeleton />
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-6 mb-12">
-                {Array.from({ length: 6 }, (_, i) => (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+                {Array.from({ length: 5 }, (_, i) => (
                   <StatBlockSkeleton key={i} />
                 ))}
               </div>
@@ -318,7 +343,6 @@ export default function PlayerDetail() {
                 <div className="w-10 h-0.5 bg-red-500 mt-3 mb-3" />
                 <p className="text-xs uppercase tracking-widest text-paper-500">
                   Član od {memberSince(player.created_at)}
-                  {player.city ? ` · ${player.city}` : ''}
                 </p>
 
                 {ownedTeams.length > 0 && (
@@ -351,13 +375,12 @@ export default function PlayerDetail() {
             </section>
 
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-6 mb-12">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
                 <StatBlock label="Godina" value={player.age != null ? String(player.age) : '—'} />
                 <StatBlock label="Visina" value={player.height_cm ? `${player.height_cm} cm` : '—'} />
                 <StatBlock label="Težina" value={player.weight_kg ? `${player.weight_kg} kg` : '—'} />
-                <StatBlock label="Dominantna ruka" value={player.dominant_hand ? HAND_LABELS[player.dominant_hand] : '—'} />
+                <StatBlock label="Mesto" value={player.city || '—'} />
                 <StatBlock label="Timova" value={String(memberTeams.length)} />
-                <StatBlock label="Golovi (fudbal)" value={String(player.career_football_goals)} />
               </div>
 
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
@@ -371,14 +394,24 @@ export default function PlayerDetail() {
                 {showFootballPositions && (
                   <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-5 py-4">
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
-                      Preferirane pozicije (Fudbal)
+                      {footballSubSports.join(' / ')}
                     </span>
                     <div className="mt-3">
-                      <PillList
-                        items={player.preferred_positions
-                          .filter((p) => FOOTBALL_POSITION_VALUES.includes(p))
-                          .map((p) => POSITION_LABELS[p] ?? p)}
+                      <StatRow
+                        label="Pozicija"
+                        value={
+                          player.preferred_positions
+                            .filter((p) => FOOTBALL_POSITION_VALUES.includes(p))
+                            .map((p) => POSITION_LABELS[p] ?? p)
+                            .join(', ') || '—'
+                        }
                       />
+                      <StatRow label="Jača noga" value="—" />
+                      <StatRow label="Golovi" value={String(player.career_football_goals)} />
+                      <StatRow label="Asistencije" value="0" />
+                      <StatRow label="Odbrane" value="0" />
+                      <StatRow label="Žuti kartoni" value="0" />
+                      <StatRow label="Crveni kartoni" value="0" />
                     </div>
                   </div>
                 )}
@@ -386,14 +419,24 @@ export default function PlayerDetail() {
                 {showBasketballPositions && (
                   <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-5 py-4">
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
-                      Preferirane pozicije (Košarka)
+                      {basketballSubSports.join(' / ')}
                     </span>
                     <div className="mt-3">
-                      <PillList
-                        items={player.preferred_positions
-                          .filter((p) => BASKETBALL_POSITION_VALUES.includes(p))
-                          .map((p) => POSITION_LABELS[p] ?? p)}
+                      <StatRow
+                        label="Pozicija"
+                        value={
+                          player.preferred_positions
+                            .filter((p) => BASKETBALL_POSITION_VALUES.includes(p))
+                            .map((p) => POSITION_LABELS[p] ?? p)
+                            .join(', ') || '—'
+                        }
                       />
+                      <StatRow label="Jača ruka" value={player.dominant_hand ? DOMINANT_LABELS[player.dominant_hand] : '—'} />
+                      <StatRow label="Poeni" value={String(player.career_basketball_points)} />
+                      <StatRow label="Asistencije" value="0" />
+                      <StatRow label="Skokovi" value="0" />
+                      <StatRow label="Ukradene lopte" value="0" />
+                      <StatRow label="Blokade" value="0" />
                     </div>
                   </div>
                 )}

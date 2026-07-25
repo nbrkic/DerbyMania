@@ -25,9 +25,10 @@ type DatePickerProps = {
   onChange: (value: string) => void;
   defaultViewYear?: number;
   max?: string;
+  disabled?: boolean;
 };
 
-export function DatePicker({ id, value, onChange, defaultViewYear, max }: DatePickerProps) {
+export function DatePicker({ id, value, onChange, defaultViewYear, max, disabled }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const now = new Date();
   const [year, selectedMonth, selectedDay] = value ? value.split('-').map(Number) : [];
@@ -109,13 +110,14 @@ export function DatePicker({ id, value, onChange, defaultViewYear, max }: DatePi
       <button
         type="button"
         id={id}
-        onClick={() => (open ? setOpen(false) : openPicker())}
+        onClick={() => !disabled && (open ? setOpen(false) : openPicker())}
+        disabled={disabled}
         className="field-input w-full pb-2.5 text-base text-left flex items-center justify-between gap-3"
       >
-        <span className={value ? 'text-paper-100' : 'text-[rgba(244,235,225,0.3)]'}>
+        <span className={disabled ? 'text-[rgba(244,235,225,0.45)]' : value ? 'text-paper-100' : 'text-[rgba(244,235,225,0.3)]'}>
           {value ? formatDisplay(value) : 'Izaberi datum'}
         </span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-red-400 shrink-0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 shrink-0 ${disabled ? 'text-paper-500/40' : 'text-red-400'}`}>
           <rect x="3" y="5" width="18" height="16" rx="1" />
           <path d="M8 3v4M16 3v4M3 10h18" />
         </svg>

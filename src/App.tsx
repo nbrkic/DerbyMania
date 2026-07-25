@@ -56,7 +56,7 @@ export function App() {
           />
           <Route path="/timovi/:id" element={<TeamDetail />} />
           <Route path="/igraci" element={<Players />} />
-          <Route path="/igraci/:id" element={<PlayerDetail />} />
+          <Route path="/:handle" element={<PlayerDetail />} />
           <Route path="/turniri" element={<Tournaments />} />
           <Route
             path="/turniri/novi"

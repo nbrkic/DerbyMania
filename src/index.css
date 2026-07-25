@@ -100,6 +100,11 @@ html, body, #root {
 }
 .field-input::placeholder { color: rgba(244,235,225,0.3); }
 
+.field-input:disabled {
+  color: rgba(244,235,225,0.45);
+  cursor: not-allowed;
+}
+
 .field-input[type='date']::-webkit-calendar-picker-indicator {
   cursor: pointer;
   filter: invert(0.9) brightness(1.4);

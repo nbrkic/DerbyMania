@@ -38,7 +38,7 @@ function SearchIcon({ className }: { className?: string }) {
 
 function formatStartDate(start: string | null) {
   if (!start) return null;
-  return new Date(start).toLocaleDateString('sr-RS', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(start).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 const RISE_CLASSES = ['rise-1', 'rise-2', 'rise-3', 'rise-4'];

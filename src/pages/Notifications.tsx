@@ -19,7 +19,7 @@ type NotificationRow = {
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('sr-RS', {
+  return new Date(iso).toLocaleString('sr-Latn-RS', {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',

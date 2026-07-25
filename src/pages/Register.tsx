@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type Poi
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
-import { AuthShell, TicketField } from '../components/AuthShell';
+import { AuthShell, TicketField, UsernameField, type UsernameStatus } from '../components/AuthShell';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-const MIN_AGE_YEARS = 13;
+const MIN_AGE_YEARS = 8;
 
 function todayISO() {
   const now = new Date();
@@ -143,20 +143,29 @@ export default function Register() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarPosition, setAvatarPosition] = useState<Position>({ x: 50, y: 50 });
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [createdUserId, setCreatedUserId] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     return () => {
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     };
   }, [avatarPreview]);
+
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error]);
 
   function handleAvatarSelect(file: File) {
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
@@ -212,51 +221,75 @@ export default function Register() {
     navigate('/profile');
   }
 
-  function getValidationProblems(): string[] {
-    const problems: string[] = [];
-    if (!fullName.trim()) problems.push('ime i prezime');
+  type FieldErrors = {
+    fullName?: string;
+    username?: string;
+    birthDate?: string;
+    phone?: string;
+    email?: string;
+    password?: string;
+  };
+
+  function getFieldErrors(): FieldErrors {
+    const errors: FieldErrors = {};
+
+    if (!fullName.trim()) {
+      errors.fullName = 'Unesi ime i prezime.';
+    } else if (!/^[A-Za-zČĆŽŠĐčćžšđ]+(?: [A-Za-zČĆŽŠĐčćžšđ]+)*$/.test(fullName.trim())) {
+      errors.fullName = 'Ime i prezime mogu sadržati samo slova i razmak.';
+    }
+
+    if (!username) {
+      errors.username = 'Unesi korisničko ime.';
+    } else if (usernameStatus === 'invalid') {
+      errors.username = 'Najmanje 3 karaktera, samo slova i brojevi.';
+    } else if (usernameStatus === 'taken') {
+      errors.username = 'Ovo korisničko ime je zauzeto.';
+    } else if (usernameStatus === 'checking') {
+      errors.username = 'Sačekaj da se završi provera dostupnosti.';
+    }
+
     if (!birthDate) {
-      problems.push('datum rođenja');
+      errors.birthDate = 'Unesi datum rođenja.';
     } else if (birthDate > todayISO()) {
-      problems.push('datum rođenja (ne može biti u budućnosti)');
+      errors.birthDate = 'Datum rođenja ne može biti u budućnosti.';
     } else if (birthDate > latestAllowedBirthDateISO()) {
-      problems.push(`datum rođenja (moraš imati bar ${MIN_AGE_YEARS} godina)`);
+      errors.birthDate = `Moraš imati bar ${MIN_AGE_YEARS} godina.`;
     }
+
     if (!phone.trim()) {
-      problems.push('broj telefona');
+      errors.phone = 'Unesi broj telefona.';
     } else if (!/^[0-9+\-\s()]+$/.test(phone) || phone.replace(/[^0-9]/g, '').length < 6) {
-      problems.push('ispravan broj telefona');
+      errors.phone = 'Unesi ispravan broj telefona.';
     }
+
     if (!email.trim()) {
-      problems.push('email');
+      errors.email = 'Unesi email.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      problems.push('ispravan email');
+      errors.email = 'Unesi ispravan email.';
     }
+
     if (!password) {
-      problems.push('lozinku');
+      errors.password = 'Unesi lozinku.';
     } else if (password.length < 6) {
-      problems.push('lozinku (bar 6 karaktera)');
+      errors.password = 'Lozinka mora imati bar 6 karaktera.';
     }
-    return problems;
+
+    return errors;
   }
+
+  const fieldErrors = attempted ? getFieldErrors() : {};
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setAttempted(true);
 
-    const problems = getValidationProblems();
-    if (problems.length === 1) {
-      setError(`Niste uneli ${problems[0]}.`);
-      return;
-    }
-    if (problems.length > 1) {
-      setError(`Niste uneli: ${problems.join(', ')}.`);
-      return;
-    }
+    if (Object.keys(getFieldErrors()).length > 0) return;
 
     setSubmitting(true);
 
-    const { error, user } = await signUp(email, password, fullName, birthDate, phone, city);
+    const { error, user } = await signUp(email, password, fullName, birthDate, phone, username);
     if (error || !user) {
       setSubmitting(false);
       setError(error ?? 'Došlo je do greške pri registraciji.');
@@ -312,11 +345,19 @@ export default function Register() {
           onSelect={handleAvatarSelect}
           onPositionChange={setAvatarPosition}
         />
-        <TicketField n="2" label="Ime i prezime" id="fullName" type="text" autoComplete="name" value={fullName} onChange={setFullName} />
-        <TicketField n="3" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} dateMax={todayISO()} />
-        <TicketField n="4" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} />
-        <TicketField n="5" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
-        <TicketField n="6" label="Email" id="email" type="email" autoComplete="email" value={email} onChange={setEmail} />
+        <TicketField n="2" label="Ime i prezime" id="fullName" type="text" autoComplete="name" value={fullName} onChange={setFullName} error={fieldErrors.fullName} />
+        <UsernameField
+          n="3"
+          label="Korisničko ime"
+          id="username"
+          value={username}
+          onChange={setUsername}
+          onStatusChange={setUsernameStatus}
+          error={fieldErrors.username}
+        />
+        <TicketField n="4" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} dateMax={todayISO()} error={fieldErrors.birthDate} />
+        <TicketField n="5" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} error={fieldErrors.phone} />
+        <TicketField n="6" label="Email" id="email" type="email" autoComplete="email" value={email} onChange={setEmail} error={fieldErrors.email} />
         <TicketField
           n="7"
           label="Lozinka"
@@ -325,10 +366,11 @@ export default function Register() {
           autoComplete="new-password"
           value={password}
           onChange={setPassword}
+          error={fieldErrors.password}
         />
 
         {error && (
-          <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-2">{error}</p>
+          <p ref={errorRef} className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-2">{error}</p>
         )}
 
         {createdUserId ? (

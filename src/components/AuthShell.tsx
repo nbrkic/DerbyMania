@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { SiteHeader } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { DatePicker } from './DatePicker';
 import { Dropdown } from './Dropdown';
+import { supabase } from '../lib/supabase';
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -57,9 +58,12 @@ type TicketFieldProps = {
   minLength?: number;
   dateDefaultViewYear?: number;
   dateMax?: string;
+  error?: string;
+  prefix?: string;
+  disabled?: boolean;
 };
 
-export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength, dateDefaultViewYear, dateMax }: TicketFieldProps) {
+export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength, dateDefaultViewYear, dateMax, error, prefix, disabled }: TicketFieldProps) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
 
@@ -69,7 +73,7 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
         <span className="text-red-400 font-bold">{n}</span> {label}
       </label>
       {type === 'date' ? (
-        <DatePicker id={id} value={value} onChange={onChange} defaultViewYear={dateDefaultViewYear} max={dateMax} />
+        <DatePicker id={id} value={value} onChange={onChange} defaultViewYear={dateDefaultViewYear} max={dateMax} disabled={disabled} />
       ) : isPassword ? (
         <div className="relative">
           <input
@@ -80,6 +84,7 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
             minLength={minLength}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
             className="field-input w-full pb-2.5 pr-9 text-base"
           />
           <button
@@ -92,17 +97,146 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
           </button>
         </div>
       ) : (
+        <div className="relative">
+          {prefix && <span className="absolute left-0 bottom-2.5 text-paper-500 select-none">{prefix}</span>}
+          <input
+            id={id}
+            type={type}
+            required={required}
+            autoComplete={autoComplete}
+            minLength={minLength}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            className={`field-input w-full pb-2.5 text-base ${prefix ? 'pl-4' : ''}`}
+          />
+        </div>
+      )}
+      {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
+    </div>
+  );
+}
+
+export const USERNAME_REGEX = /^[A-Za-z0-9]{3,}$/;
+
+export function sanitizeUsernameInput(raw: string): string {
+  return raw.replace(/[^A-Za-z0-9]/g, '');
+}
+
+export type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
+
+function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12.5 2.5 2.5L16 9.5" />
+    </svg>
+  );
+}
+
+function XCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m9.5 9.5 5 5m0-5-5 5" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={`animate-spin ${className ?? ''}`}>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeOpacity="0.25" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+type UsernameFieldProps = {
+  n: string;
+  label: string;
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** Username already saved for this account, if any — typing back to this value skips the availability check. */
+  currentUsername?: string | null;
+  onStatusChange?: (status: UsernameStatus) => void;
+  required?: boolean;
+  /** Shown below the field when it's required but still empty (format/taken messages are handled internally). */
+  error?: string;
+  disabled?: boolean;
+};
+
+export function UsernameField({ n, label, id, value, onChange, currentUsername, onStatusChange, required, error, disabled }: UsernameFieldProps) {
+  const [status, setStatus] = useState<UsernameStatus>('idle');
+
+  useEffect(() => {
+    if (!value) {
+      setStatus('idle');
+      onStatusChange?.('idle');
+      return;
+    }
+    if (!USERNAME_REGEX.test(value)) {
+      setStatus('invalid');
+      onStatusChange?.('invalid');
+      return;
+    }
+    if (currentUsername && value.toLowerCase() === currentUsername.toLowerCase()) {
+      setStatus('available');
+      onStatusChange?.('available');
+      return;
+    }
+
+    setStatus('checking');
+    onStatusChange?.('checking');
+    const timeout = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('is_username_available', { p_username: value });
+      if (error) {
+        setStatus('idle');
+        onStatusChange?.('idle');
+        return;
+      }
+      const next: UsernameStatus = data ? 'available' : 'taken';
+      setStatus(next);
+      onStatusChange?.(next);
+    }, 450);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, currentUsername]);
+
+  return (
+    <div>
+      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        <span className="text-red-400 font-bold">{n}</span> {label}
+      </label>
+      <div className="relative">
+        <span className="absolute left-0 bottom-2.5 text-paper-500 select-none">@</span>
         <input
           id={id}
-          type={type}
+          type="text"
           required={required}
-          autoComplete={autoComplete}
-          minLength={minLength}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="field-input w-full pb-2.5 text-base"
+          onChange={(e) => onChange(sanitizeUsernameInput(e.target.value))}
+          disabled={disabled}
+          className="field-input w-full pb-2.5 pl-4 pr-9 text-base"
         />
+        {!disabled && (
+          <span className="absolute right-0 bottom-2 pointer-events-none">
+            {status === 'checking' && <SpinnerIcon className="w-4 h-4 text-paper-500" />}
+            {status === 'available' && <CheckCircleIcon className="w-4 h-4 text-green-400" />}
+            {(status === 'taken' || status === 'invalid') && <XCircleIcon className="w-4 h-4 text-red-400" />}
+          </span>
+        )}
+      </div>
+      {status === 'invalid' && value && (
+        <p className="text-[11px] text-red-400 mt-1.5">Najmanje 3 karaktera, samo slova i brojevi.</p>
       )}
+      {status === 'taken' && <p className="text-[11px] text-red-400 mt-1.5">Ovo korisničko ime je zauzeto.</p>}
+      {!value && error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
     </div>
   );
 }

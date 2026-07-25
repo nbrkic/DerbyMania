@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
-import { TicketField, SelectField, MultiSelectPills } from '../components/AuthShell';
+import { TicketField, SelectField, MultiSelectPills, UsernameField, USERNAME_REGEX, type UsernameStatus } from '../components/AuthShell';
 import {
   FOOTBALL_SPORT_NAMES,
   BASKETBALL_SPORT_NAMES,
@@ -18,6 +18,7 @@ import { TournamentRow, type Tournament } from './Tournaments';
 import { RowSkeletonGrid } from '../components/Skeleton';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function CameraIcon({ className }: { className?: string }) {
   return (
@@ -30,6 +31,7 @@ function CameraIcon({ className }: { className?: string }) {
 
 type SavedValues = {
   fullName: string;
+  username: string;
   birthDate: string;
   phone: string;
   city: string;
@@ -62,10 +64,13 @@ export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const seededRef = useRef(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
@@ -82,6 +87,7 @@ export default function Profile() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [attempted, setAttempted] = useState(false);
   const [myTeams, setMyTeams] = useState<Team[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [memberTeams, setMemberTeams] = useState<Team[]>([]);
@@ -115,6 +121,7 @@ export default function Profile() {
     if (!seededRef.current && profile && user && sportsLoaded) {
       const initial: SavedValues = {
         fullName: profile.full_name ?? '',
+        username: profile.username ?? '',
         birthDate: profile.birth_date ?? '',
         phone: profile.phone ?? '',
         city: profile.city ?? '',
@@ -127,6 +134,7 @@ export default function Profile() {
         sportIds: selectedSportIds,
       };
       setFullName(initial.fullName);
+      setUsername(initial.username);
       setBirthDate(initial.birthDate);
       setPhone(initial.phone);
       setCity(initial.city);
@@ -145,6 +153,7 @@ export default function Profile() {
     !!avatarFile ||
     (saved !== null &&
       (fullName !== saved.fullName ||
+        username !== saved.username ||
         birthDate !== saved.birthDate ||
         phone !== saved.phone ||
         city !== saved.city ||
@@ -319,11 +328,52 @@ export default function Profile() {
     loadParticipatedTournaments();
   }, [user]);
 
+  type FieldErrors = {
+    fullName?: string;
+    username?: string;
+    heightCm?: string;
+    weightKg?: string;
+  };
+
+  function getFieldErrors(): FieldErrors {
+    const errors: FieldErrors = {};
+
+    if (!fullName.trim()) {
+      errors.fullName = 'Unesi ime i prezime.';
+    } else if (!/^[A-Za-zČĆŽŠĐčćžšđ]+(?: [A-Za-zČĆŽŠĐčćžšđ]+)*$/.test(fullName.trim())) {
+      errors.fullName = 'Ime i prezime mogu sadržati samo slova i razmak.';
+    }
+
+    if (username && !USERNAME_REGEX.test(username)) {
+      errors.username = 'Korisničko ime mora imati najmanje 3 karaktera i sadržati samo slova i brojeve.';
+    } else if (username && usernameStatus === 'taken') {
+      errors.username = 'Ovo korisničko ime je zauzeto.';
+    } else if (username && usernameStatus === 'checking') {
+      errors.username = 'Sačekaj da se završi provera dostupnosti korisničkog imena.';
+    }
+
+    if (heightCm && (Number(heightCm) < 100 || Number(heightCm) > 250)) {
+      errors.heightCm = 'Visina mora biti između 100 i 250 cm.';
+    }
+
+    if (weightKg && (Number(weightKg) < 20 || Number(weightKg) > 250)) {
+      errors.weightKg = 'Težina mora biti između 20 i 250 kg.';
+    }
+
+    return errors;
+  }
+
+  const fieldErrors = attempted ? getFieldErrors() : {};
+
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setError('Slika nije ispravnog formata. Dozvoljeni formati su JPG, PNG ili WEBP.');
+      return;
+    }
     if (file.size > MAX_AVATAR_SIZE) {
-      setError('Slika je prevelika (maks. 5MB).');
+      setError('Slika je prevelika (maksimalno 5MB).');
       return;
     }
     setError(null);
@@ -331,18 +381,18 @@ export default function Profile() {
     setAvatarPreview(URL.createObjectURL(file));
   }
 
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error]);
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
 
-    if (heightCm && (Number(heightCm) < 100 || Number(heightCm) > 250)) {
-      setError('Visina mora biti između 100 i 250 cm.');
-      return;
-    }
-    if (weightKg && (Number(weightKg) < 30 || Number(weightKg) > 250)) {
-      setError('Težina mora biti između 30 i 250 kg.');
-      return;
-    }
+    setAttempted(true);
+    if (Object.keys(getFieldErrors()).length > 0) return;
 
     setError(null);
     setSuccess(null);
@@ -367,6 +417,7 @@ export default function Profile() {
       .from('profiles')
       .update({
         full_name: fullName,
+        username: username || null,
         birth_date: birthDate || null,
         phone,
         city: city.trim() || null,
@@ -383,7 +434,11 @@ export default function Profile() {
 
     if (updateError) {
       setSaving(false);
-      setError(`Čuvanje podataka nije uspelo: ${updateError.message}`);
+      setError(
+        updateError.code === '23505'
+          ? 'Ovo korisničko ime je u međuvremenu zauzeto.'
+          : `Čuvanje podataka nije uspelo: ${updateError.message}`
+      );
       return;
     }
 
@@ -410,7 +465,7 @@ export default function Profile() {
 
     await refreshProfile();
     setAvatarFile(null);
-    setSaved({ fullName, birthDate, phone, city, email, dominantHand, dominantLeg, heightCm, weightKg, positions, sportIds: selectedSportIds });
+    setSaved({ fullName, username, birthDate, phone, city, email, dominantHand, dominantLeg, heightCm, weightKg, positions, sportIds: selectedSportIds });
     setSaving(false);
     setSuccess('Promene su sačuvane.');
   }
@@ -420,7 +475,7 @@ export default function Profile() {
   const showFootballPositions = selectedSportNames.some((n) => FOOTBALL_SPORT_NAMES.includes(n));
   const showBasketballPositions = selectedSportNames.some((n) => BASKETBALL_SPORT_NAMES.includes(n));
 
-  let nextFieldN = 9;
+  let nextFieldN = 10;
   const footballPositionsN = showFootballPositions ? String(nextFieldN++) : undefined;
   const dominantLegN = showFootballPositions ? String(nextFieldN++) : undefined;
   const basketballPositionsN = showBasketballPositions ? String(nextFieldN++) : undefined;
@@ -490,26 +545,37 @@ export default function Profile() {
               />
 
               <h1 className="font-display text-3xl sm:text-4xl mt-6 mb-1 leading-tight">Tvoj profil</h1>
-              <p className="text-paper-500 text-sm">{user?.email}</p>
+              {profile?.username && <p className="text-red-400 text-base font-semibold mt-2">@{profile.username}</p>}
             </div>
 
             <form onSubmit={handleSave} className="flex flex-col gap-7">
-              <TicketField n="1" label="Ime i prezime" id="fullName" type="text" autoComplete="name" required value={fullName} onChange={setFullName} />
-              <TicketField n="2" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} />
-              <TicketField n="3" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} />
-              <TicketField n="4" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
-              <TicketField n="5" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
+              <TicketField n="1" label="Ime i prezime" id="fullName" type="text" autoComplete="name" value={fullName} onChange={setFullName} error={fieldErrors.fullName} />
+              <UsernameField
+                n="2"
+                label="Korisničko ime"
+                id="username"
+                value={username}
+                onChange={setUsername}
+                currentUsername={saved?.username}
+                onStatusChange={setUsernameStatus}
+                error={fieldErrors.username}
+                disabled
+              />
+              <TicketField n="3" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} disabled />
+              <TicketField n="4" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} disabled />
+              <TicketField n="5" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
+              <TicketField n="6" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} disabled />
 
               <MultiSelectPills
-                n="6"
+                n="7"
                 label="Preferirani sportovi"
                 value={selectedSportIds.map(String)}
                 onChange={(vals) => setSelectedSportIds(vals.map(Number))}
                 options={sports.map((s) => ({ value: String(s.id), label: s.name }))}
               />
 
-              <TicketField n="7" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} />
-              <TicketField n="8" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} />
+              <TicketField n="8" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} error={fieldErrors.heightCm} />
+              <TicketField n="9" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} error={fieldErrors.weightKg} />
 
               {showFootballPositions && footballPositionsN && dominantLegN && (
                 <>
@@ -558,26 +624,23 @@ export default function Profile() {
               )}
 
               {error && (
-                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-2">{error}</p>
+                <p ref={errorRef} className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-2 text-center">{error}</p>
               )}
               {success && (
-                <p className="text-sm text-paper-100 bg-ink-800 border border-paper-100/15 px-3 py-2">{success}</p>
+                <p className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 px-3 py-2 text-center">{success}</p>
               )}
 
               <button
                 type="submit"
-                disabled={saving || !hasChanges}
+                disabled={
+                  saving ||
+                  !hasChanges ||
+                  (!!username && (usernameStatus === 'taken' || usernameStatus === 'invalid' || usernameStatus === 'checking'))
+                }
                 className="ticket-submit w-full mt-2 py-4 font-display text-sm tracking-widest uppercase flex items-center justify-center gap-3"
               >
                 {saving ? 'Čuvanje…' : 'Sačuvaj promene'}
               </button>
-
-              <Link
-                to="/"
-                className="btn-line w-full py-3.5 text-sm uppercase tracking-widest flex items-center justify-center"
-              >
-                Nazad na početnu
-              </Link>
             </form>
           </div>
         </section>
@@ -599,7 +662,7 @@ export default function Profile() {
             {loadingTeams ? (
               <RowSkeletonGrid count={3} />
             ) : myTeams.length === 0 ? (
-              <p className="text-paper-500">Još uvek nisi napravio nijedan tim.</p>
+              <p className="text-paper-500">Nisi još napravio nijedan tim.</p>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {myTeams.map((team, index) => (
@@ -613,7 +676,7 @@ export default function Profile() {
             {loadingMemberTeams ? (
               <RowSkeletonGrid count={3} />
             ) : memberTeams.length === 0 ? (
-              <p className="text-paper-500">Nisi još član nijednog tima koji nije tvoj.</p>
+              <p className="text-paper-500">Nisi još član nijednog drugog tima.</p>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {memberTeams.map((team, index) => (
@@ -637,7 +700,7 @@ export default function Profile() {
             {loadingTournaments ? (
               <RowSkeletonGrid count={3} />
             ) : myTournaments.length === 0 ? (
-              <p className="text-paper-500">Još uvek nisi napravio nijedan turnir.</p>
+              <p className="text-paper-500">Nisi još napravio nijedan turnir.</p>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {myTournaments.map((tournament, index) => (
@@ -651,7 +714,7 @@ export default function Profile() {
             {loadingParticipatedTournaments ? (
               <RowSkeletonGrid count={3} />
             ) : participatedTournaments.length === 0 ? (
-              <p className="text-paper-500">Još uvek nisi učestvovao ni na jednom turniru.</p>
+              <p className="text-paper-500">Nisi još učestvovao ni na jednom turniru.</p>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {participatedTournaments.map((tournament, index) => (

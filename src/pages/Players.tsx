@@ -9,6 +9,7 @@ import { RowSkeletonGrid, RowSkeleton } from '../components/Skeleton';
 
 export type Player = {
   id: string;
+  username: string | null;
   full_name: string | null;
   avatar_url: string | null;
   avatar_position_x: number;
@@ -70,7 +71,7 @@ const RANK_TEXT: Record<number, string> = {
 };
 
 function memberSince(iso: string) {
-  return new Date(iso).toLocaleDateString('sr-RS', { month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('sr-Latn-RS', { month: 'long', year: 'numeric' });
 }
 
 function teamWord(count: number) {
@@ -91,7 +92,7 @@ export function PlayerCard({
   const displayName = player.full_name || 'Igrač bez imena';
   return (
     <Link
-      to={`/igraci/${player.id}`}
+      to={`/${player.username ?? player.id}`}
       className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
     >
       <div className="relative shrink-0">
@@ -166,7 +167,7 @@ function TopScorersStrip({
           return (
             <Link
               key={player.id}
-              to={`/igraci/${player.id}`}
+              to={`/${player.username ?? player.id}`}
               className={`group shrink-0 flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 ${accent} pl-4 pr-5 py-2.5 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50`}
             >
               <span className={`font-display text-lg w-5 text-center shrink-0 ${rankText}`}>{rank}</span>
@@ -216,12 +217,17 @@ export default function Players() {
         .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, career_football_goals, career_basketball_points, preferred_positions')
         .order('full_name', { ascending: true });
 
-      const rows = (data as unknown as Omit<Player, 'teamCount'>[]) ?? [];
+      const rows = (data as unknown as Omit<Player, 'teamCount' | 'username'>[]) ?? [];
 
       const userIds = rows.map((p) => p.id);
       const { data: memberRows } = userIds.length
         ? await supabase.from('team_members').select('user_id').in('user_id', userIds)
         : { data: [] as { user_id: string }[] };
+
+      const { data: usernameRows } = userIds.length
+        ? await supabase.from('player_usernames').select('id, username').in('id', userIds)
+        : { data: [] as { id: string; username: string }[] };
+      const usernameById = new Map((usernameRows ?? []).map((u) => [u.id, u.username]));
 
       const countByUser = new Map<string, number>();
       (memberRows ?? []).forEach((m) => countByUser.set(m.user_id, (countByUser.get(m.user_id) ?? 0) + 1));
@@ -237,7 +243,7 @@ export default function Players() {
       });
       setPlayerSports(sportsByPlayer);
 
-      setPlayers(rows.map((p) => ({ ...p, teamCount: countByUser.get(p.id) ?? 0 })));
+      setPlayers(rows.map((p) => ({ ...p, username: usernameById.get(p.id) ?? null, teamCount: countByUser.get(p.id) ?? 0 })));
       setLoading(false);
     }
 

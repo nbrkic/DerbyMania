@@ -42,7 +42,7 @@ type TournamentDetail = {
 
 type OwnedTeam = { id: string; name: string; sport_id: number };
 type RequestStatus = 'none' | 'pending' | 'member';
-type TopScorer = { playerId: string; fullName: string | null; teamId: string; goals: number };
+type TopScorer = { playerId: string; username: string | null; fullName: string | null; teamId: string; goals: number };
 
 function BallIcon({ className }: { className?: string }) {
   return (
@@ -74,7 +74,7 @@ function StatBlock({ label, value }: { label: string; value: string }) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('sr-RS', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export default function TournamentDetail() {
@@ -224,8 +224,15 @@ export default function TournamentDetail() {
       });
 
       const { data: profile } = await supabase.from('public_profiles').select('full_name').eq('id', bestPlayerId).single();
+      const { data: usernameRow } = await supabase.from('player_usernames').select('username').eq('id', bestPlayerId).maybeSingle();
 
-      setTopScorer({ playerId: bestPlayerId, fullName: profile?.full_name ?? null, teamId: best.teamId, goals: best.goals });
+      setTopScorer({
+        playerId: bestPlayerId,
+        username: usernameRow?.username ?? null,
+        fullName: profile?.full_name ?? null,
+        teamId: best.teamId,
+        goals: best.goals,
+      });
     }
 
     loadTopScorer();
@@ -660,7 +667,7 @@ export default function TournamentDetail() {
                   </span>
                   <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
                   <Link
-                    to={`/igraci/${topScorer.playerId}`}
+                    to={`/${topScorer.username ?? topScorer.playerId}`}
                     className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 max-w-md transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                   >
                     <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">

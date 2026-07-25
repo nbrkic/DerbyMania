@@ -66,7 +66,7 @@ function StatBlock({ label, value }: { label: string; value: string }) {
 
 function TeamTournamentRow({ tournament, index }: { tournament: TeamTournamentEntry; index: number }) {
   const startLabel = tournament.start_date
-    ? new Date(tournament.start_date).toLocaleDateString('sr-RS', { day: 'numeric', month: 'long', year: 'numeric' })
+    ? new Date(tournament.start_date).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
   const toneClass =
