@@ -7,6 +7,18 @@ import { AuthShell, TicketField } from '../components/AuthShell';
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
+const MIN_AGE_YEARS = 13;
+
+function todayISO() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function latestAllowedBirthDateISO() {
+  const now = new Date();
+  return `${now.getFullYear() - MIN_AGE_YEARS}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 function CameraIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -197,14 +209,24 @@ export default function Register() {
       setError(`Otpremanje slike nije uspelo: ${retryError}`);
       return;
     }
-    navigate('/');
+    navigate('/profile');
   }
 
   function getValidationProblems(): string[] {
     const problems: string[] = [];
     if (!fullName.trim()) problems.push('ime i prezime');
-    if (!birthDate) problems.push('datum rođenja');
-    if (!phone.trim()) problems.push('broj telefona');
+    if (!birthDate) {
+      problems.push('datum rođenja');
+    } else if (birthDate > todayISO()) {
+      problems.push('datum rođenja (ne može biti u budućnosti)');
+    } else if (birthDate > latestAllowedBirthDateISO()) {
+      problems.push(`datum rođenja (moraš imati bar ${MIN_AGE_YEARS} godina)`);
+    }
+    if (!phone.trim()) {
+      problems.push('broj telefona');
+    } else if (!/^[0-9+\-\s()]+$/.test(phone) || phone.replace(/[^0-9]/g, '').length < 6) {
+      problems.push('ispravan broj telefona');
+    }
     if (!email.trim()) {
       problems.push('email');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -243,7 +265,7 @@ export default function Register() {
 
     if (!avatarFile) {
       setSubmitting(false);
-      navigate('/');
+      navigate('/profile');
       return;
     }
 
@@ -256,7 +278,7 @@ export default function Register() {
       return;
     }
 
-    navigate('/');
+    navigate('/profile');
   }
 
   return (
@@ -291,7 +313,7 @@ export default function Register() {
           onPositionChange={setAvatarPosition}
         />
         <TicketField n="2" label="Ime i prezime" id="fullName" type="text" autoComplete="name" value={fullName} onChange={setFullName} />
-        <TicketField n="3" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} />
+        <TicketField n="3" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} dateMax={todayISO()} />
         <TicketField n="4" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} />
         <TicketField n="5" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
         <TicketField n="6" label="Email" id="email" type="email" autoComplete="email" value={email} onChange={setEmail} />
@@ -321,7 +343,7 @@ export default function Register() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/profile')}
               className="text-xs uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors"
             >
               Nastavi bez slike (možeš je dodati kasnije)

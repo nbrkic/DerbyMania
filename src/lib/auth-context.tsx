@@ -20,6 +20,7 @@ type Profile = {
   phone: string | null;
   city: string | null;
   dominant_hand: string | null;
+  dominant_leg: string | null;
   height_cm: number | null;
   weight_kg: number | null;
   preferred_positions: string[];
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase
       .from('profiles')
       .select(
-        'full_name, avatar_url, avatar_position_x, avatar_position_y, birth_date, phone, city, dominant_hand, height_cm, weight_kg, preferred_positions'
+        'full_name, avatar_url, avatar_position_x, avatar_position_y, birth_date, phone, city, dominant_hand, dominant_leg, height_cm, weight_kg, preferred_positions'
       )
       .eq('id', userId)
       .single();

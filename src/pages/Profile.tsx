@@ -35,6 +35,7 @@ type SavedValues = {
   city: string;
   email: string;
   dominantHand: string;
+  dominantLeg: string;
   heightCm: string;
   weightKg: string;
   positions: string[];
@@ -43,10 +44,10 @@ type SavedValues = {
 
 type Sport = { id: number; name: string };
 
-const HAND_OPTIONS = [
-  { value: 'levak', label: 'Levak' },
-  { value: 'desnjak', label: 'Dešnjak' },
-  { value: 'oba', label: 'Oba' },
+const DOMINANT_OPTIONS = [
+  { value: 'levak', label: 'Leva' },
+  { value: 'desnjak', label: 'Desna' },
+  { value: 'oba', label: 'Obe' },
 ];
 
 function sameIds(a: number[], b: number[]) {
@@ -70,6 +71,7 @@ export default function Profile() {
   const [city, setCity] = useState('');
   const [email, setEmail] = useState('');
   const [dominantHand, setDominantHand] = useState('');
+  const [dominantLeg, setDominantLeg] = useState('');
   const [heightCm, setHeightCm] = useState('');
   const [weightKg, setWeightKg] = useState('');
   const [positions, setPositions] = useState<string[]>([]);
@@ -118,6 +120,7 @@ export default function Profile() {
         city: profile.city ?? '',
         email: user.email ?? '',
         dominantHand: profile.dominant_hand ?? '',
+        dominantLeg: profile.dominant_leg ?? '',
         heightCm: profile.height_cm != null ? String(profile.height_cm) : '',
         weightKg: profile.weight_kg != null ? String(profile.weight_kg) : '',
         positions: profile.preferred_positions ?? [],
@@ -129,6 +132,7 @@ export default function Profile() {
       setCity(initial.city);
       setEmail(initial.email);
       setDominantHand(initial.dominantHand);
+      setDominantLeg(initial.dominantLeg);
       setHeightCm(initial.heightCm);
       setWeightKg(initial.weightKg);
       setPositions(initial.positions);
@@ -146,6 +150,7 @@ export default function Profile() {
         city !== saved.city ||
         email !== saved.email ||
         dominantHand !== saved.dominantHand ||
+        dominantLeg !== saved.dominantLeg ||
         heightCm !== saved.heightCm ||
         weightKg !== saved.weightKg ||
         !samePositions(positions, saved.positions) ||
@@ -369,6 +374,7 @@ export default function Profile() {
         ...(avatarFile ? { avatar_position_x: 50, avatar_position_y: 50 } : {}),
         email,
         dominant_hand: dominantHand || null,
+        dominant_leg: dominantLeg || null,
         height_cm: heightCm ? Number(heightCm) : null,
         weight_kg: weightKg ? Number(weightKg) : null,
         preferred_positions: positions,
@@ -404,7 +410,7 @@ export default function Profile() {
 
     await refreshProfile();
     setAvatarFile(null);
-    setSaved({ fullName, birthDate, phone, city, email, dominantHand, heightCm, weightKg, positions, sportIds: selectedSportIds });
+    setSaved({ fullName, birthDate, phone, city, email, dominantHand, dominantLeg, heightCm, weightKg, positions, sportIds: selectedSportIds });
     setSaving(false);
     setSuccess('Promene su sačuvane.');
   }
@@ -413,18 +419,24 @@ export default function Profile() {
   const selectedSportNames = sports.filter((s) => selectedSportIds.includes(s.id)).map((s) => s.name);
   const showFootballPositions = selectedSportNames.some((n) => FOOTBALL_SPORT_NAMES.includes(n));
   const showBasketballPositions = selectedSportNames.some((n) => BASKETBALL_SPORT_NAMES.includes(n));
-  const footballPositionsN = '10';
-  const basketballPositionsN = showFootballPositions ? '11' : '10';
+
+  let nextFieldN = 9;
+  const footballPositionsN = showFootballPositions ? String(nextFieldN++) : undefined;
+  const dominantLegN = showFootballPositions ? String(nextFieldN++) : undefined;
+  const basketballPositionsN = showBasketballPositions ? String(nextFieldN++) : undefined;
+  const dominantHandN = showBasketballPositions ? String(nextFieldN++) : undefined;
 
   useEffect(() => {
     if (!showFootballPositions) {
       setPositions((prev) => prev.filter((p) => !FOOTBALL_POSITION_VALUES.includes(p)));
+      setDominantLeg('');
     }
   }, [showFootballPositions]);
 
   useEffect(() => {
     if (!showBasketballPositions) {
       setPositions((prev) => prev.filter((p) => !BASKETBALL_POSITION_VALUES.includes(p)));
+      setDominantHand('');
     }
   }, [showBasketballPositions]);
 
@@ -482,55 +494,67 @@ export default function Profile() {
             </div>
 
             <form onSubmit={handleSave} className="flex flex-col gap-7">
-              <TicketField n="01" label="Ime i prezime" id="fullName" type="text" autoComplete="name" required value={fullName} onChange={setFullName} />
-              <TicketField n="02" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} />
-              <TicketField n="03" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} />
-              <TicketField n="04" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
-              <TicketField n="05" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
+              <TicketField n="1" label="Ime i prezime" id="fullName" type="text" autoComplete="name" required value={fullName} onChange={setFullName} />
+              <TicketField n="2" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} />
+              <TicketField n="3" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} />
+              <TicketField n="4" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
+              <TicketField n="5" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} />
 
               <MultiSelectPills
-                n="06"
+                n="6"
                 label="Preferirani sportovi"
                 value={selectedSportIds.map(String)}
                 onChange={(vals) => setSelectedSportIds(vals.map(Number))}
                 options={sports.map((s) => ({ value: String(s.id), label: s.name }))}
               />
 
-              <SelectField
-                n="07"
-                label="Dominantna ruka/noga"
-                id="dominantHand"
-                placeholder="Izaberi"
-                value={dominantHand}
-                onChange={setDominantHand}
-                options={HAND_OPTIONS}
-              />
+              <TicketField n="7" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} />
+              <TicketField n="8" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} />
 
-              <TicketField n="08" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} />
-              <TicketField n="09" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} />
-
-              {showFootballPositions && (
-                <MultiSelectPills
-                  n={footballPositionsN}
-                  label="Preferirane pozicije (Fudbal)"
-                  value={positions.filter((p) => FOOTBALL_POSITION_VALUES.includes(p))}
-                  onChange={(vals) =>
-                    setPositions((prev) => [...prev.filter((p) => !FOOTBALL_POSITION_VALUES.includes(p)), ...vals])
-                  }
-                  options={FOOTBALL_POSITION_OPTIONS}
-                />
+              {showFootballPositions && footballPositionsN && dominantLegN && (
+                <>
+                  <MultiSelectPills
+                    n={footballPositionsN}
+                    label="Preferirane pozicije (Fudbal)"
+                    value={positions.filter((p) => FOOTBALL_POSITION_VALUES.includes(p))}
+                    onChange={(vals) =>
+                      setPositions((prev) => [...prev.filter((p) => !FOOTBALL_POSITION_VALUES.includes(p)), ...vals])
+                    }
+                    options={FOOTBALL_POSITION_OPTIONS}
+                  />
+                  <SelectField
+                    n={dominantLegN}
+                    label="Dominantna noga"
+                    id="dominantLeg"
+                    placeholder="Izaberi"
+                    value={dominantLeg}
+                    onChange={setDominantLeg}
+                    options={DOMINANT_OPTIONS}
+                  />
+                </>
               )}
 
-              {showBasketballPositions && (
-                <MultiSelectPills
-                  n={basketballPositionsN}
-                  label="Preferirane pozicije (Košarka)"
-                  value={positions.filter((p) => BASKETBALL_POSITION_VALUES.includes(p))}
-                  onChange={(vals) =>
-                    setPositions((prev) => [...prev.filter((p) => !BASKETBALL_POSITION_VALUES.includes(p)), ...vals])
-                  }
-                  options={BASKETBALL_POSITION_OPTIONS}
-                />
+              {showBasketballPositions && basketballPositionsN && dominantHandN && (
+                <>
+                  <MultiSelectPills
+                    n={basketballPositionsN}
+                    label="Preferirane pozicije (Košarka)"
+                    value={positions.filter((p) => BASKETBALL_POSITION_VALUES.includes(p))}
+                    onChange={(vals) =>
+                      setPositions((prev) => [...prev.filter((p) => !BASKETBALL_POSITION_VALUES.includes(p)), ...vals])
+                    }
+                    options={BASKETBALL_POSITION_OPTIONS}
+                  />
+                  <SelectField
+                    n={dominantHandN}
+                    label="Dominantna ruka"
+                    id="dominantHand"
+                    placeholder="Izaberi"
+                    value={dominantHand}
+                    onChange={setDominantHand}
+                    options={DOMINANT_OPTIONS}
+                  />
+                </>
               )}
 
               {error && (

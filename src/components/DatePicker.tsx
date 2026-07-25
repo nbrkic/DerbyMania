@@ -24,15 +24,17 @@ type DatePickerProps = {
   value: string;
   onChange: (value: string) => void;
   defaultViewYear?: number;
+  max?: string;
 };
 
-export function DatePicker({ id, value, onChange, defaultViewYear }: DatePickerProps) {
+export function DatePicker({ id, value, onChange, defaultViewYear, max }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const now = new Date();
   const [year, selectedMonth, selectedDay] = value ? value.split('-').map(Number) : [];
+  const [maxYear, maxMonth, maxDay] = max ? max.split('-').map(Number) : [];
 
-  const [viewYear, setViewYear] = useState(year ?? defaultViewYear ?? now.getFullYear() - 25);
-  const [viewMonth, setViewMonth] = useState(selectedMonth ? selectedMonth - 1 : 0);
+  const [viewYear, setViewYear] = useState(year ?? defaultViewYear ?? now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(selectedMonth ? selectedMonth - 1 : now.getMonth());
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +69,7 @@ export function DatePicker({ id, value, onChange, defaultViewYear }: DatePickerP
     let y = viewYear;
     if (m < 0) { m = 11; y -= 1; }
     if (m > 11) { m = 0; y += 1; }
+    if (maxYear !== undefined && (y > maxYear || (y === maxYear && m + 1 > maxMonth))) return;
     setViewMonth(m);
     setViewYear(y);
   }
@@ -83,12 +86,23 @@ export function DatePicker({ id, value, onChange, defaultViewYear }: DatePickerP
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
-  const years = Array.from({ length: 101 }, (_, i) => now.getFullYear() - i);
+  const topYear = maxYear ?? now.getFullYear();
+  const years = Array.from({ length: 101 }, (_, i) => topYear - i);
 
   const isSelected = (day: number) =>
     year === viewYear && selectedMonth === viewMonth + 1 && selectedDay === day;
   const isToday = (day: number) =>
     now.getFullYear() === viewYear && now.getMonth() === viewMonth && now.getDate() === day;
+  const isAfterMax = (day: number) => {
+    if (!maxYear) return false;
+    if (viewYear !== maxYear) return viewYear > maxYear;
+    if (viewMonth + 1 !== maxMonth) return viewMonth + 1 > maxMonth;
+    return day > maxDay;
+  };
+  const isNextMonthDisabled =
+    maxYear !== undefined && viewYear === maxYear && viewMonth + 1 === maxMonth;
+  const isMonthDisabled = (m: number) =>
+    maxYear !== undefined && viewYear === maxYear && m + 1 > maxMonth;
 
   return (
     <div ref={containerRef} className="relative">
@@ -126,7 +140,7 @@ export function DatePicker({ id, value, onChange, defaultViewYear }: DatePickerP
                 className="bg-ink-800 border border-ink-700 text-paper-100 text-xs uppercase tracking-widest px-2 py-1 focus:outline-none focus:border-red-400"
               >
                 {MONTHS.map((m, i) => (
-                  <option key={m} value={i}>{m}</option>
+                  <option key={m} value={i} disabled={isMonthDisabled(i)}>{m}</option>
                 ))}
               </select>
               <select
@@ -143,8 +157,9 @@ export function DatePicker({ id, value, onChange, defaultViewYear }: DatePickerP
             <button
               type="button"
               onClick={() => changeMonth(1)}
+              disabled={isNextMonthDisabled}
               aria-label="Sledeći mesec"
-              className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-paper-100 transition-colors"
+              className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-paper-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-red-400"
             >
               ›
             </button>
@@ -165,12 +180,15 @@ export function DatePicker({ id, value, onChange, defaultViewYear }: DatePickerP
                   <button
                     type="button"
                     onClick={() => pickDay(day)}
+                    disabled={isAfterMax(day)}
                     className={`w-8 h-8 text-sm transition-colors ${
-                      isSelected(day)
-                        ? 'bg-red-500 text-paper-100 font-bold'
-                        : isToday(day)
-                          ? 'border border-red-400 text-red-400'
-                          : 'text-paper-300 hover:bg-red-500/20 hover:text-paper-100'
+                      isAfterMax(day)
+                        ? 'text-paper-500/30 cursor-not-allowed'
+                        : isSelected(day)
+                          ? 'bg-red-500 text-paper-100 font-bold'
+                          : isToday(day)
+                            ? 'border border-red-400 text-red-400'
+                            : 'text-paper-300 hover:bg-red-500/20 hover:text-paper-100'
                     }`}
                   >
                     {day}

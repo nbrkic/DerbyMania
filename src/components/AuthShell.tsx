@@ -56,9 +56,10 @@ type TicketFieldProps = {
   required?: boolean;
   minLength?: number;
   dateDefaultViewYear?: number;
+  dateMax?: string;
 };
 
-export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength, dateDefaultViewYear }: TicketFieldProps) {
+export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength, dateDefaultViewYear, dateMax }: TicketFieldProps) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
 
@@ -68,7 +69,7 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
         <span className="text-red-400 font-bold">{n}</span> {label}
       </label>
       {type === 'date' ? (
-        <DatePicker id={id} value={value} onChange={onChange} defaultViewYear={dateDefaultViewYear} />
+        <DatePicker id={id} value={value} onChange={onChange} defaultViewYear={dateDefaultViewYear} max={dateMax} />
       ) : isPassword ? (
         <div className="relative">
           <input

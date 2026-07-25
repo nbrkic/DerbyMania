@@ -36,9 +36,9 @@ type OwnedTeam = { id: string; name: string };
 type InviteStatus = 'none' | 'pending' | 'member';
 
 const HAND_LABELS: Record<string, string> = {
-  levak: 'Levak',
-  desnjak: 'Dešnjak',
-  oba: 'Oba',
+  levak: 'Leva',
+  desnjak: 'Desna',
+  oba: 'Obe',
 };
 
 function memberSince(iso: string) {
