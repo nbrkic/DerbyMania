@@ -250,9 +250,10 @@ type TextAreaFieldProps = {
   required?: boolean;
   rows?: number;
   placeholder?: string;
+  error?: string;
 };
 
-export function TextAreaField({ n, label, id, value, onChange, required, rows = 4, placeholder }: TextAreaFieldProps) {
+export function TextAreaField({ n, label, id, value, onChange, required, rows = 4, placeholder, error }: TextAreaFieldProps) {
   return (
     <div>
       <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
@@ -267,6 +268,7 @@ export function TextAreaField({ n, label, id, value, onChange, required, rows = 
         onChange={(e) => onChange(e.target.value)}
         className="field-input w-full pb-2.5 text-base resize-none"
       />
+      {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
     </div>
   );
 }
@@ -280,15 +282,17 @@ type SelectFieldProps = {
   options: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
+  error?: string;
 };
 
-export function SelectField({ n, label, id, value, onChange, options, placeholder }: SelectFieldProps) {
+export function SelectField({ n, label, id, value, onChange, options, placeholder, error }: SelectFieldProps) {
   return (
     <div>
       <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
         <span className="text-red-400 font-bold">{n}</span> {label}
       </label>
       <Dropdown id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} />
+      {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
     </div>
   );
 }

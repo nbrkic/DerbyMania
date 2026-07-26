@@ -19,6 +19,7 @@ import TournamentDetail from './pages/TournamentDetail';
 import TournamentGroups from './pages/TournamentGroups';
 import TournamentElimination from './pages/TournamentElimination';
 import TournamentLeague from './pages/TournamentLeague';
+import Feedback from './pages/Feedback';
 
 export function App() {
   return (
@@ -56,6 +57,7 @@ export function App() {
           />
           <Route path="/timovi/:id" element={<TeamDetail />} />
           <Route path="/igraci" element={<Players />} />
+          <Route path="/feedback" element={<Feedback />} />
           <Route path="/:handle" element={<PlayerDetail />} />
           <Route path="/turniri" element={<Tournaments />} />
           <Route

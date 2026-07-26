@@ -3,6 +3,7 @@ export const NAV_LINKS = [
   { label: 'Turniri', href: '/turniri' },
   { label: 'Timovi', href: '/timovi' },
   { label: 'Igrači', href: '/igraci' },
+  { label: 'Feedback', href: '/feedback' },
 ];
 
 export function isNavLinkActive(href: string, pathname: string) {
