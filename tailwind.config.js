@@ -2,6 +2,9 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      screens: {
+        'lg-nav': '992px',
+      },
       colors: {
         ink: {
           950: '#0B0706',

@@ -80,14 +80,14 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-ink-950">
+    <header className="fixed top-0 left-0 right-0 z-50">
       <div className="max-w-6xl mx-auto">
-        <div className="px-6 h-16 flex items-center justify-between">
+        <div className="px-6 h-16 flex items-center justify-between bg-ink-950">
           <Link to="/" className="flex items-center text-2xl font-black tracking-tight">
             DERBY<span className="font-light text-paper-500">MANIA</span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden lg-nav:flex items-center gap-8">
             {NAV_LINKS.map((l) => (
               <Link
                 key={l.label}
@@ -102,7 +102,7 @@ export function SiteHeader() {
           </nav>
 
           {user ? (
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden lg-nav:flex items-center gap-3">
               <Link to="/obavestenja" title="Obaveštenja" className="relative text-paper-500 hover:text-paper-100 transition-colors">
                 <BellIcon className="w-5 h-5" />
                 {unreadNotificationCount > 0 && (
@@ -128,9 +128,14 @@ export function SiteHeader() {
               </button>
             </div>
           ) : (
-            <Link to="/login" className="hidden md:inline-flex btn-solid rounded-full px-5 py-2 text-sm items-center gap-2">
-              <UserIcon className="w-4 h-4" /> Prijava / Registracija
-            </Link>
+            <div className="hidden lg-nav:flex items-center gap-5">
+              <Link to="/login" className="text-sm font-medium text-paper-500 hover:text-paper-100 transition-colors">
+                Prijavi se
+              </Link>
+              <Link to="/register" className="btn-solid rounded-full px-5 py-2 text-sm inline-flex items-center gap-2">
+                <UserIcon className="w-4 h-4" /> Registracija
+              </Link>
+            </div>
           )}
 
           <button
@@ -138,7 +143,7 @@ export function SiteHeader() {
             onClick={() => setMobileMenuOpen((v) => !v)}
             aria-label="Meni"
             aria-expanded={mobileMenuOpen}
-            className="md:hidden flex flex-col items-center justify-center gap-1.5 w-9 h-9 -mr-1"
+            className="lg-nav:hidden flex flex-col items-center justify-center gap-1.5 w-9 h-9 -mr-1"
           >
             <span className="w-5 h-0.5 bg-paper-100" />
             <span className="w-5 h-0.5 bg-paper-100" />
@@ -148,8 +153,8 @@ export function SiteHeader() {
       </div>
 
       {mobileMenuOpen && (
-        <div className="md:hidden mt-2 max-w-4xl mx-auto rounded-3xl border border-ink-700 bg-ink-900">
-          <nav className="flex flex-col p-3">
+        <div className="lg-nav:hidden mt-2 mx-3 rounded-3xl border border-ink-700 bg-ink-900">
+          <nav className="flex flex-col items-center p-3">
             {NAV_LINKS.map((l) => (
               <Link
                 key={l.label}
@@ -200,13 +205,22 @@ export function SiteHeader() {
                 </button>
               </>
             ) : (
-              <Link
-                to="/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="btn-solid rounded-full px-5 py-3 text-sm inline-flex items-center justify-center gap-2 mt-2"
-              >
-                <UserIcon className="w-4 h-4" /> Prijava / Registracija
-              </Link>
+              <div className="flex flex-col items-center gap-2 mt-2">
+                <Link
+                  to="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-sm font-medium text-paper-500 hover:text-paper-100 transition-colors px-3 py-2"
+                >
+                  Prijavi se
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="btn-solid rounded-full px-5 py-3 text-sm inline-flex items-center justify-center gap-2 w-full"
+                >
+                  <UserIcon className="w-4 h-4" /> Registracija
+                </Link>
+              </div>
             )}
           </nav>
         </div>
