@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
@@ -42,6 +42,28 @@ type LeagueMatch = {
 };
 
 type RosterPlayer = { id: string; full_name: string | null };
+
+type MatchEventType = 'assist' | 'save' | 'yellow_card' | 'red_card' | 'rebound';
+type MatchEvent = { id: string; match_id: string; team_id: string; player_id: string; event_type: MatchEventType };
+
+function eventTypeLabel(type: MatchEventType) {
+  if (type === 'assist') return 'Asistencija';
+  if (type === 'save') return 'Odbrana';
+  if (type === 'yellow_card') return 'Žuti karton';
+  if (type === 'rebound') return 'Skok';
+  return 'Crveni karton';
+}
+
+type TimelineEntryKind = 'goal' | MatchEventType;
+
+type TimelineEntry = {
+  id: string;
+  team_id: string;
+  playerName: string;
+  kind: TimelineEntryKind;
+  points: number;
+  created_at: string;
+};
 
 type Standing = { team: LeagueTeam; played: number; scored: number; conceded: number; points: number };
 
@@ -122,6 +144,142 @@ function TeamBadge({ team, className }: { team: LeagueTeam; className?: string }
       ) : (
         <span className="font-display text-paper-500">{team.name[0]?.toUpperCase()}</span>
       )}
+    </div>
+  );
+}
+
+function AssistIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 16c4-6 8-8 12-8" />
+      <path d="M12 5l4 3-4 3" />
+    </svg>
+  );
+}
+
+function GloveIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M7 11V6a2 2 0 1 1 4 0v4" />
+      <path d="M11 10V5a2 2 0 1 1 4 0v5" />
+      <path d="M15 10.5V7a2 2 0 1 1 4 0v7c0 3.3-2.7 6-6 6h-2c-2.8 0-5-2.2-5-5v-3.5c0-.9.7-1.6 1.6-1.6.9 0 1.4.7 1.4 1.6" />
+    </svg>
+  );
+}
+
+function CardIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <rect x="6" y="3" width="12" height="18" rx="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ReboundIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 8h16" />
+      <path d="M8 15l4-7 4 7" />
+    </svg>
+  );
+}
+
+function EventPicker({
+  roster,
+  onPick,
+  idPrefix,
+  icon,
+  placeholder,
+  accentClass,
+}: {
+  roster: RosterPlayer[];
+  onPick: (playerId: string) => void | Promise<void>;
+  idPrefix: string;
+  icon: ReactNode;
+  placeholder: string;
+  accentClass: string;
+}) {
+  const [selectedId, setSelectedId] = useState('');
+
+  if (!roster.length) return null;
+
+  return (
+    <div className="w-full max-w-none sm:max-w-[10.5rem] mt-1.5 relative">
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">{icon}</span>
+      <Dropdown
+        id={idPrefix}
+        value={selectedId}
+        onChange={(playerId) => {
+          onPick(playerId);
+          setSelectedId('');
+        }}
+        placeholder={placeholder}
+        options={roster.map((p) => ({ value: p.id, label: p.full_name || 'Igrač' }))}
+        triggerClassName={`w-full pl-8 pr-3 py-1.5 text-[11px] uppercase tracking-widest border ${accentClass} transition-colors flex items-center justify-between gap-2 overflow-hidden`}
+      />
+    </div>
+  );
+}
+
+function timelineEntryIcon(kind: TimelineEntryKind, isBasketball: boolean) {
+  if (kind === 'goal') {
+    return isBasketball ? (
+      <BasketballIcon className="w-3.5 h-3.5 text-red-400 shrink-0" />
+    ) : (
+      <BallIcon className="w-3.5 h-3.5 text-red-400 shrink-0" />
+    );
+  }
+  if (kind === 'assist') return <AssistIcon className="w-3.5 h-3.5 text-paper-400 shrink-0" />;
+  if (kind === 'save') return <GloveIcon className="w-3.5 h-3.5 text-paper-400 shrink-0" />;
+  if (kind === 'rebound') return <ReboundIcon className="w-3.5 h-3.5 text-paper-400 shrink-0" />;
+  if (kind === 'yellow_card') return <CardIcon className="w-3 h-3.5 text-yellow-400 shrink-0" />;
+  return <CardIcon className="w-3 h-3.5 text-red-400 shrink-0" />;
+}
+
+function timelineEntryLabel(entry: TimelineEntry, isBasketball: boolean) {
+  if (entry.kind === 'goal') {
+    if (isBasketball) return `${entry.points} ${entry.points === 1 ? 'poen' : 'poena'}`;
+    return 'Gol';
+  }
+  return eventTypeLabel(entry.kind);
+}
+
+function MatchTimeline({
+  entries,
+  loading,
+  teamA,
+  teamB,
+  isBasketball,
+}: {
+  entries: TimelineEntry[];
+  loading: boolean;
+  teamA: LeagueTeam;
+  teamB: LeagueTeam;
+  isBasketball: boolean;
+}) {
+  if (loading) {
+    return <p className="text-xs text-paper-500 px-4 py-3">Učitavanje…</p>;
+  }
+
+  if (!entries.length) {
+    return <p className="text-xs text-paper-500 px-4 py-3">Nema zabeleženih dešavanja na ovoj utakmici.</p>;
+  }
+
+  return (
+    <div className="flex flex-col divide-y divide-ink-800">
+      {entries.map((entry) => {
+        const team = entry.team_id === teamA.id ? teamA : teamB;
+        return (
+          <div key={entry.id} className="flex items-center gap-2.5 px-4 py-2.5">
+            {timelineEntryIcon(entry.kind, isBasketball)}
+            <TeamBadge team={team} className="w-5 h-5 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
+            <span className="text-xs text-paper-100 truncate flex-1 min-w-0">{entry.playerName}</span>
+            <span className="text-[10px] uppercase tracking-widest text-paper-500 shrink-0 whitespace-nowrap">
+              {timelineEntryLabel(entry, isBasketball)}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -350,7 +508,7 @@ function ScorerPicker({
   if (isBasketball && pendingPlayerId) {
     const pendingName = roster.find((p) => p.id === pendingPlayerId)?.full_name || 'Igrač';
     return (
-      <div className="w-full max-w-[10.5rem] mt-1">
+      <div className="w-full max-w-none sm:max-w-[10.5rem] mt-1">
         <p className="text-[10px] text-paper-500 truncate mb-1.5">{pendingName}</p>
         <div className="flex gap-1.5">
           {[1, 2, 3].map((points) => (
@@ -379,7 +537,7 @@ function ScorerPicker({
   }
 
   return (
-    <div className="w-full max-w-[10.5rem] mt-1 relative">
+    <div className="w-full max-w-none sm:max-w-[10.5rem] mt-1 relative">
       {isBasketball ? (
         <BasketballIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-red-400 pointer-events-none" />
       ) : (
@@ -413,8 +571,10 @@ function LiveMatchCard({
   rosterA,
   rosterB,
   isBasketball,
+  events,
   onAddGoal,
   onFinishMatch,
+  onAddEvent,
 }: {
   match: LeagueMatch;
   teamA: LeagueTeam;
@@ -423,9 +583,12 @@ function LiveMatchCard({
   rosterA: RosterPlayer[];
   rosterB: RosterPlayer[];
   isBasketball: boolean;
+  events: MatchEvent[];
   onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) => void;
   onFinishMatch: (matchId: string) => void;
+  onAddEvent: (matchId: string, teamId: string, playerId: string, eventType: MatchEventType) => void;
 }) {
+  const rosterById = new Map([...rosterA, ...rosterB].map((p) => [p.id, p]));
   return (
     <div className="relative bg-ink-900 border border-red-500/40 overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent" />
@@ -438,21 +601,69 @@ function LiveMatchCard({
           <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold">Uživo</span>
         </div>
 
-        <div className="flex items-center justify-between gap-3 sm:gap-6">
+        <div className="flex items-start sm:items-center justify-between gap-3 sm:gap-6">
           <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
             <TeamBadge team={teamA} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-ink-800 ring-2 ring-red-500/30 flex items-center justify-center shrink-0 font-display text-xl" />
             <span className="text-sm text-paper-100 text-center truncate max-w-full">{teamA.name}</span>
             {isOwner && (
-              <ScorerPicker
-                idPrefix={`league-scorer-a-${match.id}`}
-                roster={rosterA}
-                isBasketball={isBasketball}
-                onPick={(playerId, points) => onAddGoal(match.id, 'a', match.team_a_id, playerId, points)}
-              />
+              <>
+                <ScorerPicker
+                  idPrefix={`league-scorer-a-${match.id}`}
+                  roster={rosterA}
+                  isBasketball={isBasketball}
+                  onPick={(playerId, points) => onAddGoal(match.id, 'a', match.team_a_id, playerId, points)}
+                />
+                <EventPicker
+                  idPrefix={`league-assist-a-${match.id}`}
+                  roster={rosterA}
+                  icon={<AssistIcon className="w-3.5 h-3.5 text-paper-400" />}
+                  placeholder="Asistencija"
+                  accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50"
+                  onPick={(playerId) => onAddEvent(match.id, match.team_a_id, playerId, 'assist')}
+                />
+                {isBasketball && (
+                  <EventPicker
+                    idPrefix={`league-rebound-a-${match.id}`}
+                    roster={rosterA}
+                    icon={<ReboundIcon className="w-3.5 h-3.5 text-paper-400" />}
+                    placeholder="Skok"
+                    accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50"
+                    onPick={(playerId) => onAddEvent(match.id, match.team_a_id, playerId, 'rebound')}
+                  />
+                )}
+                {!isBasketball && (
+                  <>
+                    <EventPicker
+                      idPrefix={`league-save-a-${match.id}`}
+                      roster={rosterA}
+                      icon={<GloveIcon className="w-3.5 h-3.5 text-paper-400" />}
+                      placeholder="Odbrana"
+                      accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50"
+                      onPick={(playerId) => onAddEvent(match.id, match.team_a_id, playerId, 'save')}
+                    />
+                    <EventPicker
+                      idPrefix={`league-yellow-a-${match.id}`}
+                      roster={rosterA}
+                      icon={<CardIcon className="w-3 h-3.5 text-yellow-400" />}
+                      placeholder="Žuti karton"
+                      accentClass="border-yellow-500/40 text-paper-400 hover:bg-yellow-500/10 hover:border-yellow-400/60"
+                      onPick={(playerId) => onAddEvent(match.id, match.team_a_id, playerId, 'yellow_card')}
+                    />
+                    <EventPicker
+                      idPrefix={`league-red-a-${match.id}`}
+                      roster={rosterA}
+                      icon={<CardIcon className="w-3 h-3.5 text-red-400" />}
+                      placeholder="Crveni karton"
+                      accentClass="border-red-500/40 text-paper-400 hover:bg-red-500/10 hover:border-red-400/60"
+                      onPick={(playerId) => onAddEvent(match.id, match.team_a_id, playerId, 'red_card')}
+                    />
+                  </>
+                )}
+              </>
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 pt-3 sm:pt-0">
             <span className="font-display text-4xl sm:text-5xl leading-none">{match.team_a_goals}</span>
             <span className="font-display text-2xl sm:text-3xl text-paper-700">:</span>
             <span className="font-display text-4xl sm:text-5xl leading-none">{match.team_b_goals}</span>
@@ -462,15 +673,79 @@ function LiveMatchCard({
             <TeamBadge team={teamB} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-ink-800 ring-2 ring-red-500/30 flex items-center justify-center shrink-0 font-display text-xl" />
             <span className="text-sm text-paper-100 text-center truncate max-w-full">{teamB.name}</span>
             {isOwner && (
-              <ScorerPicker
-                idPrefix={`league-scorer-b-${match.id}`}
-                roster={rosterB}
-                isBasketball={isBasketball}
-                onPick={(playerId, points) => onAddGoal(match.id, 'b', match.team_b_id, playerId, points)}
-              />
+              <>
+                <ScorerPicker
+                  idPrefix={`league-scorer-b-${match.id}`}
+                  roster={rosterB}
+                  isBasketball={isBasketball}
+                  onPick={(playerId, points) => onAddGoal(match.id, 'b', match.team_b_id, playerId, points)}
+                />
+                <EventPicker
+                  idPrefix={`league-assist-b-${match.id}`}
+                  roster={rosterB}
+                  icon={<AssistIcon className="w-3.5 h-3.5 text-paper-400" />}
+                  placeholder="Asistencija"
+                  accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50"
+                  onPick={(playerId) => onAddEvent(match.id, match.team_b_id, playerId, 'assist')}
+                />
+                {isBasketball && (
+                  <EventPicker
+                    idPrefix={`league-rebound-b-${match.id}`}
+                    roster={rosterB}
+                    icon={<ReboundIcon className="w-3.5 h-3.5 text-paper-400" />}
+                    placeholder="Skok"
+                    accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50"
+                    onPick={(playerId) => onAddEvent(match.id, match.team_b_id, playerId, 'rebound')}
+                  />
+                )}
+                {!isBasketball && (
+                  <>
+                    <EventPicker
+                      idPrefix={`league-save-b-${match.id}`}
+                      roster={rosterB}
+                      icon={<GloveIcon className="w-3.5 h-3.5 text-paper-400" />}
+                      placeholder="Odbrana"
+                      accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50"
+                      onPick={(playerId) => onAddEvent(match.id, match.team_b_id, playerId, 'save')}
+                    />
+                    <EventPicker
+                      idPrefix={`league-yellow-b-${match.id}`}
+                      roster={rosterB}
+                      icon={<CardIcon className="w-3 h-3.5 text-yellow-400" />}
+                      placeholder="Žuti karton"
+                      accentClass="border-yellow-500/40 text-paper-400 hover:bg-yellow-500/10 hover:border-yellow-400/60"
+                      onPick={(playerId) => onAddEvent(match.id, match.team_b_id, playerId, 'yellow_card')}
+                    />
+                    <EventPicker
+                      idPrefix={`league-red-b-${match.id}`}
+                      roster={rosterB}
+                      icon={<CardIcon className="w-3 h-3.5 text-red-400" />}
+                      placeholder="Crveni karton"
+                      accentClass="border-red-500/40 text-paper-400 hover:bg-red-500/10 hover:border-red-400/60"
+                      onPick={(playerId) => onAddEvent(match.id, match.team_b_id, playerId, 'red_card')}
+                    />
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>
+
+        {events.length > 0 && (
+          <div className="mt-6 pt-5 border-t border-ink-700 flex flex-wrap justify-center gap-2">
+            {events
+              .slice()
+              .reverse()
+              .map((e) => (
+                <span
+                  key={e.id}
+                  className="text-[10px] uppercase tracking-widest text-paper-500 border border-ink-700 px-2 py-1 whitespace-nowrap"
+                >
+                  {rosterById.get(e.player_id)?.full_name || 'Igrač'} · {eventTypeLabel(e.event_type)}
+                </span>
+              ))}
+          </div>
+        )}
 
         {isOwner && (
           <div className="flex justify-center mt-6">
@@ -488,22 +763,48 @@ function LiveMatchCard({
   );
 }
 
-function FinishedMatchRow({ match, teamA, teamB }: { match: LeagueMatch; teamA: LeagueTeam; teamB: LeagueTeam }) {
+function FinishedMatchRow({
+  match,
+  teamA,
+  teamB,
+  isBasketball,
+  isExpanded,
+  onToggle,
+  timeline,
+  loadingTimeline,
+}: {
+  match: LeagueMatch;
+  teamA: LeagueTeam;
+  teamB: LeagueTeam;
+  isBasketball: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+  timeline: TimelineEntry[];
+  loadingTimeline: boolean;
+}) {
   return (
-    <div className="bg-ink-900 border border-ink-700 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-          <span className="truncate text-sm text-paper-200">{teamA.name}</span>
-          <TeamBadge team={teamA} />
+    <div className="bg-ink-900 border border-ink-700">
+      <button type="button" onClick={onToggle} className="w-full text-left px-4 py-3 hover:bg-ink-800 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+            <span className="truncate text-sm text-paper-200">{teamA.name}</span>
+            <TeamBadge team={teamA} />
+          </div>
+          <span className="font-display text-base shrink-0 px-2">
+            {match.team_a_goals} : {match.team_b_goals}
+          </span>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <TeamBadge team={teamB} />
+            <span className="truncate text-sm text-paper-200">{teamB.name}</span>
+          </div>
         </div>
-        <span className="font-display text-base shrink-0 px-2">
-          {match.team_a_goals} : {match.team_b_goals}
-        </span>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <TeamBadge team={teamB} />
-          <span className="truncate text-sm text-paper-200">{teamB.name}</span>
+      </button>
+
+      {isExpanded && (
+        <div className="border-t border-ink-700">
+          <MatchTimeline entries={timeline} loading={loadingTimeline} teamA={teamA} teamB={teamB} isBasketball={isBasketball} />
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -523,6 +824,11 @@ export default function TournamentLeague() {
   const [matches, setMatches] = useState<LeagueMatch[]>([]);
   const [rosters, setRosters] = useState<Map<string, RosterPlayer[]>>(new Map());
   const fetchedRosterTeamIds = useRef(new Set<string>());
+  const [matchEvents, setMatchEvents] = useState<Map<string, MatchEvent[]>>(new Map());
+  const fetchedEventMatchIds = useRef(new Set<string>());
+  const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
+  const [matchTimelines, setMatchTimelines] = useState<Map<string, TimelineEntry[]>>(new Map());
+  const [loadingTimelineId, setLoadingTimelineId] = useState<string | null>(null);
   const [teamAId, setTeamAId] = useState('');
   const [teamBId, setTeamBId] = useState('');
   const [showNewMatchForm, setShowNewMatchForm] = useState(false);
@@ -619,6 +925,38 @@ export default function TournamentLeague() {
     loadRosters();
   }, [matches]);
 
+  useEffect(() => {
+    const neededMatchIds = new Set<string>();
+    matches
+      .filter((m) => m.status === 'in_progress')
+      .forEach((m) => {
+        if (!fetchedEventMatchIds.current.has(m.id)) neededMatchIds.add(m.id);
+      });
+    if (!neededMatchIds.size) return;
+
+    const ids = [...neededMatchIds];
+    ids.forEach((mid) => fetchedEventMatchIds.current.add(mid));
+
+    supabase
+      .from('tournament_league_events')
+      .select('id, match_id, team_id, player_id, event_type')
+      .in('match_id', ids)
+      .then(({ data }) => {
+        setMatchEvents((prev) => {
+          const next = new Map(prev);
+          ids.forEach((mid) => {
+            if (!next.has(mid)) next.set(mid, []);
+          });
+          (data as MatchEvent[] | null ?? []).forEach((e) => {
+            const list = next.get(e.match_id) ?? [];
+            list.push(e);
+            next.set(e.match_id, list);
+          });
+          return next;
+        });
+      });
+  }, [matches]);
+
   async function handleLockTable() {
     if (!tournament) return;
     setLockingTable(true);
@@ -687,6 +1025,67 @@ export default function TournamentLeague() {
     if (!error) {
       setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, status: 'finished' } : m)));
     }
+  }
+
+  async function handleAddEvent(matchId: string, teamId: string, playerId: string, eventType: MatchEventType) {
+    const { data, error } = await supabase
+      .from('tournament_league_events')
+      .insert({ match_id: matchId, team_id: teamId, player_id: playerId, event_type: eventType })
+      .select('id, match_id, team_id, player_id, event_type')
+      .single();
+
+    if (error || !data) return;
+
+    setMatchEvents((prev) => {
+      const next = new Map(prev);
+      const list = next.get(matchId) ?? [];
+      next.set(matchId, [...list, data as MatchEvent]);
+      return next;
+    });
+  }
+
+  async function handleToggleMatchDetails(matchId: string) {
+    if (expandedMatchId === matchId) {
+      setExpandedMatchId(null);
+      return;
+    }
+    setExpandedMatchId(matchId);
+    if (matchTimelines.has(matchId)) return;
+
+    setLoadingTimelineId(matchId);
+
+    const [{ data: goalRows }, { data: eventRows }] = await Promise.all([
+      supabase.from('tournament_league_goals').select('id, team_id, player_id, points, created_at').eq('match_id', matchId),
+      supabase.from('tournament_league_events').select('id, team_id, player_id, event_type, created_at').eq('match_id', matchId),
+    ]);
+
+    const playerIds = [...new Set([...(goalRows ?? []).map((g) => g.player_id), ...(eventRows ?? []).map((e) => e.player_id)])];
+    const { data: profiles } = playerIds.length
+      ? await supabase.from('public_profiles').select('id, full_name').in('id', playerIds)
+      : { data: [] as { id: string; full_name: string | null }[] };
+    const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+
+    const entries: TimelineEntry[] = [
+      ...(goalRows ?? []).map((g) => ({
+        id: g.id,
+        team_id: g.team_id,
+        playerName: nameById.get(g.player_id) || 'Igrač',
+        kind: 'goal' as TimelineEntryKind,
+        points: g.points,
+        created_at: g.created_at,
+      })),
+      ...(eventRows ?? []).map((e) => ({
+        id: e.id,
+        team_id: e.team_id,
+        playerName: nameById.get(e.player_id) || 'Igrač',
+        kind: e.event_type as TimelineEntryKind,
+        points: 0,
+        created_at: e.created_at,
+      })),
+    ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    setMatchTimelines((prev) => new Map(prev).set(matchId, entries));
+    setLoadingTimelineId(null);
   }
 
   async function handleFinishTournament() {
@@ -867,8 +1266,10 @@ export default function TournamentLeague() {
                               rosterA={rosters.get(m.team_a_id) ?? []}
                               rosterB={rosters.get(m.team_b_id) ?? []}
                               isBasketball={isBasketball}
+                              events={matchEvents.get(m.id) ?? []}
                               onAddGoal={handleAddGoal}
                               onFinishMatch={handleFinishMatch}
+                              onAddEvent={handleAddEvent}
                             />
                           );
                         })}
@@ -883,7 +1284,19 @@ export default function TournamentLeague() {
                             const teamA = teamsById.get(m.team_a_id);
                             const teamB = teamsById.get(m.team_b_id);
                             if (!teamA || !teamB) return null;
-                            return <FinishedMatchRow key={m.id} match={m} teamA={teamA} teamB={teamB} />;
+                            return (
+                              <FinishedMatchRow
+                                key={m.id}
+                                match={m}
+                                teamA={teamA}
+                                teamB={teamB}
+                                isBasketball={isBasketball}
+                                isExpanded={expandedMatchId === m.id}
+                                onToggle={() => handleToggleMatchDetails(m.id)}
+                                timeline={matchTimelines.get(m.id) ?? []}
+                                loadingTimeline={loadingTimelineId === m.id}
+                              />
+                            );
                           })}
                         </div>
                       </div>

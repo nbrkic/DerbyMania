@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type DropdownOption = { value: string; label: string };
 
@@ -13,23 +14,39 @@ type DropdownProps = {
 
 export function Dropdown({ id, value, onChange, options, placeholder, triggerClassName }: DropdownProps) {
   const [open, setOpen] = useState(false);
+  const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const selected = options.find((o) => o.value === value);
 
   useEffect(() => {
     if (!open) return;
+
+    function updatePosition() {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuRect({ top: rect.bottom + 8, left: rect.left, width: rect.width });
+    }
+
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
     function onPointerDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false);
     }
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+
     return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
@@ -64,22 +81,29 @@ export function Dropdown({ id, value, onChange, options, placeholder, triggerCla
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute z-50 mt-2 w-full bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] py-1 max-h-64 overflow-y-auto">
-          {options.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => pick(o.value)}
-              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                o.value === value ? 'bg-red-500 text-paper-100 font-semibold' : 'text-paper-300 hover:bg-red-500/20 hover:text-paper-100'
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        menuRect &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="fixed z-50 bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] py-1 max-h-64 overflow-y-auto"
+            style={{ top: menuRect.top, left: menuRect.left, width: menuRect.width }}
+          >
+            {options.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => pick(o.value)}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  o.value === value ? 'bg-red-500 text-paper-100 font-semibold' : 'text-paper-300 hover:bg-red-500/20 hover:text-paper-100'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

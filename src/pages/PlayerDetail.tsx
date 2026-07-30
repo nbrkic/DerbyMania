@@ -30,6 +30,12 @@ type PlayerDetail = {
   dominant_hand: string | null;
   career_football_goals: number;
   career_basketball_points: number;
+  career_football_assists: number;
+  career_basketball_assists: number;
+  career_saves: number;
+  career_yellow_cards: number;
+  career_red_cards: number;
+  career_rebounds: number;
   preferred_positions: string[];
 };
 
@@ -112,7 +118,7 @@ export default function PlayerDetail() {
       const { data: playerRow } = await supabase
         .from('public_profiles')
         .select(
-          'id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, height_cm, weight_kg, age, city, dominant_hand, career_football_goals, career_basketball_points, preferred_positions'
+          'id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, height_cm, weight_kg, age, city, dominant_hand, career_football_goals, career_basketball_points, career_football_assists, career_basketball_assists, career_saves, career_yellow_cards, career_red_cards, career_rebounds, preferred_positions'
         )
         .eq('id', id)
         .single();
@@ -408,10 +414,10 @@ export default function PlayerDetail() {
                       />
                       <StatRow label="Jača noga" value="—" />
                       <StatRow label="Golovi" value={String(player.career_football_goals)} />
-                      <StatRow label="Asistencije" value="0" />
-                      <StatRow label="Odbrane" value="0" />
-                      <StatRow label="Žuti kartoni" value="0" />
-                      <StatRow label="Crveni kartoni" value="0" />
+                      <StatRow label="Asistencije" value={String(player.career_football_assists)} />
+                      <StatRow label="Odbrane" value={String(player.career_saves)} />
+                      <StatRow label="Žuti kartoni" value={String(player.career_yellow_cards)} />
+                      <StatRow label="Crveni kartoni" value={String(player.career_red_cards)} />
                     </div>
                   </div>
                 )}
@@ -433,8 +439,8 @@ export default function PlayerDetail() {
                       />
                       <StatRow label="Jača ruka" value={player.dominant_hand ? DOMINANT_LABELS[player.dominant_hand] : '—'} />
                       <StatRow label="Poeni" value={String(player.career_basketball_points)} />
-                      <StatRow label="Asistencije" value="0" />
-                      <StatRow label="Skokovi" value="0" />
+                      <StatRow label="Asistencije" value={String(player.career_basketball_assists)} />
+                      <StatRow label="Skokovi" value={String(player.career_rebounds)} />
                       <StatRow label="Ukradene lopte" value="0" />
                       <StatRow label="Blokade" value="0" />
                     </div>

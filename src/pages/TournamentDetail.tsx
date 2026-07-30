@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
@@ -43,6 +43,19 @@ type TournamentDetail = {
 type OwnedTeam = { id: string; name: string; sport_id: number };
 type RequestStatus = 'none' | 'pending' | 'member';
 type TopScorer = { playerId: string; username: string | null; fullName: string | null; teamId: string; goals: number };
+type TopEventPlayer = { playerId: string; username: string | null; fullName: string | null; teamId: string; count: number };
+
+function pickBestPlayer(counts: Map<string, { teamId: string; count: number }>) {
+  let bestPlayerId = '';
+  let best = { teamId: '', count: -1 };
+  counts.forEach((value, playerId) => {
+    if (value.count > best.count) {
+      best = value;
+      bestPlayerId = playerId;
+    }
+  });
+  return bestPlayerId ? { playerId: bestPlayerId, teamId: best.teamId, count: best.count } : null;
+}
 
 function BallIcon({ className }: { className?: string }) {
   return (
@@ -63,6 +76,51 @@ function BasketballIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+function AssistIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 16c4-6 8-8 12-8" />
+      <path d="M12 5l4 3-4 3" />
+    </svg>
+  );
+}
+
+function GloveIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M7 11V6a2 2 0 1 1 4 0v4" />
+      <path d="M11 10V5a2 2 0 1 1 4 0v5" />
+      <path d="M15 10.5V7a2 2 0 1 1 4 0v7c0 3.3-2.7 6-6 6h-2c-2.8 0-5-2.2-5-5v-3.5c0-.9.7-1.6 1.6-1.6.9 0 1.4.7 1.4 1.6" />
+    </svg>
+  );
+}
+
+function ReboundIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 8h16" />
+      <path d="M8 15l4-7 4 7" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+type InviteTeamOption = {
+  id: string;
+  name: string;
+  crest_url: string | null;
+  crest_position_x: number;
+  crest_position_y: number;
+};
 
 function StatBlock({ label, value }: { label: string; value: string }) {
   return (
@@ -107,6 +165,17 @@ export default function TournamentDetail() {
   const [groupsFormed, setGroupsFormed] = useState(false);
 
   const [topScorer, setTopScorer] = useState<TopScorer | null>(null);
+  const [topAssister, setTopAssister] = useState<TopEventPlayer | null>(null);
+  const [topKeeper, setTopKeeper] = useState<TopEventPlayer | null>(null);
+  const [topRebounder, setTopRebounder] = useState<TopEventPlayer | null>(null);
+
+  const [inviteTeams, setInviteTeams] = useState<InviteTeamOption[]>([]);
+  const [invitedTeamIds, setInvitedTeamIds] = useState<Set<string>>(new Set());
+  const [inviteQuery, setInviteQuery] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const inviteBoxRef = useRef<HTMLDivElement>(null);
+  const [invitingTeamId, setInvitingTeamId] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -178,6 +247,9 @@ export default function TournamentDetail() {
   useEffect(() => {
     if (!tournament || tournament.status !== 'finished') {
       setTopScorer(null);
+      setTopAssister(null);
+      setTopKeeper(null);
+      setTopRebounder(null);
       return;
     }
 
@@ -197,45 +269,102 @@ export default function TournamentDetail() {
       });
     }
 
-    async function loadTopScorer() {
-      const counts = new Map<string, { teamId: string; goals: number }>();
+    async function countEvents(
+      matchTable: string,
+      eventsTable: string,
+      eventType: 'assist' | 'save' | 'rebound',
+      counts: Map<string, { teamId: string; count: number }>
+    ) {
+      const { data: matchRows } = await supabase.from(matchTable).select('id').eq('tournament_id', tournamentId);
+      const matchIds = (matchRows ?? []).map((m: { id: string }) => m.id);
+      if (!matchIds.length) return;
 
-      if (format === 'liga') {
-        await countGoals('tournament_league_matches', 'tournament_league_goals', counts);
-      } else if (format === 'kup') {
-        await countGoals('tournament_bracket_matches', 'tournament_bracket_goals', counts);
-      } else {
-        await countGoals('tournament_matches', 'tournament_match_goals', counts);
-        await countGoals('tournament_bracket_matches', 'tournament_bracket_goals', counts);
-      }
-
-      if (!counts.size) {
-        setTopScorer(null);
-        return;
-      }
-
-      let bestPlayerId = '';
-      let best = { teamId: '', goals: -1 };
-      counts.forEach((value, playerId) => {
-        if (value.goals > best.goals) {
-          best = value;
-          bestPlayerId = playerId;
-        }
-      });
-
-      const { data: profile } = await supabase.from('public_profiles').select('full_name').eq('id', bestPlayerId).single();
-      const { data: usernameRow } = await supabase.from('player_usernames').select('username').eq('id', bestPlayerId).maybeSingle();
-
-      setTopScorer({
-        playerId: bestPlayerId,
-        username: usernameRow?.username ?? null,
-        fullName: profile?.full_name ?? null,
-        teamId: best.teamId,
-        goals: best.goals,
+      const { data: eventRows } = await supabase
+        .from(eventsTable)
+        .select('player_id, team_id')
+        .eq('event_type', eventType)
+        .in('match_id', matchIds);
+      (eventRows ?? []).forEach((e: { player_id: string; team_id: string }) => {
+        const entry = counts.get(e.player_id) ?? { teamId: e.team_id, count: 0 };
+        entry.count += 1;
+        counts.set(e.player_id, entry);
       });
     }
 
-    loadTopScorer();
+    async function resolvePlayer(playerId: string) {
+      const { data: profile } = await supabase.from('public_profiles').select('full_name').eq('id', playerId).single();
+      const { data: usernameRow } = await supabase.from('player_usernames').select('username').eq('id', playerId).maybeSingle();
+      return { username: usernameRow?.username ?? null, fullName: profile?.full_name ?? null };
+    }
+
+    async function loadTopPlayers() {
+      const goalCounts = new Map<string, { teamId: string; goals: number }>();
+      const assistCounts = new Map<string, { teamId: string; count: number }>();
+      const saveCounts = new Map<string, { teamId: string; count: number }>();
+      const reboundCounts = new Map<string, { teamId: string; count: number }>();
+
+      if (format === 'liga') {
+        await countGoals('tournament_league_matches', 'tournament_league_goals', goalCounts);
+        await countEvents('tournament_league_matches', 'tournament_league_events', 'assist', assistCounts);
+        await countEvents('tournament_league_matches', 'tournament_league_events', 'save', saveCounts);
+        await countEvents('tournament_league_matches', 'tournament_league_events', 'rebound', reboundCounts);
+      } else if (format === 'kup') {
+        await countGoals('tournament_bracket_matches', 'tournament_bracket_goals', goalCounts);
+        await countEvents('tournament_bracket_matches', 'tournament_bracket_events', 'assist', assistCounts);
+        await countEvents('tournament_bracket_matches', 'tournament_bracket_events', 'save', saveCounts);
+        await countEvents('tournament_bracket_matches', 'tournament_bracket_events', 'rebound', reboundCounts);
+      } else {
+        await countGoals('tournament_matches', 'tournament_match_goals', goalCounts);
+        await countGoals('tournament_bracket_matches', 'tournament_bracket_goals', goalCounts);
+        await countEvents('tournament_matches', 'tournament_match_events', 'assist', assistCounts);
+        await countEvents('tournament_bracket_matches', 'tournament_bracket_events', 'assist', assistCounts);
+        await countEvents('tournament_matches', 'tournament_match_events', 'save', saveCounts);
+        await countEvents('tournament_bracket_matches', 'tournament_bracket_events', 'save', saveCounts);
+        await countEvents('tournament_matches', 'tournament_match_events', 'rebound', reboundCounts);
+        await countEvents('tournament_bracket_matches', 'tournament_bracket_events', 'rebound', reboundCounts);
+      }
+
+      if (!goalCounts.size) {
+        setTopScorer(null);
+      } else {
+        let bestPlayerId = '';
+        let best = { teamId: '', goals: -1 };
+        goalCounts.forEach((value, playerId) => {
+          if (value.goals > best.goals) {
+            best = value;
+            bestPlayerId = playerId;
+          }
+        });
+        const { username, fullName } = await resolvePlayer(bestPlayerId);
+        setTopScorer({ playerId: bestPlayerId, username, fullName, teamId: best.teamId, goals: best.goals });
+      }
+
+      const bestAssister = pickBestPlayer(assistCounts);
+      if (!bestAssister) {
+        setTopAssister(null);
+      } else {
+        const { username, fullName } = await resolvePlayer(bestAssister.playerId);
+        setTopAssister({ ...bestAssister, username, fullName });
+      }
+
+      const bestKeeper = pickBestPlayer(saveCounts);
+      if (!bestKeeper) {
+        setTopKeeper(null);
+      } else {
+        const { username, fullName } = await resolvePlayer(bestKeeper.playerId);
+        setTopKeeper({ ...bestKeeper, username, fullName });
+      }
+
+      const bestRebounder = pickBestPlayer(reboundCounts);
+      if (!bestRebounder) {
+        setTopRebounder(null);
+      } else {
+        const { username, fullName } = await resolvePlayer(bestRebounder.playerId);
+        setTopRebounder({ ...bestRebounder, username, fullName });
+      }
+    }
+
+    loadTopPlayers();
   }, [tournament]);
 
   useEffect(() => {
@@ -303,6 +432,74 @@ export default function TournamentDetail() {
         if (owned.length) setSelectedOwnerTeamId(owned[0].id);
       });
   }, [user, tournament]);
+
+  useEffect(() => {
+    if (!user || !tournament || user.id !== tournament.owner_id) {
+      setInviteTeams([]);
+      setInvitedTeamIds(new Set());
+      return;
+    }
+    if (tournament.status === 'finished' || tournament.roster_locked) {
+      setInviteTeams([]);
+      return;
+    }
+
+    async function loadInviteData() {
+      const { data: teamRows } = await supabase
+        .from('teams')
+        .select('id, name, crest_url, crest_position_x, crest_position_y')
+        .eq('sport_id', tournament!.sport_id)
+        .is('deleted_at', null)
+        .order('name', { ascending: true });
+      setInviteTeams((teamRows as InviteTeamOption[]) ?? []);
+
+      const { data: pendingInvites } = await supabase
+        .from('tournament_team_requests')
+        .select('team_id')
+        .eq('tournament_id', tournament!.id)
+        .eq('type', 'invite')
+        .eq('status', 'pending');
+      setInvitedTeamIds(new Set((pendingInvites ?? []).map((r) => r.team_id)));
+    }
+
+    loadInviteData();
+  }, [user, tournament]);
+
+  useEffect(() => {
+    if (!inviteOpen) return;
+
+    function onPointerDown(e: MouseEvent) {
+      if (inviteBoxRef.current?.contains(e.target as Node)) return;
+      setInviteOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setInviteOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [inviteOpen]);
+
+  async function handleInviteTeam(teamId: string) {
+    if (!tournament || !user) return;
+    setInvitingTeamId(teamId);
+    setInviteError(null);
+    const { error } = await supabase
+      .from('tournament_team_requests')
+      .insert({ tournament_id: tournament.id, team_id: teamId, requested_by: user.id, type: 'invite' });
+    setInvitingTeamId(null);
+
+    if (error) {
+      setInviteError('Slanje poziva nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    setInvitedTeamIds((prev) => new Set(prev).add(teamId));
+    setInviteQuery('');
+  }
 
   async function handleAddOwnTeam() {
     if (!tournament || !selectedOwnerTeamId) return;
@@ -412,6 +609,15 @@ export default function TournamentDetail() {
   const periodLabel = isBasketball ? 'Trajanje četvrtine' : 'Trajanje poluvremena';
   const startLabel = tournament?.start_date ? formatDate(tournament.start_date) : null;
   const topScorerTeam = topScorer ? teams.find((t) => t.id === topScorer.teamId) ?? null : null;
+  const topAssisterTeam = topAssister ? teams.find((t) => t.id === topAssister.teamId) ?? null : null;
+  const topKeeperTeam = topKeeper ? teams.find((t) => t.id === topKeeper.teamId) ?? null : null;
+  const topRebounderTeam = topRebounder ? teams.find((t) => t.id === topRebounder.teamId) ?? null : null;
+
+  const participatingTeamIds = new Set(teams.map((t) => t.id));
+  const inviteQueryTrimmed = inviteQuery.trim().toLowerCase();
+  const inviteMatches = inviteTeams
+    .filter((t) => !participatingTeamIds.has(t.id) && (!inviteQueryTrimmed || t.name.toLowerCase().includes(inviteQueryTrimmed)))
+    .slice(0, 30);
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
@@ -475,7 +681,7 @@ export default function TournamentDetail() {
                     )}
                   </div>
 
-                  <div className="mb-1 flex flex-col items-end gap-3">
+                  <div className="mb-1 w-full sm:w-auto flex flex-col items-center sm:items-end gap-3">
                     <Link
                       to="/turniri"
                       className="btn-line px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
@@ -484,8 +690,8 @@ export default function TournamentDetail() {
                     </Link>
 
                     {user?.id === tournament.owner_id ? (
-                      <div className="flex flex-col items-end gap-3">
-                        <div className="flex items-center gap-3">
+                      <div className="w-full sm:w-auto flex flex-col items-center sm:items-end gap-3">
+                        <div className="flex items-center justify-center flex-wrap gap-3">
                           <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
                             {isFinished ? 'Turnir je završen' : isLocked ? 'Turnir je zaključan' : 'Ovo je tvoj turnir'}
                           </span>
@@ -509,6 +715,7 @@ export default function TournamentDetail() {
                                     value={selectedOwnerTeamId}
                                     onChange={setSelectedOwnerTeamId}
                                     options={ownerTeams.map((t) => ({ value: t.id, label: t.name }))}
+                                    triggerClassName="w-full bg-transparent border border-ink-700 hover:border-paper-100 transition-colors px-5 py-2.5 text-xs uppercase tracking-widest flex items-center justify-between gap-3"
                                   />
                                 </div>
                               )}
@@ -660,36 +867,108 @@ export default function TournamentDetail() {
                 <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
               </div>
 
-              {isFinished && topScorer && (
+              {isFinished &&
+                (topScorer || topAssister || (topKeeper && !isBasketball) || (topRebounder && isBasketball)) && (
                 <div className="mb-10">
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
-                    Najbolji strelac turnira
+                    Najbolji igrači turnira
                   </span>
                   <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
-                  <Link
-                    to={`/${topScorer.username ?? topScorer.playerId}`}
-                    className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 max-w-md transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
-                  >
-                    <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
-                      {isBasketball ? (
-                        <BasketballIcon className="w-5 h-5 text-red-400" />
-                      ) : (
-                        <BallIcon className="w-5 h-5 text-red-400" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-paper-100 font-medium truncate transition-colors duration-200 group-hover:text-red-400">
-                        {topScorer.fullName || 'Igrač'}
-                      </p>
-                      {topScorerTeam && <p className="text-xs text-paper-500 truncate">{topScorerTeam.name}</p>}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-display text-2xl leading-none">{topScorer.goals}</p>
-                      <p className="text-[10px] uppercase tracking-widest text-paper-500 mt-1">
-                        {isBasketball ? (topScorer.goals === 1 ? 'poen' : 'poena') : 'golova'}
-                      </p>
-                    </div>
-                  </Link>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {topScorer && (
+                      <Link
+                        to={`/${topScorer.username ?? topScorer.playerId}`}
+                        className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
+                          {isBasketball ? (
+                            <BasketballIcon className="w-5 h-5 text-red-400" />
+                          ) : (
+                            <BallIcon className="w-5 h-5 text-red-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] uppercase tracking-widest text-paper-500 mb-0.5">Najbolji strelac</p>
+                          <p className="text-paper-100 font-medium truncate transition-colors duration-200 group-hover:text-red-400">
+                            {topScorer.fullName || 'Igrač'}
+                          </p>
+                          {topScorerTeam && <p className="text-xs text-paper-500 truncate">{topScorerTeam.name}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-display text-2xl leading-none">{topScorer.goals}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-paper-500 mt-1">
+                            {isBasketball ? (topScorer.goals === 1 ? 'poen' : 'poena') : 'golova'}
+                          </p>
+                        </div>
+                      </Link>
+                    )}
+
+                    {topAssister && (
+                      <Link
+                        to={`/${topAssister.username ?? topAssister.playerId}`}
+                        className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
+                          <AssistIcon className="w-5 h-5 text-red-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] uppercase tracking-widest text-paper-500 mb-0.5">Najbolji asistent</p>
+                          <p className="text-paper-100 font-medium truncate transition-colors duration-200 group-hover:text-red-400">
+                            {topAssister.fullName || 'Igrač'}
+                          </p>
+                          {topAssisterTeam && <p className="text-xs text-paper-500 truncate">{topAssisterTeam.name}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-display text-2xl leading-none">{topAssister.count}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-paper-500 mt-1">asistencija</p>
+                        </div>
+                      </Link>
+                    )}
+
+                    {!isBasketball && topKeeper && (
+                      <Link
+                        to={`/${topKeeper.username ?? topKeeper.playerId}`}
+                        className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
+                          <GloveIcon className="w-5 h-5 text-red-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] uppercase tracking-widest text-paper-500 mb-0.5">Najbolji golman</p>
+                          <p className="text-paper-100 font-medium truncate transition-colors duration-200 group-hover:text-red-400">
+                            {topKeeper.fullName || 'Igrač'}
+                          </p>
+                          {topKeeperTeam && <p className="text-xs text-paper-500 truncate">{topKeeperTeam.name}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-display text-2xl leading-none">{topKeeper.count}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-paper-500 mt-1">odbrana</p>
+                        </div>
+                      </Link>
+                    )}
+
+                    {isBasketball && topRebounder && (
+                      <Link
+                        to={`/${topRebounder.username ?? topRebounder.playerId}`}
+                        className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
+                          <ReboundIcon className="w-5 h-5 text-red-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] uppercase tracking-widest text-paper-500 mb-0.5">Najbolji skakač</p>
+                          <p className="text-paper-100 font-medium truncate transition-colors duration-200 group-hover:text-red-400">
+                            {topRebounder.fullName || 'Igrač'}
+                          </p>
+                          {topRebounderTeam && <p className="text-xs text-paper-500 truncate">{topRebounderTeam.name}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-display text-2xl leading-none">{topRebounder.count}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-paper-500 mt-1">skokova</p>
+                        </div>
+                      </Link>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -720,6 +999,72 @@ export default function TournamentDetail() {
                   </div>
                 )}
               </div>
+
+              {user?.id === tournament.owner_id && !isLocked && (
+                <div className="mb-10">
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Pozovi tim</span>
+                  <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
+                  <p className="text-sm text-paper-500 mb-4 max-w-md">
+                    Pretraži sve timove u bazi i pozovi ih da učestvuju na ovom turniru. Osnivač tima dobija obaveštenje i
+                    može da prihvati ili odbije poziv.
+                  </p>
+
+                  <div ref={inviteBoxRef} className="relative max-w-md">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-500 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={inviteQuery}
+                      onChange={(e) => setInviteQuery(e.target.value)}
+                      onFocus={() => setInviteOpen(true)}
+                      placeholder="Klikni da vidiš sve timove ili pretraži po imenu…"
+                      className="w-full bg-ink-900 border border-ink-700 focus:border-red-400 focus:outline-none pl-10 pr-4 py-2.5 text-sm text-paper-100 placeholder:text-paper-500 transition-colors"
+                    />
+
+                    {inviteOpen && inviteMatches.length > 0 && (
+                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] max-h-72 overflow-y-auto">
+                        {inviteMatches.map((t) => {
+                          const alreadyInvited = invitedTeamIds.has(t.id);
+                          return (
+                            <div
+                              key={t.id}
+                              className="flex items-center gap-3 px-4 py-2.5 border-b border-ink-800 last:border-b-0"
+                            >
+                              <div className="w-8 h-8 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center">
+                                {t.crest_url ? (
+                                  <img
+                                    src={t.crest_url}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    style={{ objectPosition: `${t.crest_position_x}% ${t.crest_position_y}%` }}
+                                  />
+                                ) : (
+                                  <span className="font-display text-xs text-paper-500">{t.name[0]?.toUpperCase()}</span>
+                                )}
+                              </div>
+                              <span className="flex-1 min-w-0 truncate text-sm text-paper-100">{t.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleInviteTeam(t.id)}
+                                disabled={alreadyInvited || invitingTeamId === t.id}
+                                className="shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                              >
+                                {invitingTeamId === t.id ? 'Slanje…' : alreadyInvited ? 'Poziv poslat' : 'Pozovi'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {inviteOpen && inviteMatches.length === 0 && (
+                    <p className="text-sm text-paper-500 mt-3">
+                      {inviteQueryTrimmed ? 'Nema rezultata.' : 'Nema dostupnih timova za poziv.'}
+                    </p>
+                  )}
+                  {inviteError && <p className="text-sm text-red-400 mt-3">{inviteError}</p>}
+                </div>
+              )}
 
               {(ownedParticipatingTeams.length > 0 || user?.id === tournament.owner_id) && (
                 <div className="mt-16 border border-red-500/20 bg-ink-900/60">

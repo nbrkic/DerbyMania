@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { useAuth } from '../lib/auth-context';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 
@@ -49,16 +51,19 @@ const STEPS = [
 ];
 
 const STANDINGS = [
-  { pos: 1, team: 'FK Vihor', p: 6, w: 4, d: 2, l: 0, gf: 14, ga: 5, pts: 14 },
-  { pos: 2, team: 'FK Granit', p: 6, w: 3, d: 2, l: 1, gf: 11, ga: 7, pts: 11 },
-  { pos: 3, team: 'FK Kometa', p: 6, w: 3, d: 1, l: 2, gf: 10, ga: 9, pts: 10 },
-  { pos: 4, team: 'FK Zmaj', p: 6, w: 1, d: 3, l: 2, gf: 8, ga: 10, pts: 6 },
-  { pos: 5, team: 'FK Lavovi', p: 6, w: 1, d: 2, l: 3, gf: 7, ga: 11, pts: 5 },
-  { pos: 6, team: 'FK Tvrđava', p: 6, w: 0, d: 2, l: 4, gf: 4, ga: 12, pts: 2 },
+  { pos: 1, team: 'FK Tesla', p: 6, w: 4, d: 2, l: 0, gf: 14, ga: 5, pts: 14 },
+  { pos: 2, team: 'FK Misa', p: 6, w: 3, d: 2, l: 1, gf: 11, ga: 7, pts: 11 },
+  { pos: 3, team: 'FK Strela', p: 6, w: 3, d: 1, l: 2, gf: 10, ga: 9, pts: 10 },
+  { pos: 4, team: 'FK Kotež', p: 6, w: 1, d: 3, l: 2, gf: 8, ga: 10, pts: 6 },
+  { pos: 5, team: 'FK Sodara', p: 6, w: 1, d: 2, l: 3, gf: 7, ga: 11, pts: 5 },
+  { pos: 6, team: 'FK Vojlovica', p: 6, w: 0, d: 2, l: 4, gf: 4, ga: 12, pts: 2 },
 ];
 
 /* ─── MAIN COMPONENT ────────────────────────────────────────── */
 export default function Landing() {
+  const { user } = useAuth();
+  const createTournamentHref = user ? '/turniri/novi' : '/register';
+
   return (
     <div className="min-h-screen bg-ink-950 text-paper-100 overflow-x-hidden">
       <style>{`
@@ -100,9 +105,9 @@ export default function Landing() {
           </p>
 
           <div className="rise-3 flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="#start" className="btn-solid px-8 py-4 text-base inline-flex items-center justify-center gap-2">
+            <Link to={createTournamentHref} className="btn-solid px-8 py-4 text-base inline-flex items-center justify-center gap-2">
               Napravi prvi turnir
-            </a>
+            </Link>
             <a href="#how" className="btn-line px-8 py-4 text-base inline-flex items-center justify-center gap-2">
               Vidi kako radi
             </a>
@@ -225,9 +230,9 @@ export default function Landing() {
           <p className="text-paper-500 text-lg max-w-md mx-auto mb-10 leading-relaxed">
             Kreiraj prvi turnir za manje od pet minuta. Besplatno, bez komplikacija.
           </p>
-          <a href="#" className="btn-solid px-9 py-4 text-base inline-flex items-center gap-2">
+          <Link to={createTournamentHref} className="btn-solid px-9 py-4 text-base inline-flex items-center gap-2">
             Napravi turnir
-          </a>
+          </Link>
         </div>
       </section>
 

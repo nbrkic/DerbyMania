@@ -112,7 +112,7 @@ export default function Notifications() {
                   const requestStatus =
                     n.type === 'join_request' || n.type === 'team_invite'
                       ? n.team_join_requests?.status
-                      : n.type === 'tournament_request'
+                      : n.type === 'tournament_request' || n.type === 'tournament_invite'
                         ? n.tournament_team_requests?.status
                         : null;
                   const isPendingAction = requestStatus === 'pending';
@@ -120,11 +120,13 @@ export default function Notifications() {
                     n.type === 'join_accepted' ||
                     n.type === 'invite_accepted' ||
                     n.type === 'tournament_request_accepted' ||
+                    n.type === 'tournament_invite_accepted' ||
                     requestStatus === 'accepted';
                   const isRejected =
                     n.type === 'join_rejected' ||
                     n.type === 'invite_rejected' ||
                     n.type === 'tournament_request_rejected' ||
+                    n.type === 'tournament_invite_rejected' ||
                     requestStatus === 'rejected';
                   const isChampion = n.type === 'tournament_champion';
                   const accentClass = isChampion
