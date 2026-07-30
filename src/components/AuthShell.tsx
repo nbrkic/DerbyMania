@@ -3,6 +3,7 @@ import { SiteHeader } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { DatePicker } from './DatePicker';
 import { Dropdown } from './Dropdown';
+import { Combobox, type ComboboxOption } from './Combobox';
 import { supabase } from '../lib/supabase';
 
 function EyeIcon({ className }: { className?: string }) {
@@ -292,6 +293,30 @@ export function SelectField({ n, label, id, value, onChange, options, placeholde
         <span className="text-red-400 font-bold">{n}</span> {label}
       </label>
       <Dropdown id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} />
+      {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
+    </div>
+  );
+}
+
+type ComboboxFieldProps = {
+  n: string;
+  label: string;
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: ComboboxOption[];
+  placeholder?: string;
+  error?: string;
+  disabled?: boolean;
+};
+
+export function ComboboxField({ n, label, id, value, onChange, options, placeholder, error, disabled }: ComboboxFieldProps) {
+  return (
+    <div>
+      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        <span className="text-red-400 font-bold">{n}</span> {label}
+      </label>
+      <Combobox id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} disabled={disabled} />
       {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
     </div>
   );

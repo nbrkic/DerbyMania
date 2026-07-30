@@ -4,9 +4,10 @@ import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
-import { TicketField, SelectField, TextAreaField } from '../components/AuthShell';
+import { TicketField, SelectField, ComboboxField, TextAreaField } from '../components/AuthShell';
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
+import { normalizeForSearch } from '../lib/text';
 import { FormSkeleton } from '../components/Skeleton';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -82,6 +83,7 @@ export default function CreateTournament() {
   const navigate = useNavigate();
 
   const [sports, setSports] = useState<Sport[]>([]);
+  const [cities, setCities] = useState<{ id: number; name: string }[]>([]);
   const [sportId, setSportId] = useState('');
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
@@ -111,6 +113,16 @@ export default function CreateTournament() {
       .select('id, name')
       .order('name')
       .then(({ data }) => setSports(data ?? []));
+  }, []);
+
+  useEffect(() => {
+    supabase
+      .from('city')
+      .select('id, name')
+      .then(({ data }) => {
+        const rows = (data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, 'sr'));
+        setCities(rows);
+      });
   }, []);
 
   useEffect(() => {
@@ -199,6 +211,11 @@ export default function CreateTournament() {
       setError('Unesi naziv turnira.');
       return;
     }
+    const matchedCity = city.trim() ? cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(city)) : undefined;
+    if (city.trim() && !matchedCity) {
+      setError('Izaberi grad iz ponuđene liste.');
+      return;
+    }
     if (!format) {
       setError('Izaberi format turnira.');
       return;
@@ -239,7 +256,7 @@ export default function CreateTournament() {
       const payload = {
         sport_id: Number(sportId),
         name: name.trim(),
-        city: city.trim() || null,
+        city: matchedCity ? matchedCity.name : null,
         location: location.trim() || null,
         description: description.trim() || null,
         format,
@@ -354,7 +371,7 @@ export default function CreateTournament() {
                 options={sports.map((s) => ({ value: String(s.id), label: s.name }))}
               />
               <TicketField n="02" label="Naziv turnira" id="name" type="text" required value={name} onChange={setName} />
-              <TicketField n="03" label="Grad" id="city" type="text" value={city} onChange={setCity} />
+              <ComboboxField n="03" label="Grad" id="city" value={city} onChange={setCity} options={cities} />
               <TicketField n="04" label="Lokacija" id="location" type="text" value={location} onChange={setLocation} />
 
               <SelectField

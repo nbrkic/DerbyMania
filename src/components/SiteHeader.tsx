@@ -80,9 +80,9 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-ink-950">
       <div className="max-w-6xl mx-auto">
-        <div className="px-6 h-16 flex items-center justify-between bg-ink-950">
+        <div className="px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center text-2xl font-black tracking-tight">
             DERBY<span className="font-light text-paper-500">MANIA</span>
           </Link>

@@ -1,7 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(node -e ' *)",
+      "Bash(npx eslint *)",
+      "Bash(npx vite *)",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/City?select=id,name&limit=5\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/city?select=id,name&limit=5\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/city?select=*&limit=5\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/city?select=id&limit=1\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Prefer: count=exact\" -I)",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/city?select=id,name&limit=10\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/city?select=id,name&limit=20\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/city?select=id&limit=1\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Prefer: count=exact\" -D - -o /dev/null -s)",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/sports?select=id,name&limit=3\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -o /tmp/openapi.json -w \"%{http_code}\\\\n\")"
     ]
   }
 }

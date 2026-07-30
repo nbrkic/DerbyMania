@@ -4,7 +4,8 @@ import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
-import { TicketField, SelectField, MultiSelectPills, UsernameField, USERNAME_REGEX, type UsernameStatus } from '../components/AuthShell';
+import { TicketField, SelectField, ComboboxField, MultiSelectPills, UsernameField, USERNAME_REGEX, type UsernameStatus } from '../components/AuthShell';
+import { normalizeForSearch } from '../lib/text';
 import {
   FOOTBALL_SPORT_NAMES,
   BASKETBALL_SPORT_NAMES,
@@ -81,6 +82,7 @@ export default function Profile() {
   const [weightKg, setWeightKg] = useState('');
   const [positions, setPositions] = useState<string[]>([]);
   const [sports, setSports] = useState<Sport[]>([]);
+  const [cities, setCities] = useState<{ id: number; name: string }[]>([]);
   const [selectedSportIds, setSelectedSportIds] = useState<number[]>([]);
   const [sportsLoaded, setSportsLoaded] = useState(false);
   const [saved, setSaved] = useState<SavedValues | null>(null);
@@ -103,6 +105,16 @@ export default function Profile() {
       .select('id, name')
       .order('name')
       .then(({ data }) => setSports(data ?? []));
+  }, []);
+
+  useEffect(() => {
+    supabase
+      .from('city')
+      .select('id, name')
+      .then(({ data }) => {
+        const rows = (data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, 'sr'));
+        setCities(rows);
+      });
   }, []);
 
   useEffect(() => {
@@ -331,6 +343,7 @@ export default function Profile() {
   type FieldErrors = {
     fullName?: string;
     username?: string;
+    city?: string;
     heightCm?: string;
     weightKg?: string;
   };
@@ -342,6 +355,10 @@ export default function Profile() {
       errors.fullName = 'Unesi ime i prezime.';
     } else if (!/^[A-Za-zČĆŽŠĐčćžšđ]+(?: [A-Za-zČĆŽŠĐčćžšđ]+)*$/.test(fullName.trim())) {
       errors.fullName = 'Ime i prezime mogu sadržati samo slova i razmak.';
+    }
+
+    if (city.trim() && !cities.some((c) => normalizeForSearch(c.name) === normalizeForSearch(city))) {
+      errors.city = 'Izaberi grad iz ponuđene liste.';
     }
 
     if (username && !USERNAME_REGEX.test(username)) {
@@ -356,8 +373,8 @@ export default function Profile() {
       errors.heightCm = 'Visina mora biti između 100 i 250 cm.';
     }
 
-    if (weightKg && (Number(weightKg) < 20 || Number(weightKg) > 250)) {
-      errors.weightKg = 'Težina mora biti između 20 i 250 kg.';
+    if (weightKg && (Number(weightKg) < 30 || Number(weightKg) > 250)) {
+      errors.weightKg = 'Težina mora biti između 30 i 250 kg.';
     }
 
     return errors;
@@ -398,6 +415,9 @@ export default function Profile() {
     setSuccess(null);
     setSaving(true);
 
+    const matchedCity = city.trim() ? cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(city)) : undefined;
+    const cityToSave = matchedCity ? matchedCity.name : null;
+
     let avatarUrl = profile?.avatar_url ?? null;
 
     if (avatarFile) {
@@ -420,7 +440,7 @@ export default function Profile() {
         username: username || null,
         birth_date: birthDate || null,
         phone,
-        city: city.trim() || null,
+        city: cityToSave,
         avatar_url: avatarUrl,
         ...(avatarFile ? { avatar_position_x: 50, avatar_position_y: 50 } : {}),
         email,
@@ -437,7 +457,9 @@ export default function Profile() {
       setError(
         updateError.code === '23505'
           ? 'Ovo korisničko ime je u međuvremenu zauzeto.'
-          : `Čuvanje podataka nije uspelo: ${updateError.message}`
+          : updateError.code === '23514'
+            ? 'Uneta vrednost nije u dozvoljenom opsegu. Proveri visinu i težinu pa pokušaj ponovo.'
+            : 'Čuvanje podataka nije uspelo. Pokušaj ponovo.'
       );
       return;
     }
@@ -465,7 +487,8 @@ export default function Profile() {
 
     await refreshProfile();
     setAvatarFile(null);
-    setSaved({ fullName, username, birthDate, phone, city, email, dominantHand, dominantLeg, heightCm, weightKg, positions, sportIds: selectedSportIds });
+    setCity(cityToSave ?? '');
+    setSaved({ fullName, username, birthDate, phone, city: cityToSave ?? '', email, dominantHand, dominantLeg, heightCm, weightKg, positions, sportIds: selectedSportIds });
     setSaving(false);
     setSuccess('Promene su sačuvane.');
   }
@@ -563,7 +586,15 @@ export default function Profile() {
               />
               <TicketField n="3" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} disabled />
               <TicketField n="4" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} disabled />
-              <TicketField n="5" label="Mesto/grad" id="city" type="text" autoComplete="address-level2" value={city} onChange={setCity} />
+              <ComboboxField
+                n="5"
+                label="Mesto/grad"
+                id="city"
+                value={city}
+                onChange={setCity}
+                options={cities}
+                error={fieldErrors.city}
+              />
               <TicketField n="6" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} disabled />
 
               <MultiSelectPills
