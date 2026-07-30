@@ -8,6 +8,11 @@ import { Dropdown } from '../components/Dropdown';
 import { TeamRow, type Team } from './Teams';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
+import { GroupsTabContent } from '../components/GroupsTabContent';
+import { EliminationTabContent } from '../components/EliminationTabContent';
+import { LeagueTabContent } from '../components/LeagueTabContent';
+
+type TabId = 'pocetna' | 'grupna' | 'eliminacija' | 'liga' | 'kup';
 
 const FORMAT_LABELS: Record<string, string> = {
   grupe_i_eliminacija: 'Grupna faza + eliminacija',
@@ -176,6 +181,8 @@ export default function TournamentDetail() {
   const inviteBoxRef = useRef<HTMLDivElement>(null);
   const [invitingTeamId, setInvitingTeamId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<TabId>('pocetna');
 
   useEffect(() => {
     if (!id) return;
@@ -579,13 +586,129 @@ export default function TournamentDetail() {
     if (!tournament) return;
     setDeleting(true);
     setDeleteError(null);
-    const { error } = await supabase.from('tournaments').delete().eq('id', tournament.id);
-    setDeleting(false);
 
+    const tid = tournament.id;
+
+    // Fetch all match IDs grouped by table type
+    const [leagueMatches, bracketMatches, groupMatches] = await Promise.all([
+      supabase.from('tournament_league_matches').select('id').eq('tournament_id', tid),
+      supabase.from('tournament_bracket_matches').select('id').eq('tournament_id', tid),
+      supabase.from('tournament_matches').select('id').eq('tournament_id', tid),
+    ]);
+
+    const leagueIds = (leagueMatches.data ?? []).map((r: { id: string }) => r.id);
+    const bracketIds = (bracketMatches.data ?? []).map((r: { id: string }) => r.id);
+    const groupMatchIds = (groupMatches.data ?? []).map((r: { id: string }) => r.id);
+
+    // Collect all player IDs from goal/event tables so we can snapshot career stats
+    const playerIdSet = new Set<string>();
+    const playerRowQueries: PromiseLike<{ data: { player_id: string }[] | null }>[] = [];
+    if (leagueIds.length > 0) {
+      playerRowQueries.push(supabase.from('tournament_league_goals').select('player_id').in('match_id', leagueIds) as PromiseLike<{ data: { player_id: string }[] | null }>);
+      playerRowQueries.push(supabase.from('tournament_league_events').select('player_id').in('match_id', leagueIds) as PromiseLike<{ data: { player_id: string }[] | null }>);
+    }
+    if (bracketIds.length > 0) {
+      playerRowQueries.push(supabase.from('tournament_bracket_goals').select('player_id').in('match_id', bracketIds) as PromiseLike<{ data: { player_id: string }[] | null }>);
+      playerRowQueries.push(supabase.from('tournament_bracket_events').select('player_id').in('match_id', bracketIds) as PromiseLike<{ data: { player_id: string }[] | null }>);
+    }
+    if (groupMatchIds.length > 0) {
+      playerRowQueries.push(supabase.from('tournament_match_goals').select('player_id').in('match_id', groupMatchIds) as PromiseLike<{ data: { player_id: string }[] | null }>);
+      playerRowQueries.push(supabase.from('tournament_match_events').select('player_id').in('match_id', groupMatchIds) as PromiseLike<{ data: { player_id: string }[] | null }>);
+    }
+    if (playerRowQueries.length > 0) {
+      const playerResults = await Promise.all(playerRowQueries);
+      for (const { data } of playerResults) {
+        for (const row of data ?? []) playerIdSet.add(row.player_id);
+      }
+    }
+    const affectedPlayerIds = [...playerIdSet];
+
+    type CareerStats = {
+      id: string;
+      career_football_goals: number;
+      career_basketball_points: number;
+      career_football_assists: number;
+      career_basketball_assists: number;
+      career_saves: number;
+      career_yellow_cards: number;
+      career_red_cards: number;
+      career_rebounds: number;
+    };
+    const careerStatKeys: (keyof Omit<CareerStats, 'id'>)[] = [
+      'career_football_goals', 'career_basketball_points',
+      'career_football_assists', 'career_basketball_assists',
+      'career_saves', 'career_yellow_cards', 'career_red_cards', 'career_rebounds',
+    ];
+
+    // Snapshot career stats BEFORE deletion so we can restore them if DB triggers decrement them
+    let beforeMap = new Map<string, CareerStats>();
+    if (affectedPlayerIds.length > 0) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, career_football_goals, career_basketball_points, career_football_assists, career_basketball_assists, career_saves, career_yellow_cards, career_red_cards, career_rebounds')
+        .in('id', affectedPlayerIds);
+      beforeMap = new Map((data ?? []).map((r: CareerStats) => [r.id, r]));
+    }
+
+    // Delete leaf records (goals & events) that reference match IDs
+    const leafDeletes: PromiseLike<unknown>[] = [];
+    if (leagueIds.length > 0) {
+      leafDeletes.push(supabase.from('tournament_league_goals').delete().in('match_id', leagueIds));
+      leafDeletes.push(supabase.from('tournament_league_events').delete().in('match_id', leagueIds));
+    }
+    if (bracketIds.length > 0) {
+      leafDeletes.push(supabase.from('tournament_bracket_goals').delete().in('match_id', bracketIds));
+      leafDeletes.push(supabase.from('tournament_bracket_events').delete().in('match_id', bracketIds));
+    }
+    if (groupMatchIds.length > 0) {
+      leafDeletes.push(supabase.from('tournament_match_goals').delete().in('match_id', groupMatchIds));
+      leafDeletes.push(supabase.from('tournament_match_events').delete().in('match_id', groupMatchIds));
+    }
+    await Promise.all(leafDeletes);
+
+    // Delete match tables, group assignments, groups, teams
+    await Promise.all([
+      supabase.from('tournament_league_matches').delete().eq('tournament_id', tid),
+      supabase.from('tournament_bracket_matches').delete().eq('tournament_id', tid),
+      supabase.from('tournament_matches').delete().eq('tournament_id', tid),
+      supabase.from('tournament_group_teams').delete().eq('tournament_id', tid),
+    ]);
+
+    await Promise.all([
+      supabase.from('tournament_groups').delete().eq('tournament_id', tid),
+      supabase.from('tournament_teams').delete().eq('tournament_id', tid),
+    ]);
+
+    const { error } = await supabase.from('tournaments').delete().eq('id', tid);
     if (error) {
+      setDeleting(false);
       setDeleteError('Brisanje turnira nije uspelo. Pokušaj ponovo.');
       return;
     }
+
+    // Restore career stats that DB triggers may have decremented
+    if (affectedPlayerIds.length > 0) {
+      const { data: afterData } = await supabase
+        .from('profiles')
+        .select('id, career_football_goals, career_basketball_points, career_football_assists, career_basketball_assists, career_saves, career_yellow_cards, career_red_cards, career_rebounds')
+        .in('id', affectedPlayerIds);
+
+      const restores: PromiseLike<unknown>[] = [];
+      for (const after of (afterData ?? []) as CareerStats[]) {
+        const before = beforeMap.get(after.id);
+        if (!before) continue;
+        const update: Partial<Record<keyof Omit<CareerStats, 'id'>, number>> = {};
+        for (const key of careerStatKeys) {
+          if (after[key] < before[key]) update[key] = before[key];
+        }
+        if (Object.keys(update).length > 0) {
+          restores.push(supabase.from('profiles').update(update).eq('id', after.id) as PromiseLike<unknown>);
+        }
+      }
+      await Promise.all(restores);
+    }
+
+    setDeleting(false);
     navigate('/turniri');
   }
 
@@ -618,6 +741,16 @@ export default function TournamentDetail() {
   const inviteMatches = inviteTeams
     .filter((t) => !participatingTeamIds.has(t.id) && (!inviteQueryTrimmed || t.name.toLowerCase().includes(inviteQueryTrimmed)))
     .slice(0, 30);
+
+  const tabs: { id: TabId; label: string }[] = [{ id: 'pocetna', label: 'Početna' }];
+  if (tournament?.format === 'grupe_i_eliminacija') {
+    tabs.push({ id: 'grupna', label: 'Grupna faza' });
+    tabs.push({ id: 'eliminacija', label: 'Eliminaciona faza' });
+  } else if (tournament?.format === 'liga') {
+    tabs.push({ id: 'liga', label: 'Liga' });
+  } else if (tournament?.format === 'kup') {
+    tabs.push({ id: 'kup', label: 'Kup' });
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
@@ -773,80 +906,28 @@ export default function TournamentDetail() {
               </div>
             </section>
 
-            {tournament.format === 'grupe_i_eliminacija' && (
-              <section className="bg-maroon-900 border-b border-ink-700">
-                <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col gap-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-                    <div>
-                      <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Grupna faza</span>
-                      <p className="text-paper-200 text-sm mt-1">
-                        Ovaj turnir koristi format grupa. Pogledaj raspored grupa i timove u njima.
-                      </p>
-                    </div>
-                    <Link
-                      to={`/turniri/${tournament.id}/grupe`}
-                      className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
+            <div className="bg-ink-900 border-b border-ink-700 sticky top-16 z-10">
+              <div className="max-w-6xl mx-auto">
+                <div className="flex">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex-1 py-3.5 text-xs uppercase tracking-widest font-semibold transition-colors border-b-2 ${
+                        activeTab === tab.id
+                          ? 'border-red-500 text-paper-100'
+                          : 'border-transparent text-paper-500 hover:text-paper-100'
+                      }`}
                     >
-                      Pogledaj grupnu fazu
-                    </Link>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 pt-6 border-t border-ink-700">
-                    <div>
-                      <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Eliminaciona faza</span>
-                      <p className="text-paper-200 text-sm mt-1">
-                        Kada se zaključi grupna faza, ovde se prati eliminaciona faza i pobednik turnira.
-                      </p>
-                    </div>
-                    <Link
-                      to={`/turniri/${tournament.id}/eliminacija`}
-                      className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
-                    >
-                      Pogledaj eliminacionu fazu
-                    </Link>
-                  </div>
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
-              </section>
-            )}
+              </div>
+            </div>
 
-            {tournament.format === 'kup' && (
-              <section className="bg-maroon-900 border-b border-ink-700">
-                <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-                  <div>
-                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Kup</span>
-                    <p className="text-paper-200 text-sm mt-1">
-                      Ovaj turnir koristi kup format. Pogledaj žreb i eliminacionu fazu.
-                    </p>
-                  </div>
-                  <Link
-                    to={`/turniri/${tournament.id}/eliminacija`}
-                    className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
-                  >
-                    Pogledaj kup
-                  </Link>
-                </div>
-              </section>
-            )}
-
-            {tournament.format === 'liga' && (
-              <section className="bg-maroon-900 border-b border-ink-700">
-                <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-                  <div>
-                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Liga</span>
-                    <p className="text-paper-200 text-sm mt-1">
-                      Ovaj turnir koristi format lige. Pogledaj tabelu i utakmice svih prijavljenih timova.
-                    </p>
-                  </div>
-                  <Link
-                    to={`/turniri/${tournament.id}/liga`}
-                    className="btn-solid px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
-                  >
-                    Pogledaj tabelu lige
-                  </Link>
-                </div>
-              </section>
-            )}
-
+            {activeTab === 'pocetna' && (
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
               <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
                 <StatBlock label="Grad" value={tournament.city || '—'} />
@@ -1144,6 +1225,20 @@ export default function TournamentDetail() {
                 </div>
               )}
             </section>
+            )}
+
+            {activeTab === 'grupna' && id && (
+              <GroupsTabContent id={id} tournament={tournament} onSwitchToElimination={() => setActiveTab('eliminacija')} />
+            )}
+            {activeTab === 'eliminacija' && id && (
+              <EliminationTabContent id={id} tournament={tournament} onSwitchToGroups={() => setActiveTab('grupna')} />
+            )}
+            {activeTab === 'liga' && id && (
+              <LeagueTabContent id={id} tournament={tournament} />
+            )}
+            {activeTab === 'kup' && id && (
+              <EliminationTabContent id={id} tournament={tournament} />
+            )}
           </>
         )}
       </main>
