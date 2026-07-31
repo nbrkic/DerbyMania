@@ -181,6 +181,27 @@ html, body, #root {
 }
 .ring-expand { animation: ringExpand 1.3s cubic-bezier(0.16,1,0.3,1) 0.15s both; }
 
+@keyframes stampIn {
+  0%   { opacity: 0; transform: scale(2.6) rotate(-14deg); }
+  55%  { opacity: 1; transform: scale(0.92) rotate(3deg); }
+  75%  { transform: scale(1.05) rotate(-1.5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.stamp-in { animation: stampIn 0.6s cubic-bezier(0.22,1,0.36,1) both; }
+
+@keyframes stampRingPulse {
+  0%   { opacity: 0; transform: scale(0.6); }
+  35%  { opacity: 0.9; }
+  100% { opacity: 0; transform: scale(1.7); }
+}
+.stamp-ring-pulse { animation: stampRingPulse 0.8s ease-out 0.4s both; }
+
+@keyframes fadeUpIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up-in { animation: fadeUpIn 0.5s ease-out both; }
+
 @keyframes skeletonSweep {
   0%   { transform: translateX(-130%) skewX(-12deg); }
   100% { transform: translateX(230%) skewX(-12deg); }

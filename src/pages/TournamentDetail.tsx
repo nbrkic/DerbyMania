@@ -745,7 +745,7 @@ export default function TournamentDetail() {
   const tabs: { id: TabId; label: string }[] = [{ id: 'pocetna', label: 'Početna' }];
   if (tournament?.format === 'grupe_i_eliminacija') {
     tabs.push({ id: 'grupna', label: 'Grupna faza' });
-    tabs.push({ id: 'eliminacija', label: 'Eliminaciona faza' });
+    tabs.push({ id: 'eliminacija', label: 'Eliminacija' });
   } else if (tournament?.format === 'liga') {
     tabs.push({ id: 'liga', label: 'Liga' });
   } else if (tournament?.format === 'kup') {

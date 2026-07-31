@@ -16,9 +16,6 @@ import PlayerDetail from './pages/PlayerDetail';
 import Tournaments from './pages/Tournaments';
 import CreateTournament from './pages/CreateTournament';
 import TournamentDetail from './pages/TournamentDetail';
-import TournamentGroups from './pages/TournamentGroups';
-import TournamentElimination from './pages/TournamentElimination';
-import TournamentLeague from './pages/TournamentLeague';
 import Feedback from './pages/Feedback';
 
 export function App() {
@@ -77,9 +74,6 @@ export function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/turniri/:id/grupe" element={<TournamentGroups />} />
-          <Route path="/turniri/:id/eliminacija" element={<TournamentElimination />} />
-          <Route path="/turniri/:id/liga" element={<TournamentLeague />} />
           <Route
             path="/obavestenja"
             element={

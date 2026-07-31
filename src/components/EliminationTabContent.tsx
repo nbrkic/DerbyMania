@@ -452,15 +452,17 @@ function BracketTree({ totalRounds, matchesByRound, teamsById, isOwner, onStart 
   );
 }
 
-function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, rosterB, isBasketball, events, finishError, onAddGoal, onFinishMatch, onAddEvent }: {
+function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, rosterB, isBasketball, events, finishError, onAddGoal, onFinishMatch, onAddEvent, onUndoLast }: {
   match: BracketMatch; teamA: GroupTeam; teamB: GroupTeam; roundText: string;
   isOwner: boolean; rosterA: RosterPlayer[]; rosterB: RosterPlayer[]; isBasketball: boolean;
   events: MatchEvent[]; finishError: string | null;
   onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) => void;
   onFinishMatch: (matchId: string) => void;
   onAddEvent: (matchId: string, teamId: string, playerId: string, eventType: MatchEventType) => void;
+  onUndoLast: (matchId: string) => void;
 }) {
   const rosterById = new Map([...rosterA, ...rosterB].map((p) => [p.id, p]));
+  const hasEntries = match.team_a_goals > 0 || match.team_b_goals > 0 || events.length > 0;
   return (
     <div className="relative bg-ink-900 border border-red-500/40 overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent" />
@@ -522,7 +524,12 @@ function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, roste
           </div>
         )}
         {isOwner && (
-          <div className="flex flex-col items-center gap-2 mt-6">
+          <div className="flex flex-col items-center gap-3 mt-6">
+            {hasEntries && (
+              <button type="button" onClick={() => onUndoLast(match.id)} className="text-[11px] uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors">
+                Poništi poslednji unos
+              </button>
+            )}
             <button type="button" onClick={() => onFinishMatch(match.id)} className="btn-solid px-6 py-2.5 text-xs uppercase tracking-widest">Završi utakmicu</button>
             {finishError && <p className="text-xs text-red-400">{finishError}</p>}
           </div>
@@ -613,6 +620,63 @@ export function EliminationTabContent({
       .then(({ data }) => { setBracketMatches((data as BracketMatch[]) ?? []); setLoadingBracket(false); });
   }, [id]);
 
+  const matchIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    matchIdsRef.current = new Set(bracketMatches.map((m) => m.id));
+  }, [bracketMatches]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`tournament-bracket-${id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournament_bracket_matches', filter: `tournament_id=eq.${id}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const oldId = (payload.old as { id: string }).id;
+            setBracketMatches((prev) => prev.filter((m) => m.id !== oldId));
+            return;
+          }
+          const row = payload.new as BracketMatch;
+          setBracketMatches((prev) => {
+            if (prev.some((m) => m.id === row.id)) return prev.map((m) => (m.id === row.id ? { ...m, ...row } : m));
+            return [...prev, row].sort((a, b) => a.round - b.round || a.bracket_slot - b.bracket_slot);
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournament_bracket_events' },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const old = payload.old as { id: string; match_id?: string };
+            if (!old.match_id || !matchIdsRef.current.has(old.match_id)) return;
+            setMatchEvents((prev) => {
+              const list = prev.get(old.match_id!) ?? [];
+              const next = new Map(prev);
+              next.set(old.match_id!, list.filter((e) => e.id !== old.id));
+              return next;
+            });
+            return;
+          }
+          const row = payload.new as MatchEvent;
+          if (!matchIdsRef.current.has(row.match_id)) return;
+          setMatchEvents((prev) => {
+            const list = prev.get(row.match_id) ?? [];
+            if (list.some((e) => e.id === row.id)) return prev;
+            const next = new Map(prev);
+            next.set(row.match_id, [...list, row]);
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id]);
+
   useEffect(() => {
     const neededTeamIds = new Set<string>();
     bracketMatches.filter((m) => m.status === 'in_progress').forEach((m) => {
@@ -701,6 +765,38 @@ export function EliminationTabContent({
     setMatchEvents((prev) => { const next = new Map(prev); const list = next.get(matchId) ?? []; next.set(matchId, [...list, data as MatchEvent]); return next; });
   }
 
+  async function handleUndoLast(matchId: string) {
+    const match = bracketMatches.find((m) => m.id === matchId);
+    if (!match) return;
+
+    const [{ data: lastGoal }, { data: lastEvent }] = await Promise.all([
+      supabase.from('tournament_bracket_goals').select('id, team_id, points, created_at').eq('match_id', matchId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('tournament_bracket_events').select('id, match_id, team_id, player_id, event_type, created_at').eq('match_id', matchId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+
+    const goalTime = lastGoal ? new Date(lastGoal.created_at).getTime() : -1;
+    const eventTime = lastEvent ? new Date(lastEvent.created_at).getTime() : -1;
+    if (goalTime < 0 && eventTime < 0) return;
+
+    if (goalTime >= eventTime) {
+      const { error } = await supabase.from('tournament_bracket_goals').delete().eq('id', lastGoal!.id);
+      if (error) return;
+      const side = lastGoal!.team_id === match.team_a_id ? 'a' : 'b';
+      const field = side === 'a' ? 'team_a_goals' : 'team_b_goals';
+      const newValue = Math.max(0, (side === 'a' ? match.team_a_goals : match.team_b_goals) - lastGoal!.points);
+      const { error: updateError } = await supabase.from('tournament_bracket_matches').update({ [field]: newValue }).eq('id', matchId);
+      if (!updateError) setBracketMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, [field]: newValue } : m)));
+    } else {
+      const { error } = await supabase.from('tournament_bracket_events').delete().eq('id', lastEvent!.id);
+      if (error) return;
+      setMatchEvents((prev) => {
+        const next = new Map(prev);
+        next.set(matchId, (next.get(matchId) ?? []).filter((e) => e.id !== lastEvent!.id));
+        return next;
+      });
+    }
+  }
+
   async function handleToggleMatchDetails(matchId: string) {
     if (expandedMatchId === matchId) { setExpandedMatchId(null); return; }
     setExpandedMatchId(matchId);
@@ -787,7 +883,7 @@ export function EliminationTabContent({
                   const teamA = m.team_a_id ? teamsById.get(m.team_a_id) : null;
                   const teamB = m.team_b_id ? teamsById.get(m.team_b_id) : null;
                   if (!teamA || !teamB) return null;
-                  return <LiveMatchCard key={m.id} match={m} teamA={teamA} teamB={teamB} roundText={roundLabel(m.round, totalRounds)} isOwner={isOwner} rosterA={rosters.get(teamA.id) ?? []} rosterB={rosters.get(teamB.id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} finishError={finishError} onAddGoal={handleAddGoal} onFinishMatch={handleFinishBracketMatch} onAddEvent={handleAddEvent} />;
+                  return <LiveMatchCard key={m.id} match={m} teamA={teamA} teamB={teamB} roundText={roundLabel(m.round, totalRounds)} isOwner={isOwner} rosterA={rosters.get(teamA.id) ?? []} rosterB={rosters.get(teamB.id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} finishError={finishError} onAddGoal={handleAddGoal} onFinishMatch={handleFinishBracketMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />;
                 })}
               </div>
             )}

@@ -4,7 +4,11 @@
       "Bash(npm install *)",
       "Bash(npm run *)",
       "mcp__claude_ai_Supabase__list_projects",
-      "mcp__claude_ai_Supabase__execute_sql"
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(npx tsc *)",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__execute_sql"
     ]
   }
 }
