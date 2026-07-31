@@ -126,7 +126,7 @@ function TournamentCreatedCelebration({
   onContinue: () => void;
 }) {
   return (
-    <div className="relative w-full max-w-lg overflow-hidden bg-ink-900 border border-red-500/40">
+    <div className="relative w-full max-w-lg overflow-hidden bg-ink-900 border border-red-500/40 mt-10 sm:mt-16">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{ background: 'radial-gradient(circle at 50% 30%, rgba(194,31,46,0.16), transparent 62%)' }}
