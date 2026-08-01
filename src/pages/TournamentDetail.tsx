@@ -34,6 +34,7 @@ type TournamentDetail = {
   start_date: string | null;
   start_time: string | null;
   max_teams: number | null;
+  entry_fee_per_player: number | null;
   format: string;
   players_per_team: number;
   substitutions_allowed: number;
@@ -191,7 +192,7 @@ export default function TournamentDetail() {
       const { data: tournamentRow } = await supabase
         .from('tournaments')
         .select(
-          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, description, start_date, start_time, max_teams, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, sport_id, status, roster_locked, sports(name)'
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, description, start_date, start_time, max_teams, entry_fee_per_player, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, sport_id, status, roster_locked, sports(name)'
         )
         .eq('id', id)
         .single();
@@ -946,6 +947,15 @@ export default function TournamentDetail() {
                 <StatBlock label="Dozvoljene izmene" value={String(tournament.substitutions_allowed)} />
                 <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} />
                 <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
+              </div>
+
+              <div className="mb-10 bg-ink-900 border border-red-500/30 border-l-2 border-l-red-500 px-5 py-4 inline-block">
+                <p className="text-[11px] uppercase tracking-widest text-paper-500 mb-1">Kotizacija</p>
+                <p className="font-display text-xl leading-tight">
+                  {tournament.entry_fee_per_player != null
+                    ? `${tournament.entry_fee_per_player.toLocaleString('sr-Latn-RS')} RSD po igraču`
+                    : 'Bez kotizacije'}
+                </p>
               </div>
 
               {isFinished &&
