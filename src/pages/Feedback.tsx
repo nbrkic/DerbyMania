@@ -62,7 +62,8 @@ export default function Feedback() {
       }
     }
 
-    if (message.length < MIN_MESSAGE_LENGTH) {
+    const normalizedMessageLength = message.trim().replace(/\s+/g, ' ').length;
+    if (normalizedMessageLength < MIN_MESSAGE_LENGTH) {
       errors.message = `Poruka mora imati najmanje ${MIN_MESSAGE_LENGTH} karaktera.`;
     }
 
@@ -103,7 +104,7 @@ export default function Feedback() {
       setFullName('');
       setEmail('');
     }
-    setSuccess('Hvala na poruci! Uzećemo je u obzir.');
+    setSuccess('Hvala na poruci!');
   }
 
   return (
@@ -128,7 +129,7 @@ export default function Feedback() {
               <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Feedback</span>
               <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Pošalji nam poruku</h1>
               <p className="text-paper-500 mt-3 max-w-md mx-auto">
-                Komentar, primedba, sugestija ili pohvala — sve nam pomaže da DerbyManiju učinimo boljom.
+                Komentar, primedba, sugestija ili pohvala, sve nam pomaže da DerbyManiju učinimo boljom.
               </p>
             </div>
 

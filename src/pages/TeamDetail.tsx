@@ -10,6 +10,7 @@ import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../compo
 type TeamDetail = {
   id: string;
   owner_id: string;
+  captain_id: string | null;
   name: string;
   crest_url: string | null;
   crest_position_x: number;
@@ -126,6 +127,8 @@ export default function TeamDetail() {
   const [founderName, setFounderName] = useState<string | null>(null);
   const [playerCount, setPlayerCount] = useState(0);
   const [members, setMembers] = useState<Player[]>([]);
+  const [togglingCaptainId, setTogglingCaptainId] = useState<string | null>(null);
+  const [captainError, setCaptainError] = useState<string | null>(null);
   const [isMember, setIsMember] = useState(false);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -147,7 +150,7 @@ export default function TeamDetail() {
     async function load() {
       const { data: teamRow } = await supabase
         .from('teams')
-        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, description, founded_year, sports(name)')
+        .select('id, owner_id, captain_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, description, founded_year, sports(name)')
         .eq('id', id)
         .is('deleted_at', null)
         .single();
@@ -396,6 +399,27 @@ export default function TeamDetail() {
     setHasPendingRequest(true);
   }
 
+  async function handleToggleCaptain(memberId: string) {
+    if (!team || user?.id !== team.owner_id) return;
+
+    const currentCaptainId = team.captain_id ?? team.owner_id;
+    const nextCaptainId = currentCaptainId === memberId ? team.owner_id : memberId;
+
+    setTogglingCaptainId(memberId);
+    setCaptainError(null);
+
+    const { error } = await supabase.from('teams').update({ captain_id: nextCaptainId }).eq('id', team.id);
+
+    setTogglingCaptainId(null);
+
+    if (error) {
+      setCaptainError('Ažuriranje kapitena nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    setTeam((prev) => (prev ? { ...prev, captain_id: nextCaptainId } : prev));
+  }
+
   async function handleLeaveTeam() {
     if (!user || !team) return;
     setLeaving(true);
@@ -493,7 +517,7 @@ export default function TeamDetail() {
                   <div className="mb-1 flex flex-col items-end gap-3">
                     <Link
                       to="/timovi"
-                      className="btn-line px-6 py-3 text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                      className="btn-line px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
                     >
                       Nazad na timove
                     </Link>
@@ -535,6 +559,11 @@ export default function TeamDetail() {
               {founderName && (
                 <p className="text-sm text-paper-500 mb-10">
                   Osnivač: <span className="text-paper-100">{founderName}</span>
+                  {(team.captain_id ?? team.owner_id) === team.owner_id && (
+                    <span className="ml-2 text-[11px] uppercase tracking-widest text-yellow-400 font-semibold">
+                      · Kapiten
+                    </span>
+                  )}
                 </p>
               )}
 
@@ -561,11 +590,50 @@ export default function TeamDetail() {
                 {members.length === 0 ? (
                   <p className="text-sm text-paper-500">Ovaj tim još uvek nema igrača.</p>
                 ) : (
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {members.map((member, index) => (
-                      <PlayerCard key={member.id} player={member} index={index} isCaptain={member.id === team.owner_id} />
-                    ))}
-                  </div>
+                  <>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {members.map((member, index) => {
+                        const captainId = team.captain_id ?? team.owner_id;
+                        const isCaptain = member.id === captainId;
+                        return (
+                          <div key={member.id} className="flex items-stretch gap-2">
+                            <div className="min-w-0 flex-1">
+                              <PlayerCard player={member} index={index} isCaptain={isCaptain} />
+                            </div>
+                            {user?.id === team.owner_id && (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCaptain(member.id)}
+                                disabled={togglingCaptainId === member.id}
+                                title={isCaptain ? 'Ukloni kapitena' : 'Postavi za kapitena'}
+                                className={`shrink-0 w-24 flex flex-col items-center justify-center gap-1.5 border transition-colors duration-200 disabled:opacity-50 disabled:pointer-events-none ${
+                                  isCaptain
+                                    ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 hover:border-yellow-400/70'
+                                    : 'border-ink-700 text-paper-500 hover:text-paper-100 hover:border-red-400/50 hover:bg-ink-700'
+                                }`}
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill={isCaptain ? 'currentColor' : 'none'}
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="w-4 h-4"
+                                >
+                                  <path d="m12 3 2.6 5.8 6.4.6-4.8 4.3 1.4 6.3L12 16.9l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z" />
+                                </svg>
+                                <span className="text-[10px] font-semibold uppercase tracking-widest whitespace-nowrap">
+                                  {togglingCaptainId === member.id ? '…' : isCaptain ? 'Ukloni' : 'Kapiten'}
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {captainError && <p className="text-sm text-red-400 mt-3">{captainError}</p>}
+                  </>
                 )}
               </div>
 

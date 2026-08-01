@@ -575,10 +575,12 @@ export function EliminationTabContent({
   id,
   tournament,
   onSwitchToGroups,
+  onFinished,
 }: {
   id: string;
   tournament: TournamentInfo;
   onSwitchToGroups?: () => void;
+  onFinished?: () => void;
 }) {
   const { user } = useAuth();
 
@@ -755,6 +757,8 @@ export function EliminationTabContent({
       const { error: propError } = await supabase.from('tournament_bracket_matches').update({ [field]: winnerId }).eq('tournament_id', id).eq('round', nextRound).eq('bracket_slot', nextSlot);
       if (!propError) setBracketMatches((prev) => prev.map((m) => (m.round === nextRound && m.bracket_slot === nextSlot ? { ...m, [field]: winnerId } : m)));
     } else {
+      const { error: finishTournamentError } = await supabase.from('tournaments').update({ status: 'finished' }).eq('id', id);
+      if (!finishTournamentError) onFinished?.();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }

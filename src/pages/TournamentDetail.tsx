@@ -1147,7 +1147,7 @@ export default function TournamentDetail() {
                 </div>
               )}
 
-              {(ownedParticipatingTeams.length > 0 || user?.id === tournament.owner_id) && (
+              {(ownedParticipatingTeams.length > 0 || (user?.id === tournament.owner_id && !isFinished)) && (
                 <div className="mt-16 border border-red-500/20 bg-ink-900/60">
                   <div className="px-6 py-4 border-b border-red-500/20">
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Opasna zona</span>
@@ -1182,7 +1182,7 @@ export default function TournamentDetail() {
                       </div>
                     ))}
 
-                    {user?.id === tournament.owner_id && (
+                    {user?.id === tournament.owner_id && !isFinished && (
                       <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
                           <p className="text-sm font-medium text-paper-100">Obriši turnir</p>
@@ -1231,13 +1231,26 @@ export default function TournamentDetail() {
               <GroupsTabContent id={id} tournament={tournament} onSwitchToElimination={() => setActiveTab('eliminacija')} />
             )}
             {activeTab === 'eliminacija' && id && (
-              <EliminationTabContent id={id} tournament={tournament} onSwitchToGroups={() => setActiveTab('grupna')} />
+              <EliminationTabContent
+                id={id}
+                tournament={tournament}
+                onSwitchToGroups={() => setActiveTab('grupna')}
+                onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
+              />
             )}
             {activeTab === 'liga' && id && (
-              <LeagueTabContent id={id} tournament={tournament} />
+              <LeagueTabContent
+                id={id}
+                tournament={tournament}
+                onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
+              />
             )}
             {activeTab === 'kup' && id && (
-              <EliminationTabContent id={id} tournament={tournament} />
+              <EliminationTabContent
+                id={id}
+                tournament={tournament}
+                onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
+              />
             )}
           </>
         )}

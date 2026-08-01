@@ -566,6 +566,9 @@ export default function Profile() {
                 onChange={handleAvatarChange}
                 className="sr-only"
               />
+              <p className="text-xs text-paper-500 mt-3">
+                Dodaj svoju sliku (maksimalno 5MB).
+              </p>
 
               <h1 className="font-display text-3xl sm:text-4xl mt-6 mb-1 leading-tight">Tvoj profil</h1>
               {profile?.username && <p className="text-red-400 text-base font-semibold mt-2">@{profile.username}</p>}
