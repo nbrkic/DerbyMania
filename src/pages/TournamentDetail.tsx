@@ -589,6 +589,18 @@ export default function TournamentDetail() {
 
     const tid = tournament.id;
 
+    // Delete pending/existing team requests & invites for this tournament, and any
+    // notifications pointing at them, before touching matches (FK: notifications.tournament_request_id -> tournament_team_requests.id)
+    const { data: teamRequests } = await supabase
+      .from('tournament_team_requests')
+      .select('id')
+      .eq('tournament_id', tid);
+    const teamRequestIds = (teamRequests ?? []).map((r: { id: string }) => r.id);
+    if (teamRequestIds.length > 0) {
+      await supabase.from('notifications').delete().in('tournament_request_id', teamRequestIds);
+      await supabase.from('tournament_team_requests').delete().in('id', teamRequestIds);
+    }
+
     // Fetch all match IDs grouped by table type
     const [leagueMatches, bracketMatches, groupMatches] = await Promise.all([
       supabase.from('tournament_league_matches').select('id').eq('tournament_id', tid),
@@ -666,7 +678,7 @@ export default function TournamentDetail() {
     }
     await Promise.all(leafDeletes);
 
-    // Delete match tables, group assignments, groups, teams
+    // Delete match tables and group assignments
     await Promise.all([
       supabase.from('tournament_league_matches').delete().eq('tournament_id', tid),
       supabase.from('tournament_bracket_matches').delete().eq('tournament_id', tid),
@@ -674,15 +686,41 @@ export default function TournamentDetail() {
       supabase.from('tournament_group_teams').delete().eq('tournament_id', tid),
     ]);
 
-    await Promise.all([
-      supabase.from('tournament_groups').delete().eq('tournament_id', tid),
-      supabase.from('tournament_teams').delete().eq('tournament_id', tid),
-    ]);
+    // Unlock the roster and clear groups BEFORE removing teams — a DB trigger on
+    // tournament_teams blocks team removal once the roster is locked / groups exist
+    // (the same rule that blocks a manual "withdraw" after groups are formed).
+    const { error: unlockError } = await supabase
+      .from('tournaments')
+      .update({ roster_locked: false })
+      .eq('id', tid);
+    if (unlockError) {
+      console.error('Unlock roster failed:', unlockError);
+      setDeleting(false);
+      setDeleteError(`Brisanje turnira nije uspelo: ${unlockError.message}${unlockError.details ? ` (${unlockError.details})` : ''}`);
+      return;
+    }
+
+    const { error: groupsError } = await supabase.from('tournament_groups').delete().eq('tournament_id', tid);
+    if (groupsError) {
+      console.error('Delete tournament_groups failed:', groupsError);
+      setDeleting(false);
+      setDeleteError(`Brisanje turnira nije uspelo: ${groupsError.message}${groupsError.details ? ` (${groupsError.details})` : ''}`);
+      return;
+    }
+
+    const { error: teamsError } = await supabase.from('tournament_teams').delete().eq('tournament_id', tid);
+    if (teamsError) {
+      console.error('Delete tournament_teams failed:', teamsError);
+      setDeleting(false);
+      setDeleteError(`Brisanje turnira nije uspelo: ${teamsError.message}${teamsError.details ? ` (${teamsError.details})` : ''}`);
+      return;
+    }
 
     const { error } = await supabase.from('tournaments').delete().eq('id', tid);
     if (error) {
+      console.error('Delete tournament failed:', error);
       setDeleting(false);
-      setDeleteError('Brisanje turnira nije uspelo. Pokušaj ponovo.');
+      setDeleteError(`Brisanje turnira nije uspelo: ${error.message}${error.details ? ` (${error.details})` : ''}`);
       return;
     }
 
