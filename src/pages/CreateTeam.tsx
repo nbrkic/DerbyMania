@@ -250,6 +250,7 @@ export default function CreateTeam() {
       const { error: insertError } = await supabase.from('teams').insert({
         id: teamId,
         owner_id: user.id,
+        captain_id: user.id,
         sport_id: Number(sportId),
         name: name.trim(),
         city: matchedCity ? matchedCity.name : null,

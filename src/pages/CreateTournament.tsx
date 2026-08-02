@@ -39,6 +39,7 @@ const STEP_IDS = [
   'termin',
   'kapacitet',
   'opis',
+  'kotizacija',
   'grb',
   'baner',
   'pregled',
@@ -54,6 +55,7 @@ const STEP_LABELS: Record<StepId, string> = {
   termin: 'Termin',
   kapacitet: 'Broj timova',
   opis: 'O turniru',
+  kotizacija: 'Kotizacija',
   grb: 'Logo turnira',
   baner: 'Baner turnira',
   pregled: 'Pregled',
@@ -196,6 +198,8 @@ export default function CreateTournament() {
   const [startTime, setStartTime] = useState('');
   const [maxTeams, setMaxTeams] = useState('');
   const [description, setDescription] = useState('');
+  const [hasEntryFee, setHasEntryFee] = useState<boolean | null>(null);
+  const [entryFeePerPlayer, setEntryFeePerPlayer] = useState('');
   const [crestFile, setCrestFile] = useState<File | null>(null);
   const [crestPreview, setCrestPreview] = useState<string | null>(null);
   const [crestPosition, setCrestPosition] = useState<Position>({ x: 50, y: 50 });
@@ -235,7 +239,7 @@ export default function CreateTournament() {
       const { data } = await supabase
         .from('tournaments')
         .select(
-          'sport_id, name, city, location, description, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, start_date, start_time, max_teams, crest_url, crest_position_x, crest_position_y, banner_url, status'
+          'sport_id, name, city, location, description, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, start_date, start_time, max_teams, entry_fee_per_player, crest_url, crest_position_x, crest_position_y, banner_url, status'
         )
         .eq('id', tournamentId)
         .single();
@@ -255,6 +259,8 @@ export default function CreateTournament() {
         setStartDate(data.start_date ?? '');
         setStartTime(data.start_time ? data.start_time.slice(0, 5) : '');
         setMaxTeams(data.max_teams != null ? String(data.max_teams) : '');
+        setHasEntryFee(data.entry_fee_per_player != null ? true : false);
+        setEntryFeePerPlayer(data.entry_fee_per_player != null ? String(data.entry_fee_per_player) : '');
         setCrestPreview(data.crest_url);
         setCrestPosition({ x: data.crest_position_x, y: data.crest_position_y });
         setBannerPreview(data.banner_url);
@@ -362,6 +368,10 @@ export default function CreateTournament() {
       setError('Maksimalan broj timova mora biti bar 2.');
       return;
     }
+    if (hasEntryFee && (!entryFeePerPlayer || Number(entryFeePerPlayer) <= 0)) {
+      setError('Unesi iznos kotizacije po igraču.');
+      return;
+    }
 
     setError(null);
     setSubmitting(true);
@@ -385,6 +395,7 @@ export default function CreateTournament() {
         start_date: startDate || null,
         start_time: startTime || null,
         max_teams: maxTeams ? Number(maxTeams) : null,
+        entry_fee_per_player: hasEntryFee ? Number(entryFeePerPlayer) : null,
         crest_url: crestUrl,
         crest_position_x: Math.round(crestPosition.x),
         crest_position_y: Math.round(crestPosition.y),
@@ -431,6 +442,7 @@ export default function CreateTournament() {
         start_date: startDate || null,
         start_time: startTime || null,
         max_teams: maxTeams ? Number(maxTeams) : null,
+        entry_fee_per_player: hasEntryFee ? Number(entryFeePerPlayer) : null,
         crest_url: crestUrl,
         crest_position_x: Math.round(crestPosition.x),
         crest_position_y: Math.round(crestPosition.y),
@@ -507,6 +519,19 @@ export default function CreateTournament() {
     if (step === 'kapacitet') {
       if (maxTeams && Number(maxTeams) < 2) {
         setError('Maksimalan broj timova mora biti bar 2.');
+        return;
+      }
+      goNext();
+      return;
+    }
+
+    if (step === 'kotizacija') {
+      if (hasEntryFee === null) {
+        setError('Izaberi da li se plaća kotizacija.');
+        return;
+      }
+      if (hasEntryFee && (!entryFeePerPlayer || Number(entryFeePerPlayer) <= 0)) {
+        setError('Unesi iznos kotizacije po igraču.');
         return;
       }
       goNext();
@@ -705,8 +730,36 @@ export default function CreateTournament() {
                       placeholder="Par rečenica o turniru…"
                     />
 
-                    <CrestField
+                    <SelectField
                       n="14"
+                      label="Kotizacija"
+                      id="entry-fee-choice"
+                      required
+                      placeholder="Da li se plaća kotizacija?"
+                      value={hasEntryFee === true ? 'da' : hasEntryFee === false ? 'ne' : ''}
+                      onChange={(v) => {
+                        setHasEntryFee(v === 'da');
+                        if (v !== 'da') setEntryFeePerPlayer('');
+                      }}
+                      options={[
+                        { value: 'ne', label: 'Ne' },
+                        { value: 'da', label: 'Da' },
+                      ]}
+                    />
+                    {hasEntryFee && (
+                      <TicketField
+                        n="15"
+                        label="Iznos po igraču (RSD)"
+                        id="entry-fee-amount"
+                        type="number"
+                        required
+                        value={entryFeePerPlayer}
+                        onChange={setEntryFeePerPlayer}
+                      />
+                    )}
+
+                    <CrestField
+                      n="16"
                       label="Logo turnira"
                       previewUrl={crestPreview}
                       position={crestPosition}
@@ -714,7 +767,7 @@ export default function CreateTournament() {
                       onPositionChange={setCrestPosition}
                     />
                     <ImageField
-                      n="15"
+                      n="17"
                       label="Baner turnira"
                       shape="banner"
                       previewUrl={bannerPreview}
@@ -1043,6 +1096,59 @@ export default function CreateTournament() {
                       placeholder="Par rečenica o turniru…"
                     />
                   </div>
+                </>
+              )}
+
+              {step === 'kotizacija' && (
+                <>
+                  <div>
+                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
+                      {STEP_LABELS.kotizacija}
+                    </span>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Da li se plaća kotizacija?</h1>
+                  </div>
+                  <div className="flex flex-col gap-3 w-full max-w-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasEntryFee(true);
+                      }}
+                      className={`px-4 py-5 border transition-colors text-sm font-medium ${
+                        hasEntryFee === true
+                          ? 'border-red-400 bg-red-500/10 text-paper-100'
+                          : 'border-ink-700 hover:border-red-400/60 hover:bg-ink-800 text-paper-300'
+                      }`}
+                    >
+                      Da
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasEntryFee(false);
+                        setEntryFeePerPlayer('');
+                      }}
+                      className={`px-4 py-5 border transition-colors text-sm font-medium ${
+                        hasEntryFee === false
+                          ? 'border-red-400 bg-red-500/10 text-paper-100'
+                          : 'border-ink-700 hover:border-red-400/60 hover:bg-ink-800 text-paper-300'
+                      }`}
+                    >
+                      Ne
+                    </button>
+                  </div>
+                  {hasEntryFee === true && (
+                    <div className="w-full max-w-xs text-left">
+                      <TicketField
+                        n=""
+                        label="Iznos po igraču (RSD)"
+                        id="entry-fee-amount"
+                        type="number"
+                        required
+                        value={entryFeePerPlayer}
+                        onChange={setEntryFeePerPlayer}
+                      />
+                    </div>
+                  )}
                 </>
               )}
 

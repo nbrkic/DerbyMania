@@ -50,6 +50,15 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const NOTIFICATION_RETENTION_DAYS = 7;
+
+// Notifications the user never dismisses would otherwise pile up forever,
+// so anything older than the retention window is purged on every session load.
+export async function cleanupOldNotifications(userId: string) {
+  const cutoff = new Date(Date.now() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  await supabase.from('notifications').delete().eq('user_id', userId).lt('created_at', cutoff);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -88,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       if (data.session?.user) {
         loadProfile(data.session.user.id);
-        loadUnreadNotificationCount(data.session.user.id);
+        cleanupOldNotifications(data.session.user.id).then(() => loadUnreadNotificationCount(data.session.user.id));
       }
     });
 
@@ -96,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(newSession);
       if (newSession?.user) {
         loadProfile(newSession.user.id);
-        loadUnreadNotificationCount(newSession.user.id);
+        cleanupOldNotifications(newSession.user.id).then(() => loadUnreadNotificationCount(newSession.user.id));
       } else {
         setProfile(null);
         setUnreadNotificationCount(0);
@@ -118,7 +127,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (lookupError || !email) {
       return { error: 'Pogrešno korisničko ime ili lozinka.' };
     }
-    return signIn(email, password);
+    const { error } = await signIn(email, password);
+    if (error) {
+      return { error: 'Pogrešno korisničko ime ili lozinka.' };
+    }
+    return { error: null };
   }
 
   async function signUp(

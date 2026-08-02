@@ -5,6 +5,7 @@ import { SiteHeader, UserAvatar } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
 import { FOOTBALL_POSITION_OPTIONS, BASKETBALL_POSITION_OPTIONS } from '../lib/positions';
+import { normalizeForSearch } from '../lib/text';
 import { RowSkeletonGrid, RowSkeleton } from '../components/Skeleton';
 
 export type Player = {
@@ -35,15 +36,16 @@ function SearchIcon({ className }: { className?: string }) {
   );
 }
 
-function TrophyIcon({ className }: { className?: string }) {
+function FootballIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M8 4h8v4.5a4 4 0 0 1-4 4 4 4 0 0 1-4-4V4Z" />
-      <path d="M8 5H5.5a2 2 0 0 0 0 4H7" />
-      <path d="M16 5h2.5a2 2 0 0 1 0 4H17" />
-      <path d="M12 12.5V16" />
-      <path d="M9.5 20h5" />
-      <path d="M10.2 16.5h3.6l.6 3.5h-4.8l.6-3.5Z" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8.2 15.2 10.6 14 14.3H10L8.8 10.6Z" />
+      <path d="M12 8.2V4.5" />
+      <path d="M8.8 10.6 5.4 9.5" />
+      <path d="M10 14.3 8 17.8" />
+      <path d="M14 14.3 16 17.8" />
+      <path d="M15.2 10.6 18.6 9.5" />
     </svg>
   );
 }
@@ -59,19 +61,35 @@ function BasketballIcon({ className }: { className?: string }) {
 }
 
 const RANK_ACCENT: Record<number, string> = {
-  1: 'border-l-red-400',
-  2: 'border-l-paper-300',
-  3: 'border-l-paper-700',
+  1: 'border-amber-300/60',
+  2: 'border-zinc-300/50',
+  3: 'border-orange-700/50',
 };
 
 const RANK_TEXT: Record<number, string> = {
-  1: 'text-red-400',
-  2: 'text-paper-300',
-  3: 'text-paper-500',
+  1: 'text-amber-300',
+  2: 'text-zinc-300',
+  3: 'text-orange-500',
 };
 
+const MONTHS_GENITIVE = [
+  'januara',
+  'februara',
+  'marta',
+  'aprila',
+  'maja',
+  'juna',
+  'jula',
+  'avgusta',
+  'septembra',
+  'oktobra',
+  'novembra',
+  'decembra',
+];
+
 function memberSince(iso: string) {
-  return new Date(iso).toLocaleDateString('sr-Latn-RS', { month: 'long', year: 'numeric' });
+  const date = new Date(iso);
+  return `${MONTHS_GENITIVE[date.getMonth()]} ${date.getFullYear()}.`;
 }
 
 function teamWord(count: number) {
@@ -125,9 +143,6 @@ export function PlayerCard({
         <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold whitespace-nowrap">
           {player.teamCount} {teamWord(player.teamCount)}
         </span>
-        <span className="text-[10px] uppercase tracking-widest text-paper-700 whitespace-nowrap">
-          {player.career_football_goals} {player.career_football_goals === 1 ? 'gol' : 'golova'}
-        </span>
       </div>
     </Link>
   );
@@ -156,31 +171,34 @@ function TopScorersStrip({
         {icon}
         <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">{title}</span>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-1">
+      <div className="grid sm:grid-cols-3 gap-3">
         {players.map((player, index) => {
           const rank = index + 1;
-          const accent = RANK_ACCENT[rank] ?? 'border-l-red-500/40';
+          const medalBorder = RANK_ACCENT[rank];
           const rankText = RANK_TEXT[rank] ?? 'text-paper-700';
           const displayName = player.full_name || 'Igrač bez imena';
           const value = getValue(player);
+          const borderClasses = medalBorder
+            ? `border ${medalBorder}`
+            : 'border border-ink-700 border-l-2 border-l-red-500/40';
 
           return (
             <Link
               key={player.id}
               to={`/${player.username ?? player.id}`}
-              className={`group shrink-0 flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 ${accent} pl-4 pr-5 py-2.5 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50`}
+              className={`group flex items-center gap-3 bg-ink-800 ${borderClasses} pl-4 pr-5 py-2.5 transition-colors duration-200 hover:bg-ink-700 hover:border-red-400/70`}
             >
-              <span className={`font-display text-lg w-5 text-center shrink-0 ${rankText}`}>{rank}</span>
+              <span className={`font-display text-lg w-5 text-center shrink-0 transition-colors duration-200 ${rankText} group-hover:text-red-400`}>{rank}</span>
               <UserAvatar
                 name={displayName}
                 avatarUrl={player.avatar_url}
                 position={{ x: player.avatar_position_x, y: player.avatar_position_y }}
                 className="w-8 h-8 text-xs ring-1 ring-red-500/30 shrink-0"
               />
-              <span className="text-sm text-paper-100 whitespace-nowrap transition-colors duration-200 group-hover:text-red-400">
+              <span className="text-sm text-paper-100 truncate transition-colors duration-200 group-hover:text-red-400">
                 {displayName}
               </span>
-              <span className="text-xs text-paper-500 whitespace-nowrap">
+              <span className="text-xs text-paper-500 whitespace-nowrap ml-auto">
                 {value} {unitWord(value)}
               </span>
             </Link>
@@ -251,9 +269,9 @@ export default function Players() {
   }, []);
 
   const filteredPlayers = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = normalizeForSearch(search);
     const filtered = players.filter((p) => {
-      const matchesQuery = !query || (p.full_name ?? '').toLowerCase().includes(query);
+      const matchesQuery = !query || normalizeForSearch(p.full_name ?? '').includes(query);
       const matchesSport = !sportFilter || playerSports.get(p.id)?.has(Number(sportFilter));
       const matchesPosition = !positionFilter || p.preferred_positions?.includes(positionFilter);
       return matchesQuery && matchesSport && matchesPosition;
@@ -335,15 +353,15 @@ export default function Players() {
             {!loading && (
               <>
                 <TopScorersStrip
-                  title="Najbolji strelci"
-                  icon={<TrophyIcon className="w-4 h-4 text-red-400" />}
+                  title="Najbolji strelci (fudbal/mali fudbal)"
+                  icon={<FootballIcon className="w-4 h-4 text-red-400" />}
                   players={topScorers}
                   getValue={(p) => p.career_football_goals}
                   unitWord={(v) => (v === 1 ? 'gol' : 'golova')}
                   riseClass="rise-2"
                 />
                 <TopScorersStrip
-                  title="Top poenteri (košarka)"
+                  title="Top poenteri (košarka/basket)"
                   icon={<BasketballIcon className="w-4 h-4 text-red-400" />}
                   players={topBasketballScorers}
                   getValue={(p) => p.career_basketball_points}
@@ -432,7 +450,7 @@ export default function Players() {
                 <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Svi DerbyMania igrači</span>
                 <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
 
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid sm:grid-cols-3 gap-3">
                   {pagedPlayers.map((player, index) => (
                     <PlayerCard key={player.id} player={player} index={index} />
                   ))}

@@ -805,6 +805,7 @@ function FinishedMatchRow({
 export function LeagueTabContent({
   id,
   tournament,
+  onFinished,
 }: {
   id: string;
   tournament: {
@@ -815,6 +816,7 @@ export function LeagueTabContent({
     roster_locked: boolean;
     sports: { name: string } | null;
   };
+  onFinished?: () => void;
 }) {
   const { user } = useAuth();
 
@@ -1183,6 +1185,7 @@ export function LeagueTabContent({
     }
     setLocalStatus('finished');
     setConfirmingFinish(false);
+    onFinished?.();
   }
 
   const teamsById = new Map(teams.map((t) => [t.id, t]));

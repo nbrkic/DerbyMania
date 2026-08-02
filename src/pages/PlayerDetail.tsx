@@ -50,8 +50,24 @@ const DOMINANT_LABELS: Record<string, string> = {
   oba: 'Obe',
 };
 
+const MONTHS_GENITIVE = [
+  'januara',
+  'februara',
+  'marta',
+  'aprila',
+  'maja',
+  'juna',
+  'jula',
+  'avgusta',
+  'septembra',
+  'oktobra',
+  'novembra',
+  'decembra',
+];
+
 function memberSince(iso: string) {
-  return new Date(iso).toLocaleDateString('sr-Latn-RS', { month: 'long', year: 'numeric' });
+  const date = new Date(iso);
+  return `${MONTHS_GENITIVE[date.getMonth()]} ${date.getFullYear()}.`;
 }
 
 function StatBlock({ label, value }: { label: string; value: string }) {
@@ -350,37 +366,39 @@ export default function PlayerDetail() {
                 <p className="text-xs uppercase tracking-widest text-paper-500">
                   Član od {memberSince(player.created_at)}
                 </p>
-
-                {ownedTeams.length > 0 && (
-                  <div className="mt-6 w-full max-w-sm">
-                    <p className="text-xs uppercase tracking-widest text-paper-500 mb-3">Pozovi igrača u svoj tim</p>
-                    <div className="flex flex-col sm:flex-row items-center gap-3">
-                      {ownedTeams.length > 1 && (
-                        <div className="w-full sm:w-48">
-                          <Dropdown
-                            id="invite-team"
-                            value={selectedInviteTeamId}
-                            onChange={setSelectedInviteTeamId}
-                            options={ownedTeams.map((t) => ({ value: t.id, label: t.name }))}
-                          />
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleInvite}
-                        disabled={inviting || currentInviteStatus !== 'none'}
-                        className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
-                      >
-                        {inviteLabel}
-                      </button>
-                    </div>
-                    {inviteError && <p className="text-sm text-red-400 mt-3">{inviteError}</p>}
-                  </div>
-                )}
               </div>
             </section>
 
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
+              {ownedTeams.length > 0 && (
+                <div className="mb-12 bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-5 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold shrink-0">
+                    Pozovi igrača u svoj tim
+                  </span>
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                    {ownedTeams.length > 1 && (
+                      <div className="w-full sm:w-48">
+                        <Dropdown
+                          id="invite-team"
+                          value={selectedInviteTeamId}
+                          onChange={setSelectedInviteTeamId}
+                          options={ownedTeams.map((t) => ({ value: t.id, label: t.name }))}
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleInvite}
+                      disabled={inviting || currentInviteStatus !== 'none'}
+                      className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
+                    >
+                      {inviteLabel}
+                    </button>
+                  </div>
+                  {inviteError && <p className="text-sm text-red-400 sm:ml-4">{inviteError}</p>}
+                </div>
+              )}
+
               <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
                 <StatBlock label="Godina" value={player.age != null ? String(player.age) : '—'} />
                 <StatBlock label="Visina" value={player.height_cm ? `${player.height_cm} cm` : '—'} />

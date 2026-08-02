@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../lib/auth-context';
+import { cleanupOldNotifications, useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
@@ -43,6 +43,7 @@ export default function Notifications() {
 
   async function load() {
     if (!user) return;
+    await cleanupOldNotifications(user.id);
     const { data } = await supabase
       .from('notifications')
       .select(

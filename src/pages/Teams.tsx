@@ -5,6 +5,7 @@ import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
 import { CardSkeletonGrid } from '../components/Skeleton';
+import { normalizeForSearch } from '../lib/text';
 
 type Sport = { id: number; name: string };
 
@@ -202,9 +203,9 @@ export default function Teams() {
   }, []);
 
   const filteredTeams = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = normalizeForSearch(search);
     return teams.filter((t) => {
-      const matchesSearch = !query || t.name.toLowerCase().includes(query);
+      const matchesSearch = !query || normalizeForSearch(t.name).includes(query);
       const matchesSport = !sportFilter || String(t.sport_id) === sportFilter;
       return matchesSearch && matchesSport;
     });
