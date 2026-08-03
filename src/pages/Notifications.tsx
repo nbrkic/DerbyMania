@@ -40,6 +40,8 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [confirmingDismissAll, setConfirmingDismissAll] = useState(false);
+  const [dismissingAll, setDismissingAll] = useState(false);
 
   async function load() {
     if (!user) return;
@@ -64,6 +66,26 @@ export default function Notifications() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notifications-page-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => {
+          load();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -92,6 +114,15 @@ export default function Notifications() {
     await supabase.from('notifications').delete().eq('id', id);
   }
 
+  async function dismissAll() {
+    if (!user) return;
+    setDismissingAll(true);
+    await supabase.from('notifications').delete().eq('user_id', user.id);
+    setNotifications([]);
+    setDismissingAll(false);
+    setConfirmingDismissAll(false);
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
       <div className="grain" />
@@ -100,8 +131,43 @@ export default function Notifications() {
       <main className="flex-1 pt-16 flex flex-col">
         <section className="flex-1 bg-ink-900 border-b border-ink-700">
           <div className="max-w-4xl mx-auto px-6 py-16 sm:py-20 w-full">
-            <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Tvoj nalog</span>
-            <h1 className="font-display text-4xl sm:text-5xl mt-4 mb-10 leading-tight">Obaveštenja</h1>
+            <div className="flex items-end justify-between gap-4 flex-wrap mb-10">
+              <div>
+                <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Tvoj nalog</span>
+                <h1 className="font-display text-4xl sm:text-5xl mt-4 leading-tight">Obaveštenja</h1>
+              </div>
+
+              {!loading && notifications.length > 0 && (
+                confirmingDismissAll ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={dismissAll}
+                      disabled={dismissingAll}
+                      className="px-4 py-2.5 text-xs uppercase tracking-widest text-paper-100 bg-red-500 hover:bg-red-400 transition-colors disabled:opacity-50"
+                    >
+                      {dismissingAll ? 'Brisanje…' : 'Potvrdi'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDismissAll(false)}
+                      disabled={dismissingAll}
+                      className="text-xs uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors"
+                    >
+                      Otkaži
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDismissAll(true)}
+                    className="btn-line px-4 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
+                  >
+                    Obriši sva obaveštenja
+                  </button>
+                )
+              )}
+            </div>
 
             {loading ? (
               <TextCardSkeletonList count={4} />

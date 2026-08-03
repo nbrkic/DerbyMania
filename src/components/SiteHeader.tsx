@@ -23,6 +23,15 @@ function UserIcon({ className }: { className?: string }) {
   );
 }
 
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/);
   const first = parts[0]?.[0] ?? '?';
@@ -173,8 +182,8 @@ export function SiteHeader() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-ink-950">
       <div className="max-w-6xl mx-auto">
         <div className="px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center text-2xl font-black tracking-tight">
-            DERBY<span className="font-light text-paper-500">MANIA</span>
+          <Link to="/" className="flex items-center" aria-label="DerbyMania — početna">
+            <img src="/logo.png" alt="DerbyMania" className="h-10 w-auto" />
           </Link>
 
           <nav className="hidden lg-nav:flex items-center gap-8">
@@ -265,9 +274,7 @@ export function SiteHeader() {
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-lg font-black tracking-tight">
-              DERBY<span className="font-light text-paper-500">MANIA</span>
-            </span>
+            <img src="/logo.png" alt="DerbyMania" className="h-9 w-auto" />
             <button
               ref={closeRef}
               type="button"
@@ -327,17 +334,7 @@ export function SiteHeader() {
                 <span className="text-base font-semibold text-paper-100 truncate">{displayName}</span>
               </Link>
             </div>
-          ) : (
-            <div className="mt-2">
-              <Link
-                to="/login"
-                onClick={closeMenu}
-                className="block rounded-2xl px-4 py-3 text-sm font-medium text-paper-500 hover:bg-ink-800 hover:text-paper-100 transition-colors"
-              >
-                Prijavi se
-              </Link>
-            </div>
-          )}
+          ) : null}
 
           {user ? (
             <button
@@ -348,13 +345,22 @@ export function SiteHeader() {
               <LogoutIcon className="w-4 h-4" /> Odjava
             </button>
           ) : (
-            <Link
-              to="/register"
-              onClick={closeMenu}
-              className="btn-solid mt-auto rounded-2xl px-6 py-4 text-sm font-semibold inline-flex items-center justify-center gap-2"
-            >
-              <UserIcon className="w-4 h-4" /> Registracija
-            </Link>
+            <div className="mt-auto flex flex-col gap-2">
+              <Link
+                to="/login"
+                onClick={closeMenu}
+                className="btn-solid rounded-2xl px-6 py-4 text-sm font-semibold inline-flex items-center justify-center gap-2"
+              >
+                <UserIcon className="w-4 h-4" /> Prijavi se
+              </Link>
+              <Link
+                to="/register"
+                onClick={closeMenu}
+                className="btn-solid rounded-2xl px-6 py-4 text-sm font-semibold inline-flex items-center justify-center gap-2"
+              >
+                <PlusIcon className="w-4 h-4" /> Registracija
+              </Link>
+            </div>
           )}
         </nav>
       </>

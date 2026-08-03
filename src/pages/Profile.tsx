@@ -17,6 +17,7 @@ import {
 import { TeamRow, type Team } from './Teams';
 import { TournamentRow, type Tournament } from './Tournaments';
 import { RowSkeletonGrid } from '../components/Skeleton';
+import { compressImage, CREST_MAX_DIMENSION } from '../lib/imageCompression';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -421,9 +422,10 @@ export default function Profile() {
     let avatarUrl = profile?.avatar_url ?? null;
 
     if (avatarFile) {
-      const ext = avatarFile.name.split('.').pop() || 'jpg';
+      const compressed = await compressImage(avatarFile, CREST_MAX_DIMENSION);
+      const ext = compressed.name.split('.').pop() || 'jpg';
       const path = `${user.id}/avatar.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, avatarFile, { upsert: true });
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, compressed, { upsert: true });
       if (uploadError) {
         setSaving(false);
         setError(`Otpremanje slike nije uspelo: ${uploadError.message}`);

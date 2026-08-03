@@ -7,8 +7,8 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-ink-700 py-10">
       <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-        <Link to="/" className="font-black tracking-tight">
-          DERBY<span className="font-light text-paper-500">MANIA</span>
+        <Link to="/" aria-label="DerbyMania — početna">
+          <img src="/logo.png" alt="DerbyMania" className="h-9 w-auto" />
         </Link>
         <div className="flex items-center gap-8">
           {NAV_LINKS.map((l) => (

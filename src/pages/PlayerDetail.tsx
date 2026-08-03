@@ -70,11 +70,11 @@ function memberSince(iso: string) {
   return `${MONTHS_GENITIVE[date.getMonth()]} ${date.getFullYear()}.`;
 }
 
-function StatBlock({ label, value }: { label: string; value: string }) {
+function StatBlock({ label, value, className = '' }: { label: string; value: string; className?: string }) {
   return (
-    <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-5 py-4">
-      <p className="text-[11px] uppercase tracking-widest text-paper-500 mb-1">{label}</p>
-      <p className="font-display text-xl leading-tight">{value}</p>
+    <div className={`bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-3 py-3 sm:px-5 sm:py-4 ${className}`}>
+      <p className="text-[10px] sm:text-[11px] uppercase tracking-widest text-paper-500 mb-1 truncate">{label}</p>
+      <p className="font-display text-base sm:text-xl leading-tight truncate">{value}</p>
     </div>
   );
 }
@@ -327,7 +327,7 @@ export default function PlayerDetail() {
           <>
             <PlayerHeroSkeleton />
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-6 mb-12">
                 {Array.from({ length: 5 }, (_, i) => (
                   <StatBlockSkeleton key={i} />
                 ))}
@@ -399,12 +399,16 @@ export default function PlayerDetail() {
                 </div>
               )}
 
-              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-6 mb-12">
                 <StatBlock label="Godina" value={player.age != null ? String(player.age) : '—'} />
                 <StatBlock label="Visina" value={player.height_cm ? `${player.height_cm} cm` : '—'} />
                 <StatBlock label="Težina" value={player.weight_kg ? `${player.weight_kg} kg` : '—'} />
                 <StatBlock label="Mesto" value={player.city || '—'} />
-                <StatBlock label="Timova" value={String(memberTeams.length)} />
+                <StatBlock
+                  label="Timova"
+                  value={String(memberTeams.length)}
+                  className="col-span-2 lg:col-span-1 text-center lg:text-left"
+                />
               </div>
 
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">

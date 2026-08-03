@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { Dropdown } from '../components/Dropdown';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { TableSkeleton } from '../components/Skeleton';
+import { ScheduleSection, addMinutesToClock, type ScheduleItem } from './MatchSchedule';
+import { roundRobinRounds } from '../lib/roundRobin';
 
 type LeagueTeam = {
   id: string;
@@ -15,7 +17,7 @@ type LeagueTeam = {
   deleted_at: string | null;
 };
 
-type MatchStatus = 'in_progress' | 'finished';
+type MatchStatus = 'pending' | 'in_progress' | 'finished';
 
 type LeagueMatch = {
   id: string;
@@ -24,6 +26,8 @@ type LeagueMatch = {
   team_a_goals: number;
   team_b_goals: number;
   status: MatchStatus;
+  created_at: string;
+  match_order: number | null;
 };
 
 type RosterPlayer = { id: string; full_name: string | null };
@@ -814,6 +818,8 @@ export function LeagueTabContent({
     format: string;
     status: string;
     roster_locked: boolean;
+    start_time: string | null;
+    match_duration_minutes: number;
     sports: { name: string } | null;
   };
   onFinished?: () => void;
@@ -831,6 +837,9 @@ export function LeagueTabContent({
   const [lockError, setLockError] = useState<string | null>(null);
 
   const [matches, setMatches] = useState<LeagueMatch[]>([]);
+  const [startingMatchId, setStartingMatchId] = useState<string | null>(null);
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
+  const [scrollToPodium, setScrollToPodium] = useState(false);
   const [rosters, setRosters] = useState<Map<string, RosterPlayer[]>>(new Map());
   const fetchedRosterTeamIds = useRef(new Set<string>());
   const [matchEvents, setMatchEvents] = useState<Map<string, MatchEvent[]>>(new Map());
@@ -875,7 +884,7 @@ export function LeagueTabContent({
 
     supabase
       .from('tournament_league_matches')
-      .select('id, team_a_id, team_b_id, team_a_goals, team_b_goals, status')
+      .select('id, team_a_id, team_b_id, team_a_goals, team_b_goals, status, created_at, match_order')
       .eq('tournament_id', tournament.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => setMatches((data as LeagueMatch[]) ?? []));
@@ -885,6 +894,24 @@ export function LeagueTabContent({
   useEffect(() => {
     matchIdsRef.current = new Set(matches.map((m) => m.id));
   }, [matches]);
+
+  useEffect(() => {
+    if (!pendingScrollId) return;
+    const el = document.getElementById(`match-${pendingScrollId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPendingScrollId(null);
+    }
+  }, [matches, pendingScrollId]);
+
+  useEffect(() => {
+    if (!scrollToPodium) return;
+    const el = document.getElementById('league-podium');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setScrollToPodium(false);
+    }
+  }, [localStatus, scrollToPodium]);
 
   useEffect(() => {
     if (!localRosterLocked) return;
@@ -1015,12 +1042,36 @@ export function LeagueTabContent({
     setLockError(null);
 
     const { error } = await supabase.from('tournaments').update({ roster_locked: true }).eq('id', tournament.id);
-    setLockingTable(false);
 
     if (error) {
+      setLockingTable(false);
       setLockError('Kreiranje tabele nije uspelo. Pokušaj ponovo.');
       return;
     }
+
+    const fixtures = roundRobinRounds(teams.map((t) => t.id)).flat();
+    if (fixtures.length > 0) {
+      const { data: insertedMatches, error: matchesError } = await supabase
+        .from('tournament_league_matches')
+        .insert(
+          fixtures.map((f, i) => ({
+            tournament_id: tournament.id,
+            team_a_id: f.teamAId,
+            team_b_id: f.teamBId,
+            status: 'pending',
+            match_order: i,
+          }))
+        )
+        .select('id, team_a_id, team_b_id, team_a_goals, team_b_goals, status, created_at, match_order');
+      if (matchesError) {
+        setLockingTable(false);
+        setLockError('Generisanje rasporeda utakmica nije uspelo.');
+        return;
+      }
+      setMatches((insertedMatches as LeagueMatch[]) ?? []);
+    }
+
+    setLockingTable(false);
     setLocalRosterLocked(true);
     setConfirmingLock(false);
   }
@@ -1034,7 +1085,7 @@ export function LeagueTabContent({
     const { data, error } = await supabase
       .from('tournament_league_matches')
       .insert({ tournament_id: tournament.id, team_a_id: teamAId, team_b_id: teamBId })
-      .select('id, team_a_id, team_b_id, team_a_goals, team_b_goals, status')
+      .select('id, team_a_id, team_b_id, team_a_goals, team_b_goals, status, created_at, match_order')
       .single();
 
     setCreatingMatch(false);
@@ -1076,6 +1127,16 @@ export function LeagueTabContent({
 
     if (!error) {
       setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, status: 'finished' } : m)));
+    }
+  }
+
+  async function handleStartMatch(matchId: string) {
+    setStartingMatchId(matchId);
+    const { error } = await supabase.from('tournament_league_matches').update({ status: 'in_progress' }).eq('id', matchId);
+    setStartingMatchId(null);
+    if (!error) {
+      setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, status: 'in_progress' } : m)));
+      setPendingScrollId(matchId);
     }
   }
 
@@ -1185,6 +1246,7 @@ export function LeagueTabContent({
     }
     setLocalStatus('finished');
     setConfirmingFinish(false);
+    setScrollToPodium(true);
     onFinished?.();
   }
 
@@ -1200,6 +1262,21 @@ export function LeagueTabContent({
   const finishedMatches = matches.filter((m) => m.status === 'finished');
   const standings = computeStandings(teams, matches);
 
+  const scheduleItems: ScheduleItem[] = tournament.start_time
+    ? matches
+        .filter((m) => m.match_order != null)
+        .slice()
+        .sort((a, b) => (a.match_order as number) - (b.match_order as number))
+        .map((m) => ({
+          id: m.id,
+          time: addMinutesToClock(tournament.start_time!, (m.match_order as number) * tournament.match_duration_minutes),
+          label: `${teamsById.get(m.team_a_id)?.name ?? '?'} — ${teamsById.get(m.team_b_id)?.name ?? '?'}`,
+          status: m.status,
+          onStart: isOwner && m.status === 'pending' ? () => handleStartMatch(m.id) : undefined,
+          starting: startingMatchId === m.id,
+        }))
+    : [];
+
   if (loadingTeams) {
     return (
       <div className="max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
@@ -1213,14 +1290,18 @@ export function LeagueTabContent({
       {localRosterLocked ? (
         <>
           {isTournamentFinished && standings[0] && (
-            <PodiumSection
-              first={standings[0].team}
-              second={standings[1]?.team ?? null}
-              third={standings[2]?.team ?? null}
-            />
+            <div id="league-podium">
+              <PodiumSection
+                first={standings[0].team}
+                second={standings[1]?.team ?? null}
+                third={standings[2]?.team ?? null}
+              />
+            </div>
           )}
 
           <StandingsTable teams={teams} matches={matches} isBasketball={isBasketball} />
+
+          <ScheduleSection items={scheduleItems} />
 
           <div className="mt-16">
             <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Utakmice</span>
@@ -1298,21 +1379,22 @@ export function LeagueTabContent({
                   const teamB = teamsById.get(m.team_b_id);
                   if (!teamA || !teamB) return null;
                   return (
-                    <LiveMatchCard
-                      key={m.id}
-                      match={m}
-                      teamA={teamA}
-                      teamB={teamB}
-                      isOwner={isOwner && !isTournamentFinished}
-                      rosterA={rosters.get(m.team_a_id) ?? []}
-                      rosterB={rosters.get(m.team_b_id) ?? []}
-                      isBasketball={isBasketball}
-                      events={matchEvents.get(m.id) ?? []}
-                      onAddGoal={handleAddGoal}
-                      onFinishMatch={handleFinishMatch}
-                      onAddEvent={handleAddEvent}
-                      onUndoLast={handleUndoLast}
-                    />
+                    <div id={`match-${m.id}`} key={m.id}>
+                      <LiveMatchCard
+                        match={m}
+                        teamA={teamA}
+                        teamB={teamB}
+                        isOwner={isOwner && !isTournamentFinished}
+                        rosterA={rosters.get(m.team_a_id) ?? []}
+                        rosterB={rosters.get(m.team_b_id) ?? []}
+                        isBasketball={isBasketball}
+                        events={matchEvents.get(m.id) ?? []}
+                        onAddGoal={handleAddGoal}
+                        onFinishMatch={handleFinishMatch}
+                        onAddEvent={handleAddEvent}
+                        onUndoLast={handleUndoLast}
+                      />
+                    </div>
                   );
                 })}
               </div>

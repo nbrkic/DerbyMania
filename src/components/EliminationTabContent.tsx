@@ -4,11 +4,14 @@ import { supabase } from '../lib/supabase';
 import { Dropdown } from './Dropdown';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { BracketSkeleton } from './Skeleton';
+import { ScheduleSection, addMinutesToClock, type ScheduleItem } from './MatchSchedule';
 
 type TournamentInfo = {
   id: string;
   owner_id: string;
   format: string;
+  start_time: string | null;
+  match_duration_minutes: number;
   sports: { name: string } | null;
 };
 
@@ -588,6 +591,8 @@ export function EliminationTabContent({
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [bracketMatches, setBracketMatches] = useState<BracketMatch[]>([]);
   const [loadingBracket, setLoadingBracket] = useState(true);
+  const [startingMatchId, setStartingMatchId] = useState<string | null>(null);
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const [rosters, setRosters] = useState<Map<string, RosterPlayer[]>>(new Map());
   const [finishError, setFinishError] = useState<string | null>(null);
   const [matchEvents, setMatchEvents] = useState<Map<string, MatchEvent[]>>(new Map());
@@ -598,6 +603,17 @@ export function EliminationTabContent({
   const [confirmingDraw, setConfirmingDraw] = useState(false);
   const [drawingBracket, setDrawingBracket] = useState(false);
   const [drawError, setDrawError] = useState<string | null>(null);
+  const [groupPhaseMatchCount, setGroupPhaseMatchCount] = useState(0);
+
+  useEffect(() => {
+    if (tournament.format !== 'grupe_i_eliminacija') return;
+    supabase
+      .from('tournament_matches')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', id)
+      .not('match_order', 'is', null)
+      .then(({ count }) => setGroupPhaseMatchCount(count ?? 0));
+  }, [id, tournament.format]);
 
   useEffect(() => {
     async function loadTeams() {
@@ -626,6 +642,15 @@ export function EliminationTabContent({
   useEffect(() => {
     matchIdsRef.current = new Set(bracketMatches.map((m) => m.id));
   }, [bracketMatches]);
+
+  useEffect(() => {
+    if (!pendingScrollId) return;
+    const el = document.getElementById(`match-${pendingScrollId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPendingScrollId(null);
+    }
+  }, [bracketMatches, pendingScrollId]);
 
   useEffect(() => {
     const channel = supabase
@@ -724,8 +749,13 @@ export function EliminationTabContent({
   const isBasketball = !!tournament.sports?.name && BASKETBALL_SPORT_NAMES.includes(tournament.sports.name);
 
   async function handleStartBracketMatch(matchId: string) {
+    setStartingMatchId(matchId);
     const { error } = await supabase.from('tournament_bracket_matches').update({ status: 'in_progress' }).eq('id', matchId);
-    if (!error) setBracketMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, status: 'in_progress' } : m)));
+    setStartingMatchId(null);
+    if (!error) {
+      setBracketMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, status: 'in_progress' } : m)));
+      setPendingScrollId(matchId);
+    }
   }
 
   async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) {
@@ -864,6 +894,25 @@ export function EliminationTabContent({
   const inProgressMatches = bracketMatches.filter((m) => m.status === 'in_progress');
   const finishedMatches = bracketMatches.filter((m) => m.status === 'finished' && !m.is_bye);
 
+  const scheduleItems: ScheduleItem[] = tournament.start_time
+    ? bracketMatches
+        .filter((m) => !m.is_bye)
+        .slice()
+        .sort((a, b) => a.round - b.round || a.bracket_slot - b.bracket_slot)
+        .map((m, i) => ({
+          id: m.id,
+          time: addMinutesToClock(
+            tournament.start_time!,
+            (groupPhaseMatchCount + i) * tournament.match_duration_minutes
+          ),
+          label: `${m.team_a_id ? (teamsById.get(m.team_a_id)?.name ?? '?') : '?'} — ${m.team_b_id ? (teamsById.get(m.team_b_id)?.name ?? '?') : '?'}`,
+          sublabel: roundLabel(m.round, totalRounds),
+          status: m.status,
+          onStart: isOwner && m.status === 'pending' && m.team_a_id && m.team_b_id ? () => handleStartBracketMatch(m.id) : undefined,
+          starting: startingMatchId === m.id,
+        }))
+    : [];
+
   if (loadingTeams || loadingBracket) {
     return (
       <div className="max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
@@ -878,6 +927,9 @@ export function EliminationTabContent({
         <>
           {champion && <ChampionBanner champion={champion} />}
           <BracketTree totalRounds={totalRounds} matchesByRound={matchesByRound} teamsById={teamsById} isOwner={isOwner} onStart={handleStartBracketMatch} />
+
+          <ScheduleSection items={scheduleItems} />
+
           <div className="mt-16">
             <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Utakmice</span>
             <div className="w-10 h-0.5 bg-red-500 mt-3 mb-6" />
@@ -887,7 +939,11 @@ export function EliminationTabContent({
                   const teamA = m.team_a_id ? teamsById.get(m.team_a_id) : null;
                   const teamB = m.team_b_id ? teamsById.get(m.team_b_id) : null;
                   if (!teamA || !teamB) return null;
-                  return <LiveMatchCard key={m.id} match={m} teamA={teamA} teamB={teamB} roundText={roundLabel(m.round, totalRounds)} isOwner={isOwner} rosterA={rosters.get(teamA.id) ?? []} rosterB={rosters.get(teamB.id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} finishError={finishError} onAddGoal={handleAddGoal} onFinishMatch={handleFinishBracketMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />;
+                  return (
+                    <div id={`match-${m.id}`} key={m.id}>
+                      <LiveMatchCard match={m} teamA={teamA} teamB={teamB} roundText={roundLabel(m.round, totalRounds)} isOwner={isOwner} rosterA={rosters.get(teamA.id) ?? []} rosterB={rosters.get(teamB.id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} finishError={finishError} onAddGoal={handleAddGoal} onFinishMatch={handleFinishBracketMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
+                    </div>
+                  );
                 })}
               </div>
             )}

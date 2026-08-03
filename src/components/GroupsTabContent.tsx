@@ -5,12 +5,16 @@ import { supabase } from '../lib/supabase';
 import { Dropdown } from './Dropdown';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { TableSkeletonGrid, Skeleton } from './Skeleton';
+import { ScheduleSection, addMinutesToClock, type ScheduleItem } from './MatchSchedule';
+import { generateGroupFixtures } from '../lib/roundRobin';
 
 type TournamentInfo = {
   id: string;
   owner_id: string;
   format: string;
   status: string;
+  start_time: string | null;
+  match_duration_minutes: number;
   sports: { name: string } | null;
 };
 
@@ -25,7 +29,7 @@ type GroupTeam = {
 
 type TournamentGroup = { id: string; name: string; teamIds: string[] };
 
-type MatchStatus = 'in_progress' | 'finished';
+type MatchStatus = 'pending' | 'in_progress' | 'finished';
 
 type TournamentMatch = {
   id: string;
@@ -35,6 +39,8 @@ type TournamentMatch = {
   team_a_goals: number;
   team_b_goals: number;
   status: MatchStatus;
+  created_at: string;
+  match_order: number | null;
 };
 
 type RosterPlayer = { id: string; full_name: string | null };
@@ -490,6 +496,8 @@ export function GroupsTabContent({
   const [resettingGroups, setResettingGroups] = useState(false);
 
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
+  const [startingMatchId, setStartingMatchId] = useState<string | null>(null);
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const [rosters, setRosters] = useState<Map<string, RosterPlayer[]>>(new Map());
   const fetchedRosterTeamIds = useRef(new Set<string>());
   const [matchEvents, setMatchEvents] = useState<Map<string, MatchEvent[]>>(new Map());
@@ -532,19 +540,13 @@ export function GroupsTabContent({
 
   useEffect(() => {
     async function loadGroups() {
-      const { data: groupRows } = await supabase
-        .from('tournament_groups')
-        .select('id, name')
-        .eq('tournament_id', id)
-        .order('created_at', { ascending: true });
+      const [{ data: groupRows }, { data: groupTeamRows }] = await Promise.all([
+        supabase.from('tournament_groups').select('id, name').eq('tournament_id', id).order('created_at', { ascending: true }),
+        supabase.from('tournament_group_teams').select('group_id, team_id').eq('tournament_id', id),
+      ]);
 
       const groupList = groupRows ?? [];
       if (!groupList.length) { setGroups([]); setLoadingGroups(false); return; }
-
-      const { data: groupTeamRows } = await supabase
-        .from('tournament_group_teams')
-        .select('group_id, team_id')
-        .eq('tournament_id', id);
 
       const teamIdsByGroup = new Map<string, string[]>();
       (groupTeamRows ?? []).forEach((r) => {
@@ -560,7 +562,7 @@ export function GroupsTabContent({
   useEffect(() => {
     supabase
       .from('tournament_matches')
-      .select('id, group_id, team_a_id, team_b_id, team_a_goals, team_b_goals, status')
+      .select('id, group_id, team_a_id, team_b_id, team_a_goals, team_b_goals, status, created_at, match_order')
       .eq('tournament_id', id)
       .order('created_at', { ascending: false })
       .then(({ data }) => setMatches((data as TournamentMatch[]) ?? []));
@@ -570,6 +572,15 @@ export function GroupsTabContent({
   useEffect(() => {
     matchIdsRef.current = new Set(matches.map((m) => m.id));
   }, [matches]);
+
+  useEffect(() => {
+    if (!pendingScrollId) return;
+    const el = document.getElementById(`match-${pendingScrollId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPendingScrollId(null);
+    }
+  }, [matches, pendingScrollId]);
 
   useEffect(() => {
     const channel = supabase
@@ -713,6 +724,28 @@ export function GroupsTabContent({
     if (assignError) { setGeneratingGroups(false); setGroupsError('Raspoređivanje timova nije uspelo.'); return; }
 
     setGroups(insertedGroups.map((g) => ({ id: g.id, name: g.name, teamIds: assignments.filter((a) => a.group_id === g.id).map((a) => a.team_id) })));
+
+    const fixtures = generateGroupFixtures(
+      insertedGroups.map((g) => ({ groupId: g.id, teamIds: assignments.filter((a) => a.group_id === g.id).map((a) => a.team_id) }))
+    );
+    if (fixtures.length > 0) {
+      const { data: insertedMatches, error: matchesError } = await supabase
+        .from('tournament_matches')
+        .insert(
+          fixtures.map((f, i) => ({
+            tournament_id: id,
+            group_id: f.groupId,
+            team_a_id: f.teamAId,
+            team_b_id: f.teamBId,
+            status: 'pending',
+            match_order: i,
+          }))
+        )
+        .select('id, group_id, team_a_id, team_b_id, team_a_goals, team_b_goals, status, created_at, match_order');
+      if (matchesError) { setGeneratingGroups(false); setGroupsError('Generisanje rasporeda utakmica nije uspelo.'); return; }
+      setMatches((insertedMatches as TournamentMatch[]) ?? []);
+    }
+
     setGeneratingGroups(false);
   }
 
@@ -783,7 +816,7 @@ export function GroupsTabContent({
     const { data, error } = await supabase
       .from('tournament_matches')
       .insert({ tournament_id: id, group_id: groupOfA.id, team_a_id: teamAId, team_b_id: teamBId })
-      .select('id, group_id, team_a_id, team_b_id, team_a_goals, team_b_goals, status')
+      .select('id, group_id, team_a_id, team_b_id, team_a_goals, team_b_goals, status, created_at, match_order')
       .single();
     setCreatingMatch(false);
     if (error || !data) { setNewMatchError('Kreiranje utakmice nije uspelo.'); return; }
@@ -807,6 +840,16 @@ export function GroupsTabContent({
   async function handleFinishMatch(matchId: string) {
     const { error } = await supabase.from('tournament_matches').update({ status: 'finished', finished_at: new Date().toISOString() }).eq('id', matchId);
     if (!error) setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, status: 'finished' } : m)));
+  }
+
+  async function handleStartMatch(matchId: string) {
+    setStartingMatchId(matchId);
+    const { error } = await supabase.from('tournament_matches').update({ status: 'in_progress' }).eq('id', matchId);
+    setStartingMatchId(null);
+    if (!error) {
+      setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, status: 'in_progress' } : m)));
+      setPendingScrollId(matchId);
+    }
   }
 
   async function handleAddEvent(matchId: string, teamId: string, playerId: string, eventType: MatchEventType) {
@@ -885,6 +928,23 @@ export function GroupsTabContent({
   const teamBOptions = teamAId ? (groups.find((g) => g.teamIds.includes(teamAId))?.teamIds ?? []).filter((tid) => tid !== teamAId).map((tid) => teamsById.get(tid)).filter((t): t is GroupTeam => !!t).map((t) => ({ value: t.id, label: t.name })) : [];
   const inProgressMatches = matches.filter((m) => m.status === 'in_progress');
   const finishedMatches = matches.filter((m) => m.status === 'finished');
+
+  const scheduleItems: ScheduleItem[] = tournament.start_time
+    ? matches
+        .filter((m) => m.match_order != null)
+        .slice()
+        .sort((a, b) => (a.match_order as number) - (b.match_order as number))
+        .map((m) => ({
+          id: m.id,
+          time: addMinutesToClock(tournament.start_time!, (m.match_order as number) * tournament.match_duration_minutes),
+          label: `${teamsById.get(m.team_a_id)?.name ?? '?'} — ${teamsById.get(m.team_b_id)?.name ?? '?'}`,
+          sublabel: groupNameById.get(m.group_id),
+          status: m.status,
+          onStart: isOwner && m.status === 'pending' ? () => handleStartMatch(m.id) : undefined,
+          starting: startingMatchId === m.id,
+        }))
+    : [];
+
   const minGroupSize = groups.length ? Math.min(...groups.map((g) => g.teamIds.length)) : 0;
   const qualifiersOptions = Array.from({ length: Math.max(0, minGroupSize) }, (_, i) => { const value = String(i + 1); return { value, label: value }; });
 
@@ -911,6 +971,8 @@ export function GroupsTabContent({
               />
             ))}
           </div>
+
+          <ScheduleSection items={scheduleItems} />
 
           <div className="mt-16">
             <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Utakmice</span>
@@ -950,7 +1012,9 @@ export function GroupsTabContent({
                   const teamB = teamsById.get(m.team_b_id);
                   if (!teamA || !teamB) return null;
                   return (
-                    <LiveMatchCard key={m.id} match={m} teamA={teamA} teamB={teamB} groupName={groupNameById.get(m.group_id) ?? ''} isOwner={isOwner} rosterA={rosters.get(m.team_a_id) ?? []} rosterB={rosters.get(m.team_b_id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} onAddGoal={handleAddGoal} onFinishMatch={handleFinishMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
+                    <div id={`match-${m.id}`} key={m.id}>
+                      <LiveMatchCard match={m} teamA={teamA} teamB={teamB} groupName={groupNameById.get(m.group_id) ?? ''} isOwner={isOwner} rosterA={rosters.get(m.team_a_id) ?? []} rosterB={rosters.get(m.team_b_id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} onAddGoal={handleAddGoal} onFinishMatch={handleFinishMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
+                    </div>
                   );
                 })}
               </div>

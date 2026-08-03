@@ -239,8 +239,14 @@ export default function Players() {
 
       const userIds = rows.map((p) => p.id);
       const { data: memberRows } = userIds.length
-        ? await supabase.from('team_members').select('user_id').in('user_id', userIds)
-        : { data: [] as { user_id: string }[] };
+        ? await supabase.from('team_members').select('user_id, team_id').in('user_id', userIds)
+        : { data: [] as { user_id: string; team_id: string }[] };
+
+      const teamIds = [...new Set((memberRows ?? []).map((m) => m.team_id))];
+      const { data: activeTeamRows } = teamIds.length
+        ? await supabase.from('teams').select('id').in('id', teamIds).is('deleted_at', null)
+        : { data: [] as { id: string }[] };
+      const activeTeamIds = new Set((activeTeamRows ?? []).map((t) => t.id));
 
       const { data: usernameRows } = userIds.length
         ? await supabase.from('player_usernames').select('id, username').in('id', userIds)
@@ -248,7 +254,10 @@ export default function Players() {
       const usernameById = new Map((usernameRows ?? []).map((u) => [u.id, u.username]));
 
       const countByUser = new Map<string, number>();
-      (memberRows ?? []).forEach((m) => countByUser.set(m.user_id, (countByUser.get(m.user_id) ?? 0) + 1));
+      (memberRows ?? []).forEach((m) => {
+        if (!activeTeamIds.has(m.team_id)) return;
+        countByUser.set(m.user_id, (countByUser.get(m.user_id) ?? 0) + 1);
+      });
 
       const { data: preferredRows } = userIds.length
         ? await supabase.from('profile_preferred_sports').select('profile_id, sport_id').in('profile_id', userIds)

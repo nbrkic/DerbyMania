@@ -73,7 +73,7 @@ export function CardSkeletonGrid({ count, className }: { count: number; classNam
 
 export function StatBlockSkeleton({ delay = 0 }: { delay?: number }) {
   return (
-    <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-ink-700 px-5 py-4">
+    <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-ink-700 px-3 py-3 sm:px-5 sm:py-4">
       <Skeleton className="h-2.5 w-16 mb-2.5" delay={delay} />
       <Skeleton className="h-5 w-10" delay={delay} />
     </div>

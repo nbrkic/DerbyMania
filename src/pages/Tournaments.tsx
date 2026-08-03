@@ -50,14 +50,16 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
   return (
     <Link
       to={`/turniri/${tournament.id}`}
-      className={`group relative block bg-ink-800 border border-ink-700 border-t-2 border-t-red-500/40 overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:border-red-500/60 hover:shadow-[0_0_0_1px_rgba(239,68,68,0.3),0_20px_40px_-18px_rgba(220,38,38,0.55)] ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
+      className={`group relative block bg-ink-800 border border-ink-700 border-t-2 border-t-red-500/40 overflow-hidden transition-[transform,border-color,box-shadow] duration-300 hover:scale-[1.02] hover:border-red-500/60 hover:shadow-[0_0_0_1px_rgba(239,68,68,0.3),0_20px_40px_-18px_rgba(220,38,38,0.55)] ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
     >
       <div className="aspect-[21/9] bg-ink-700 overflow-hidden relative">
         {tournament.banner_url && (
           <img
             src={tournament.banner_url}
             alt=""
-            className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110 group-hover:saturate-125"
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
           />
         )}
         <div className="absolute inset-0 bg-red-600/0 group-hover:bg-red-600/10 transition-colors duration-300" />
@@ -69,11 +71,13 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
       </div>
 
       <div className="px-5 pb-5 relative">
-        <div className="relative z-10 w-16 h-16 -mt-8 mb-3 rounded-full overflow-hidden bg-ink-700 border-4 border-ink-900 ring-2 ring-red-500/30 flex items-center justify-center transition-all duration-300 group-hover:ring-4 group-hover:ring-red-500/60 group-hover:scale-110">
+        <div className="relative z-10 w-16 h-16 -mt-8 mb-3 rounded-full overflow-hidden bg-ink-700 border-4 border-ink-900 ring-2 ring-red-500/30 flex items-center justify-center transition-[box-shadow,transform] duration-300 group-hover:ring-4 group-hover:ring-red-500/60 group-hover:scale-110">
           {tournament.crest_url ? (
             <img
               src={tournament.crest_url}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover"
               style={{ objectPosition: `${tournament.crest_position_x}% ${tournament.crest_position_y}%` }}
             />

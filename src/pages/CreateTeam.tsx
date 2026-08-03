@@ -7,6 +7,7 @@ import { SiteFooter } from '../components/SiteFooter';
 import { TicketField, ComboboxField, TextAreaField } from '../components/AuthShell';
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { normalizeForSearch } from '../lib/text';
+import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -227,9 +228,10 @@ export default function CreateTeam() {
   }
 
   async function uploadImage(teamId: string, file: File, kind: 'crest' | 'banner') {
-    const ext = file.name.split('.').pop() || 'jpg';
+    const compressed = await compressImage(file, kind === 'banner' ? BANNER_MAX_DIMENSION : CREST_MAX_DIMENSION);
+    const ext = compressed.name.split('.').pop() || 'jpg';
     const path = `${user!.id}/${teamId}/${kind}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from('teams').upload(path, file, { upsert: true });
+    const { error: uploadError } = await supabase.storage.from('teams').upload(path, compressed, { upsert: true });
     if (uploadError) throw new Error(uploadError.message);
     const { data } = supabase.storage.from('teams').getPublicUrl(path);
     return data.publicUrl;

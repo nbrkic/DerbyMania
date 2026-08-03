@@ -8,12 +8,12 @@ const FEATURES = [
   {
     n: '01',
     title: 'Žreb i raspored',
-    desc: 'Formiraj grupe i generiši raspored za ligu ili eliminacije u nekoliko klikova — bez tabela u Excel-u.',
+    desc: 'Formiraj grupe i generiši raspored za ligu ili eliminacije u nekoliko klikova, bez tabela u Excel-u.',
   },
   {
     n: '02',
-    title: 'Kartoteka ekipa',
-    desc: 'Grb, boje, sastav i istorija svake ekipe na jednom mestu, dostupno pre i posle svakog meča.',
+    title: 'Pregled ekipa',
+    desc: 'Grb, sastav i istorija svake ekipe na jednom mestu, dostupno pre i posle svakog meča.',
   },
   {
     n: '03',
@@ -22,8 +22,8 @@ const FEATURES = [
   },
   {
     n: '04',
-    title: 'Statistika i forma',
-    desc: 'Strelci, asistencije i forma ekipa kroz sezonu — spremno za deljenje sa navijačima.',
+    title: 'Statistika igrača',
+    desc: 'Strelci, asistencije i odbrane golmana, sve statistike se prate automatski i dostupne su na klik.',
   },
 ];
 
@@ -31,12 +31,12 @@ const STEPS = [
   {
     n: 'I',
     title: 'Kreiraj turnir',
-    desc: 'Izaberi format — liga, grupe ili eliminacije — i broj ekipa koje igraju.',
+    desc: 'Izaberi format: liga, grupa + eliminacija ili kup, i broj ekipa koje igraju.',
   },
   {
     n: 'II',
     title: 'Pozovi ekipe',
-    desc: 'Ekipe se prijavljuju sa sastavom, grbom i bojama kluba.',
+    desc: 'Ekipe se prijavljuju sa sastavom, grbom i bannerom kluba.',
   },
   {
     n: 'III',
@@ -46,7 +46,7 @@ const STEPS = [
   {
     n: 'IV',
     title: 'Proglasi šampiona',
-    desc: 'Konačan plasman i statistika sezone, spremni za deljenje.',
+    desc: 'Konačan plasman i statistika turnia, spremni za deljenje.',
   },
 ];
 
@@ -95,13 +95,13 @@ export default function Landing() {
           style={{ clipPath: 'polygon(0 6%, 100% 0, 100% 94%, 0 100%)' }}
         />
 
-        <div className="relative z-10 max-w-3xl mx-auto px-6 py-16 sm:py-28 md:py-44 text-center">
+        <div className="relative z-10 max-w-3xl mx-auto px-6 pt-16 pb-24 sm:py-28 md:py-44 text-center">
           <h1 className="rise-1 font-display leading-[1.02] tracking-tight text-5xl sm:text-7xl md:text-8xl mb-8">
             Organizacija <span className="text-red-400">sportskih turnira</span>
           </h1>
 
           <p className="rise-2 text-paper-300 text-lg max-w-md mx-auto mb-10 leading-relaxed">
-            DerbyMania vodi tvoj žreb, raspored i rezultate od prve do poslednje utakmice sezone.
+            DerbyMania prati tvoj turnir, utakmice i rezultate od prvog do poslednjeg meča turnira.
           </p>
 
           <div className="rise-3 flex flex-col sm:flex-row gap-4 justify-center">
@@ -118,7 +118,7 @@ export default function Landing() {
       {/* ── STATEMENT ───────────────────────────────────────────── */}
       <section className="py-7 sm:py-10 md:py-14 border-b border-ink-700">
         <p className="max-w-xl mx-auto px-6 text-center text-base sm:text-lg font-medium text-paper-500">
-          Organizacija turnira nikad nije bila lakša — <span className="text-red-400">uz DerbyManiju.</span>
+          Organizacija turnira nikad nije bila lakša <span className="text-red-400">uz DerbyManiju.</span>
         </p>
       </section>
 
@@ -161,7 +161,7 @@ export default function Landing() {
             <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Kako radi</span>
             <h2 className="font-display text-4xl sm:text-5xl mt-4 leading-tight">Četiri lagana koraka.</h2>
             <p className="text-paper-500 mt-5 leading-relaxed">
-              Od prijave ekipa do proglašenja šampiona, sve prati jedan tok bez preskakanja koraka.
+              Od prijave ekipa do proglašenja šampiona, sve beležimo za vas.
             </p>
           </div>
         </div>
@@ -216,7 +216,7 @@ export default function Landing() {
             <p className="text-xl sm:text-2xl font-medium leading-snug mb-4">
               Prvi put da tabelu grupe ne računam ručno na klupi.
             </p>
-            <p className="text-paper-300 text-sm uppercase tracking-widest">Organizator, Kup regije</p>
+            <p className="text-paper-300 text-sm uppercase tracking-widest">Organizator, Kup Pančeva</p>
           </div>
         </div>
       </section>
@@ -228,7 +228,7 @@ export default function Landing() {
             Tvoj turnir. <span className="text-red-400">Tvoja pravila.</span>
           </h2>
           <p className="text-paper-500 text-lg max-w-md mx-auto mb-10 leading-relaxed">
-            Kreiraj prvi turnir za manje od pet minuta. Besplatno, bez komplikacija.
+            Kreiraj prvi turnir za manje od dva minuta. Besplatno, bez komplikacija.
           </p>
           <Link to={createTournamentHref} className="btn-solid px-9 py-4 text-base inline-flex items-center gap-2">
             Napravi turnir

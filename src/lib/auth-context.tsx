@@ -115,6 +115,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.subscription.unsubscribe();
   }, []);
 
+  const userId = session?.user?.id;
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`notifications-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        () => {
+          loadUnreadNotificationCount(userId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error ? translateAuthError(error.message) : null };

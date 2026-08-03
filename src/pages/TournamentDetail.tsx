@@ -128,11 +128,11 @@ type InviteTeamOption = {
   crest_position_y: number;
 };
 
-function StatBlock({ label, value }: { label: string; value: string }) {
+function StatBlock({ label, value, className = '' }: { label: string; value: string; className?: string }) {
   return (
-    <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-5 py-4">
-      <p className="text-[11px] uppercase tracking-widest text-paper-500 mb-1">{label}</p>
-      <p className="font-display text-xl leading-tight">{value}</p>
+    <div className={`bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-3 py-3 sm:px-5 sm:py-4 ${className}`}>
+      <p className="text-[10px] sm:text-[11px] uppercase tracking-widest text-paper-500 mb-1 truncate">{label}</p>
+      <p className="font-display text-base sm:text-xl leading-tight truncate">{value}</p>
     </div>
   );
 }
@@ -184,6 +184,11 @@ export default function TournamentDetail() {
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<TabId>('pocetna');
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(new Set(['pocetna']));
+
+  useEffect(() => {
+    setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
+  }, [activeTab]);
 
   useEffect(() => {
     if (!id) return;
@@ -801,12 +806,12 @@ export default function TournamentDetail() {
           <>
             <DetailHeroSkeleton />
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-6 mb-6">
                 {Array.from({ length: 5 }, (_, i) => (
                   <StatBlockSkeleton key={i} />
                 ))}
               </div>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-6 mb-10">
                 {Array.from({ length: 5 }, (_, i) => (
                   <StatBlockSkeleton key={i} />
                 ))}
@@ -831,16 +836,23 @@ export default function TournamentDetail() {
               </div>
 
               <div className="max-w-6xl mx-auto px-6 pb-10">
-                <div className="relative z-10 w-28 h-28 sm:w-32 sm:h-32 -mt-14 sm:-mt-16 rounded-full overflow-hidden bg-ink-800 border-4 border-ink-900 ring-2 ring-red-500/40 flex items-center justify-center">
-                  {tournament.crest_url ? (
-                    <img
-                      src={tournament.crest_url}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      style={{ objectPosition: `${tournament.crest_position_x}% ${tournament.crest_position_y}%` }}
-                    />
-                  ) : (
-                    <span className="font-display text-3xl text-paper-500">{tournament.name[0]?.toUpperCase()}</span>
+                <div className="flex items-end gap-4 flex-wrap">
+                  <div className="relative z-10 w-28 h-28 sm:w-32 sm:h-32 -mt-14 sm:-mt-16 rounded-full overflow-hidden bg-ink-800 border-4 border-ink-900 ring-2 ring-red-500/40 flex items-center justify-center">
+                    {tournament.crest_url ? (
+                      <img
+                        src={tournament.crest_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        style={{ objectPosition: `${tournament.crest_position_x}% ${tournament.crest_position_y}%` }}
+                      />
+                    ) : (
+                      <span className="font-display text-3xl text-paper-500">{tournament.name[0]?.toUpperCase()}</span>
+                    )}
+                  </div>
+                  {organizerName && (
+                    <p className="pb-1 text-xs uppercase tracking-widest text-paper-500">
+                      Organizator: <span className="text-paper-100 font-medium normal-case tracking-normal">{organizerName}</span>
+                    </p>
                   )}
                 </div>
 
@@ -968,7 +980,8 @@ export default function TournamentDetail() {
 
             {activeTab === 'pocetna' && (
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
+              {/* Desktop: original order/grouping */}
+              <div className="hidden lg:grid lg:grid-cols-5 gap-6 mb-6">
                 <StatBlock label="Grad" value={tournament.city || '—'} />
                 <StatBlock label="Lokacija" value={tournament.location || '—'} />
                 <StatBlock label="Termin" value={startLabel || '—'} />
@@ -979,7 +992,7 @@ export default function TournamentDetail() {
                 />
               </div>
 
-              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+              <div className="hidden lg:grid lg:grid-cols-5 gap-6 mb-10">
                 <StatBlock label="Format" value={FORMAT_LABELS[tournament.format] ?? tournament.format} />
                 <StatBlock label="Broj igrača" value={String(tournament.players_per_team)} />
                 <StatBlock label="Dozvoljene izmene" value={String(tournament.substitutions_allowed)} />
@@ -987,9 +1000,31 @@ export default function TournamentDetail() {
                 <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
               </div>
 
-              <div className="mb-10 bg-ink-900 border border-red-500/30 border-l-2 border-l-red-500 px-5 py-4 inline-block">
-                <p className="text-[11px] uppercase tracking-widest text-paper-500 mb-1">Kotizacija</p>
-                <p className="font-display text-xl leading-tight">
+              {/* Telefoni/tableti: Format i trajanje poluvremena razmenjuju mesto sa brojem timova */}
+              <div className="grid grid-cols-2 lg:hidden gap-3 mb-10">
+                <StatBlock label="Grad" value={tournament.city || '—'} />
+                <StatBlock label="Lokacija" value={tournament.location || '—'} />
+                <StatBlock label="Termin" value={startLabel || '—'} />
+                <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} />
+                <StatBlock
+                  label="Format"
+                  value={FORMAT_LABELS[tournament.format] ?? tournament.format}
+                  className="col-span-2 text-center"
+                />
+                <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
+                <StatBlock label="Broj igrača" value={String(tournament.players_per_team)} />
+                <StatBlock label="Dozvoljene izmene" value={String(tournament.substitutions_allowed)} />
+                <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} />
+                <StatBlock
+                  label="Timova"
+                  value={tournament.max_teams ? `${teams.length} / ${tournament.max_teams}` : String(teams.length)}
+                  className="col-span-2 text-center"
+                />
+              </div>
+
+              <div className="mb-10 bg-ink-900 border border-red-500/30 border-l-2 border-l-red-500 px-3 py-3 sm:px-5 sm:py-4 inline-block">
+                <p className="text-[10px] sm:text-[11px] uppercase tracking-widest text-paper-500 mb-1">Kotizacija</p>
+                <p className="font-display text-base sm:text-xl leading-tight">
                   {tournament.entry_fee_per_player != null
                     ? `${tournament.entry_fee_per_player.toLocaleString('sr-Latn-RS')} RSD po igraču`
                     : 'Bez kotizacije'}
@@ -1099,12 +1134,6 @@ export default function TournamentDetail() {
                     )}
                   </div>
                 </div>
-              )}
-
-              {organizerName && (
-                <p className="text-sm text-paper-500 mb-10">
-                  Organizator: <span className="text-paper-100">{organizerName}</span>
-                </p>
               )}
 
               {tournament.description && (
@@ -1275,30 +1304,38 @@ export default function TournamentDetail() {
             </section>
             )}
 
-            {activeTab === 'grupna' && id && (
-              <GroupsTabContent id={id} tournament={tournament} onSwitchToElimination={() => setActiveTab('eliminacija')} />
+            {visitedTabs.has('grupna') && id && (
+              <div className={activeTab === 'grupna' ? undefined : 'hidden'}>
+                <GroupsTabContent id={id} tournament={tournament} onSwitchToElimination={() => setActiveTab('eliminacija')} />
+              </div>
             )}
-            {activeTab === 'eliminacija' && id && (
-              <EliminationTabContent
-                id={id}
-                tournament={tournament}
-                onSwitchToGroups={() => setActiveTab('grupna')}
-                onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
-              />
+            {visitedTabs.has('eliminacija') && id && (
+              <div className={activeTab === 'eliminacija' ? undefined : 'hidden'}>
+                <EliminationTabContent
+                  id={id}
+                  tournament={tournament}
+                  onSwitchToGroups={() => setActiveTab('grupna')}
+                  onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
+                />
+              </div>
             )}
-            {activeTab === 'liga' && id && (
-              <LeagueTabContent
-                id={id}
-                tournament={tournament}
-                onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
-              />
+            {visitedTabs.has('liga') && id && (
+              <div className={activeTab === 'liga' ? undefined : 'hidden'}>
+                <LeagueTabContent
+                  id={id}
+                  tournament={tournament}
+                  onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
+                />
+              </div>
             )}
-            {activeTab === 'kup' && id && (
-              <EliminationTabContent
-                id={id}
-                tournament={tournament}
-                onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
-              />
+            {visitedTabs.has('kup') && id && (
+              <div className={activeTab === 'kup' ? undefined : 'hidden'}>
+                <EliminationTabContent
+                  id={id}
+                  tournament={tournament}
+                  onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
+                />
+              </div>
             )}
           </>
         )}
