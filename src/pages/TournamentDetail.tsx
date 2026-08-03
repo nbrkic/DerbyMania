@@ -11,6 +11,7 @@ import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../compo
 import { GroupsTabContent } from '../components/GroupsTabContent';
 import { EliminationTabContent } from '../components/EliminationTabContent';
 import { LeagueTabContent } from '../components/LeagueTabContent';
+import { TournamentGallery } from '../components/TournamentGallery';
 
 type TabId = 'pocetna' | 'grupna' | 'eliminacija' | 'liga' | 'kup';
 
@@ -1157,6 +1158,12 @@ export default function TournamentDetail() {
                   </div>
                 )}
               </div>
+
+              <TournamentGallery
+                tournamentId={tournament.id}
+                ownerId={tournament.owner_id}
+                isOwner={user?.id === tournament.owner_id}
+              />
 
               {user?.id === tournament.owner_id && !isLocked && (
                 <div className="mb-10">
