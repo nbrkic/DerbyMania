@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { Dropdown } from './Dropdown';
@@ -10,6 +11,7 @@ type TournamentInfo = {
   id: string;
   owner_id: string;
   format: string;
+  status: string;
   start_time: string | null;
   match_duration_minutes: number;
   sports: { name: string } | null;
@@ -255,12 +257,16 @@ function ChampionBanner({ champion }: { champion: GroupTeam }) {
         <span className="text-xs uppercase tracking-[0.3em] text-red-400 font-semibold">Prvak turnira</span>
         <div className="mt-7 flex flex-col items-center gap-5">
           <div className="crown-float"><TrophyIcon className="trophy-pop w-11 h-11 text-red-400" /></div>
-          <div className="relative w-28 h-28">
-            <div className="ring-expand absolute inset-0 rounded-full border-2 border-red-400/70 pointer-events-none" />
-            <div className="glow-pulse absolute inset-0 rounded-full pointer-events-none" />
-            <TeamBadge team={champion} className="trophy-pop relative w-28 h-28 rounded-full overflow-hidden bg-ink-800 ring-4 ring-red-500/60 flex items-center justify-center font-display text-3xl" />
-          </div>
-          <h2 className="champion-name-reveal font-display text-3xl sm:text-4xl leading-tight">{champion.name}</h2>
+          <Link to={`/timovi/${champion.id}`} className="group flex flex-col items-center gap-5">
+            <div className="relative w-28 h-28">
+              <div className="ring-expand absolute inset-0 rounded-full border-2 border-red-400/70 pointer-events-none" />
+              <div className="glow-pulse absolute inset-0 rounded-full pointer-events-none" />
+              <TeamBadge team={champion} className="trophy-pop relative w-28 h-28 rounded-full overflow-hidden bg-ink-800 ring-4 ring-red-500/60 flex items-center justify-center font-display text-3xl" />
+            </div>
+            <h2 className="champion-name-reveal font-display text-3xl sm:text-4xl leading-tight transition-colors group-hover:text-red-400">
+              {champion.name}
+            </h2>
+          </Link>
         </div>
       </div>
     </div>
@@ -341,10 +347,10 @@ function BracketOutcomeBox({ match, teamsById, isOwner, onStart }: {
   if (match.status === 'finished' && match.is_bye && winner) {
     return (
       <div className="w-full bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-3 py-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <Link to={`/timovi/${winner.id}`} className="group flex items-center gap-2 min-w-0">
           <TeamBadge team={winner} className="w-7 h-7 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
-          <span className="text-sm text-paper-100 font-semibold truncate">{winner.name}</span>
-        </div>
+          <span className="text-sm text-paper-100 font-semibold truncate transition-colors group-hover:text-red-400">{winner.name}</span>
+        </Link>
         <p className="text-[11px] text-paper-500 mt-1 pl-9">Slobodan prolaz</p>
       </div>
     );
@@ -355,19 +361,19 @@ function BracketOutcomeBox({ match, teamsById, isOwner, onStart }: {
       <div className="w-full bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50">
         <div className="divide-y divide-ink-700">
           <div className="flex items-center justify-between gap-2 min-w-0 px-3 py-2">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <Link to={`/timovi/${teamA.id}`} className="group flex items-center gap-1.5 min-w-0 flex-1">
               <TeamBadge team={teamA} className="w-6 h-6 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
-              <span className={`text-xs truncate ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span>
-            </div>
+              <span className={`text-xs truncate transition-colors group-hover:text-red-400 ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span>
+            </Link>
             <div className="flex items-center border-l border-ink-700 pl-2 ml-1">
               <span className={`font-display text-sm shrink-0 ${match.winner_team_id === teamA.id ? 'text-paper-100' : 'text-paper-500'}`}>{match.team_a_goals}</span>
             </div>
           </div>
           <div className="flex items-center justify-between gap-2 min-w-0 px-3 py-2">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <Link to={`/timovi/${teamB.id}`} className="group flex items-center gap-1.5 min-w-0 flex-1">
               <TeamBadge team={teamB} className="w-6 h-6 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
-              <span className={`text-xs truncate ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span>
-            </div>
+              <span className={`text-xs truncate transition-colors group-hover:text-red-400 ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span>
+            </Link>
             <div className="flex items-center border-l border-ink-700 pl-2 ml-1">
               <span className={`font-display text-sm shrink-0 ${match.winner_team_id === teamB.id ? 'text-paper-100' : 'text-paper-500'}`}>{match.team_b_goals}</span>
             </div>
@@ -381,15 +387,21 @@ function BracketOutcomeBox({ match, teamsById, isOwner, onStart }: {
     <div className="w-full bg-ink-900 border border-ink-700">
       <div className="divide-y divide-ink-700">
         <div className="flex items-center justify-between gap-2 min-w-0 px-3 py-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            {teamA ? (<><TeamBadge team={teamA} className="w-6 h-6 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" /><span className="text-xs text-paper-100 truncate">{teamA.name}</span></>) : <span className="text-xs text-paper-700">TBD</span>}
-          </div>
+          {teamA ? (
+            <Link to={`/timovi/${teamA.id}`} className="group flex items-center gap-1.5 min-w-0 flex-1">
+              <TeamBadge team={teamA} className="w-6 h-6 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
+              <span className="text-xs text-paper-100 truncate transition-colors group-hover:text-red-400">{teamA.name}</span>
+            </Link>
+          ) : <div className="flex items-center min-w-0 flex-1"><span className="text-xs text-paper-700">TBD</span></div>}
           {match.status === 'in_progress' && <div className="flex items-center border-l border-ink-700 pl-2 ml-1"><span className="text-xs font-display shrink-0">{match.team_a_goals}</span></div>}
         </div>
         <div className="flex items-center justify-between gap-2 min-w-0 px-3 py-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            {teamB ? (<><TeamBadge team={teamB} className="w-6 h-6 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" /><span className="text-xs text-paper-100 truncate">{teamB.name}</span></>) : <span className="text-xs text-paper-700">TBD</span>}
-          </div>
+          {teamB ? (
+            <Link to={`/timovi/${teamB.id}`} className="group flex items-center gap-1.5 min-w-0 flex-1">
+              <TeamBadge team={teamB} className="w-6 h-6 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
+              <span className="text-xs text-paper-100 truncate transition-colors group-hover:text-red-400">{teamB.name}</span>
+            </Link>
+          ) : <div className="flex items-center min-w-0 flex-1"><span className="text-xs text-paper-700">TBD</span></div>}
           {match.status === 'in_progress' && <div className="flex items-center border-l border-ink-700 pl-2 ml-1"><span className="text-xs font-display shrink-0">{match.team_b_goals}</span></div>}
         </div>
       </div>
@@ -429,7 +441,12 @@ function BracketTree({ totalRounds, matchesByRound, teamsById, isOwner, onStart 
             {entrants.map((team, i) => (
               <div key={i} className="flex-1 flex items-center px-1">
                 <div className="w-full flex items-center gap-2 bg-ink-800 border border-ink-700 px-2.5 py-1.5 min-w-0">
-                  {team ? (<><TeamBadge team={team} className="w-6 h-6 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" /><span className="text-xs text-paper-100 truncate">{team.name}</span></>) : <span className="text-xs text-paper-700">—</span>}
+                  {team ? (
+                    <Link to={`/timovi/${team.id}`} className="group flex items-center gap-2 min-w-0">
+                      <TeamBadge team={team} className="w-6 h-6 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
+                      <span className="text-xs text-paper-100 truncate transition-colors group-hover:text-red-400">{team.name}</span>
+                    </Link>
+                  ) : <span className="text-xs text-paper-700">—</span>}
                 </div>
               </div>
             ))}
@@ -476,8 +493,10 @@ function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, roste
         </div>
         <div className="flex items-start sm:items-center justify-between gap-3 sm:gap-6">
           <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
-            <TeamBadge team={teamA} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-ink-800 ring-2 ring-red-500/30 flex items-center justify-center shrink-0 font-display text-xl" />
-            <span className="text-sm text-paper-100 text-center truncate max-w-full">{teamA.name}</span>
+            <Link to={`/timovi/${teamA.id}`} className="group flex flex-col items-center gap-2">
+              <TeamBadge team={teamA} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-ink-800 ring-2 ring-red-500/30 flex items-center justify-center shrink-0 font-display text-xl" />
+              <span className="text-sm text-paper-100 text-center truncate max-w-full transition-colors group-hover:text-red-400">{teamA.name}</span>
+            </Link>
             {isOwner && (
               <>
                 <ScorerPicker idPrefix={`b-scorer-a-${match.id}`} roster={rosterA} isBasketball={isBasketball} onPick={(playerId, points) => onAddGoal(match.id, 'a', teamA.id, playerId, points)} />
@@ -499,8 +518,10 @@ function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, roste
             <span className="font-display text-4xl sm:text-5xl leading-none">{match.team_b_goals}</span>
           </div>
           <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
-            <TeamBadge team={teamB} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-ink-800 ring-2 ring-red-500/30 flex items-center justify-center shrink-0 font-display text-xl" />
-            <span className="text-sm text-paper-100 text-center truncate max-w-full">{teamB.name}</span>
+            <Link to={`/timovi/${teamB.id}`} className="group flex flex-col items-center gap-2">
+              <TeamBadge team={teamB} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-ink-800 ring-2 ring-red-500/30 flex items-center justify-center shrink-0 font-display text-xl" />
+              <span className="text-sm text-paper-100 text-center truncate max-w-full transition-colors group-hover:text-red-400">{teamB.name}</span>
+            </Link>
             {isOwner && (
               <>
                 <ScorerPicker idPrefix={`b-scorer-b-${match.id}`} roster={rosterB} isBasketball={isBasketball} onPick={(playerId, points) => onAddGoal(match.id, 'b', teamB.id, playerId, points)} />
@@ -549,22 +570,40 @@ function FinishedMatchRow({ match, teamA, teamB, roundText, isBasketball, isExpa
 }) {
   return (
     <div className="bg-ink-900 border border-ink-700">
-      <button type="button" onClick={onToggle} className="w-full text-left px-4 py-3 hover:bg-ink-800 transition-colors">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        className="w-full text-left px-4 py-3 hover:bg-ink-800 transition-colors cursor-pointer"
+      >
         <div className="sm:hidden">
           <div className="text-center mb-1.5"><span className="text-[10px] uppercase tracking-widest text-paper-700">{roundText}</span></div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 flex-1 justify-end min-w-0"><span className={`truncate text-sm ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span><TeamBadge team={teamA} /></div>
+            <Link to={`/timovi/${teamA.id}`} onClick={(e) => e.stopPropagation()} className="group flex items-center gap-2 flex-1 justify-end min-w-0">
+              <span className={`truncate text-sm transition-colors group-hover:text-red-400 ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span>
+              <TeamBadge team={teamA} />
+            </Link>
             <span className="font-display text-base shrink-0 px-2">{match.team_a_goals} : {match.team_b_goals}</span>
-            <div className="flex items-center gap-2 flex-1 min-w-0"><TeamBadge team={teamB} /><span className={`truncate text-sm ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span></div>
+            <Link to={`/timovi/${teamB.id}`} onClick={(e) => e.stopPropagation()} className="group flex items-center gap-2 flex-1 min-w-0">
+              <TeamBadge team={teamB} />
+              <span className={`truncate text-sm transition-colors group-hover:text-red-400 ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span>
+            </Link>
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-3">
           <span className="text-[10px] uppercase tracking-widest text-paper-700 w-16 sm:w-24 shrink-0 truncate">{roundText}</span>
-          <div className="flex items-center gap-2 flex-1 justify-end min-w-0"><span className={`truncate text-sm ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span><TeamBadge team={teamA} /></div>
+          <Link to={`/timovi/${teamA.id}`} onClick={(e) => e.stopPropagation()} className="group flex items-center gap-2 flex-1 justify-end min-w-0">
+            <span className={`truncate text-sm transition-colors group-hover:text-red-400 ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span>
+            <TeamBadge team={teamA} />
+          </Link>
           <span className="font-display text-base shrink-0 px-2">{match.team_a_goals} : {match.team_b_goals}</span>
-          <div className="flex items-center gap-2 flex-1 min-w-0"><TeamBadge team={teamB} /><span className={`truncate text-sm ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span></div>
+          <Link to={`/timovi/${teamB.id}`} onClick={(e) => e.stopPropagation()} className="group flex items-center gap-2 flex-1 min-w-0">
+            <TeamBadge team={teamB} />
+            <span className={`truncate text-sm transition-colors group-hover:text-red-400 ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span>
+          </Link>
         </div>
-      </button>
+      </div>
       {isExpanded && (
         <div className="border-t border-ink-700">
           <MatchTimeline entries={timeline} loading={loadingTimeline} teamA={teamA} teamB={teamB} isBasketball={isBasketball} />
@@ -749,6 +788,7 @@ export function EliminationTabContent({
   const isBasketball = !!tournament.sports?.name && BASKETBALL_SPORT_NAMES.includes(tournament.sports.name);
 
   async function handleStartBracketMatch(matchId: string) {
+    if (tournament.status === 'finished') return;
     setStartingMatchId(matchId);
     const { error } = await supabase.from('tournament_bracket_matches').update({ status: 'in_progress' }).eq('id', matchId);
     setStartingMatchId(null);
@@ -908,7 +948,7 @@ export function EliminationTabContent({
           label: `${m.team_a_id ? (teamsById.get(m.team_a_id)?.name ?? '?') : '?'} — ${m.team_b_id ? (teamsById.get(m.team_b_id)?.name ?? '?') : '?'}`,
           sublabel: roundLabel(m.round, totalRounds),
           status: m.status,
-          onStart: isOwner && m.status === 'pending' && m.team_a_id && m.team_b_id ? () => handleStartBracketMatch(m.id) : undefined,
+          onStart: isOwner && m.status === 'pending' && m.team_a_id && m.team_b_id && tournament.status !== 'finished' ? () => handleStartBracketMatch(m.id) : undefined,
           starting: startingMatchId === m.id,
         }))
     : [];

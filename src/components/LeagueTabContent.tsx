@@ -1131,6 +1131,7 @@ export function LeagueTabContent({
   }
 
   async function handleStartMatch(matchId: string) {
+    if (localStatus === 'finished') return;
     setStartingMatchId(matchId);
     const { error } = await supabase.from('tournament_league_matches').update({ status: 'in_progress' }).eq('id', matchId);
     setStartingMatchId(null);
@@ -1272,7 +1273,7 @@ export function LeagueTabContent({
           time: addMinutesToClock(tournament.start_time!, (m.match_order as number) * tournament.match_duration_minutes),
           label: `${teamsById.get(m.team_a_id)?.name ?? '?'} — ${teamsById.get(m.team_b_id)?.name ?? '?'}`,
           status: m.status,
-          onStart: isOwner && m.status === 'pending' ? () => handleStartMatch(m.id) : undefined,
+          onStart: isOwner && m.status === 'pending' && !isTournamentFinished ? () => handleStartMatch(m.id) : undefined,
           starting: startingMatchId === m.id,
         }))
     : [];

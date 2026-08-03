@@ -843,6 +843,7 @@ export function GroupsTabContent({
   }
 
   async function handleStartMatch(matchId: string) {
+    if (tournament.status === 'finished') return;
     setStartingMatchId(matchId);
     const { error } = await supabase.from('tournament_matches').update({ status: 'in_progress' }).eq('id', matchId);
     setStartingMatchId(null);
@@ -940,7 +941,7 @@ export function GroupsTabContent({
           label: `${teamsById.get(m.team_a_id)?.name ?? '?'} — ${teamsById.get(m.team_b_id)?.name ?? '?'}`,
           sublabel: groupNameById.get(m.group_id),
           status: m.status,
-          onStart: isOwner && m.status === 'pending' ? () => handleStartMatch(m.id) : undefined,
+          onStart: isOwner && m.status === 'pending' && tournament.status !== 'finished' ? () => handleStartMatch(m.id) : undefined,
           starting: startingMatchId === m.id,
         }))
     : [];
