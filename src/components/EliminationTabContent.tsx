@@ -14,6 +14,7 @@ type TournamentInfo = {
   status: string;
   start_time: string | null;
   match_duration_minutes: number;
+  period_duration_minutes: number;
   sports: { name: string } | null;
 };
 
@@ -580,28 +581,28 @@ function FinishedMatchRow({ match, teamA, teamB, roundText, isBasketball, isExpa
         <div className="sm:hidden">
           <div className="text-center mb-1.5"><span className="text-[10px] uppercase tracking-widest text-paper-700">{roundText}</span></div>
           <div className="flex items-center gap-3">
-            <Link to={`/timovi/${teamA.id}`} onClick={(e) => e.stopPropagation()} className="group flex items-center gap-2 flex-1 justify-end min-w-0">
-              <span className={`truncate text-sm transition-colors group-hover:text-red-400 ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span>
+            <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+              <span className={`truncate text-sm ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span>
               <TeamBadge team={teamA} />
-            </Link>
+            </div>
             <span className="font-display text-base shrink-0 px-2">{match.team_a_goals} : {match.team_b_goals}</span>
-            <Link to={`/timovi/${teamB.id}`} onClick={(e) => e.stopPropagation()} className="group flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               <TeamBadge team={teamB} />
-              <span className={`truncate text-sm transition-colors group-hover:text-red-400 ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span>
-            </Link>
+              <span className={`truncate text-sm ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span>
+            </div>
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-3">
           <span className="text-[10px] uppercase tracking-widest text-paper-700 w-16 sm:w-24 shrink-0 truncate">{roundText}</span>
-          <Link to={`/timovi/${teamA.id}`} onClick={(e) => e.stopPropagation()} className="group flex items-center gap-2 flex-1 justify-end min-w-0">
-            <span className={`truncate text-sm transition-colors group-hover:text-red-400 ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span>
+          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+            <span className={`truncate text-sm ${match.winner_team_id === teamA.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamA.name}</span>
             <TeamBadge team={teamA} />
-          </Link>
+          </div>
           <span className="font-display text-base shrink-0 px-2">{match.team_a_goals} : {match.team_b_goals}</span>
-          <Link to={`/timovi/${teamB.id}`} onClick={(e) => e.stopPropagation()} className="group flex items-center gap-2 flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <TeamBadge team={teamB} />
-            <span className={`truncate text-sm transition-colors group-hover:text-red-400 ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span>
-          </Link>
+            <span className={`truncate text-sm ${match.winner_team_id === teamB.id ? 'text-paper-100 font-semibold' : 'text-paper-500'}`}>{teamB.name}</span>
+          </div>
         </div>
       </div>
       {isExpanded && (
@@ -943,7 +944,7 @@ export function EliminationTabContent({
           id: m.id,
           time: addMinutesToClock(
             tournament.start_time!,
-            (groupPhaseMatchCount + i) * tournament.match_duration_minutes
+            (groupPhaseMatchCount + i) * (tournament.match_duration_minutes + tournament.period_duration_minutes)
           ),
           label: `${m.team_a_id ? (teamsById.get(m.team_a_id)?.name ?? '?') : '?'} — ${m.team_b_id ? (teamsById.get(m.team_b_id)?.name ?? '?') : '?'}`,
           sublabel: roundLabel(m.round, totalRounds),

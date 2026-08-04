@@ -359,7 +359,7 @@ export default function CreateTournament() {
       return;
     }
     if (!periodDurationMinutes || Number(periodDurationMinutes) < 1) {
-      setError('Unesi trajanje poluvremena/četvrtine.');
+      setError('Unesi trajanje pauze između poluvremena/četvrtina.');
       return;
     }
     if (!startTime) {
@@ -502,7 +502,7 @@ export default function CreateTournament() {
         return;
       }
       if (!periodDurationMinutes || Number(periodDurationMinutes) < 1) {
-        setError('Unesi trajanje poluvremena/četvrtine.');
+        setError('Unesi trajanje pauze između poluvremena/četvrtina.');
         return;
       }
       goNext();
@@ -552,7 +552,7 @@ export default function CreateTournament() {
 
   const selectedSportName = sports.find((s) => String(s.id) === sportId)?.name ?? null;
   const isBasketball = !!selectedSportName && BASKETBALL_SPORT_NAMES.includes(selectedSportName);
-  const periodLabel = isBasketball ? 'Trajanje četvrtine (min)' : 'Trajanje poluvremena';
+  const periodLabel = isBasketball ? 'Trajanje pauze između četvrtina (min)' : 'Trajanje pauze između poluvremena (min)';
 
   if (loadingExisting) {
     return (

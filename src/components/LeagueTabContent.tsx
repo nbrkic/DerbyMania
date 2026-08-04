@@ -820,6 +820,7 @@ export function LeagueTabContent({
     roster_locked: boolean;
     start_time: string | null;
     match_duration_minutes: number;
+    period_duration_minutes: number;
     sports: { name: string } | null;
   };
   onFinished?: () => void;
@@ -1270,7 +1271,10 @@ export function LeagueTabContent({
         .sort((a, b) => (a.match_order as number) - (b.match_order as number))
         .map((m) => ({
           id: m.id,
-          time: addMinutesToClock(tournament.start_time!, (m.match_order as number) * tournament.match_duration_minutes),
+          time: addMinutesToClock(
+            tournament.start_time!,
+            (m.match_order as number) * (tournament.match_duration_minutes + tournament.period_duration_minutes)
+          ),
           label: `${teamsById.get(m.team_a_id)?.name ?? '?'} — ${teamsById.get(m.team_b_id)?.name ?? '?'}`,
           status: m.status,
           onStart: isOwner && m.status === 'pending' && !isTournamentFinished ? () => handleStartMatch(m.id) : undefined,

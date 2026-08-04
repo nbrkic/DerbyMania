@@ -15,6 +15,7 @@ type TournamentInfo = {
   status: string;
   start_time: string | null;
   match_duration_minutes: number;
+  period_duration_minutes: number;
   sports: { name: string } | null;
 };
 
@@ -937,7 +938,10 @@ export function GroupsTabContent({
         .sort((a, b) => (a.match_order as number) - (b.match_order as number))
         .map((m) => ({
           id: m.id,
-          time: addMinutesToClock(tournament.start_time!, (m.match_order as number) * tournament.match_duration_minutes),
+          time: addMinutesToClock(
+            tournament.start_time!,
+            (m.match_order as number) * (tournament.match_duration_minutes + tournament.period_duration_minutes)
+          ),
           label: `${teamsById.get(m.team_a_id)?.name ?? '?'} — ${teamsById.get(m.team_b_id)?.name ?? '?'}`,
           sublabel: groupNameById.get(m.group_id),
           status: m.status,

@@ -774,7 +774,7 @@ export default function TournamentDetail() {
   const ownedParticipatingTeams = teams.filter((t) => t.owner_id === user?.id);
   const sportName = tournament?.sports?.name ?? null;
   const isBasketball = !!sportName && BASKETBALL_SPORT_NAMES.includes(sportName);
-  const periodLabel = isBasketball ? 'Trajanje četvrtine' : 'Trajanje poluvremena';
+  const periodLabel = 'Trajanje pauze';
   const startLabel = tournament?.start_date ? formatDate(tournament.start_date) : null;
   const topScorerTeam = topScorer ? teams.find((t) => t.id === topScorer.teamId) ?? null : null;
   const topAssisterTeam = topAssister ? teams.find((t) => t.id === topAssister.teamId) ?? null : null;
@@ -981,27 +981,35 @@ export default function TournamentDetail() {
 
             {activeTab === 'pocetna' && (
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
-              {/* Desktop: original order/grouping */}
-              <div className="hidden lg:grid lg:grid-cols-5 gap-6 mb-6">
+              {/* Desktop */}
+              <div className="hidden lg:grid lg:grid-cols-5 gap-6 mb-10">
                 <StatBlock label="Grad" value={tournament.city || '—'} />
-                <StatBlock label="Lokacija" value={tournament.location || '—'} />
-                <StatBlock label="Termin" value={startLabel || '—'} />
+                <StatBlock label="Lokacija" value={tournament.location || '—'} className="col-span-2" />
+                <StatBlock label="Termin" value={startLabel || '—'} className="col-span-2" />
+
                 <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} />
                 <StatBlock
                   label="Timova"
                   value={tournament.max_teams ? `${teams.length} / ${tournament.max_teams}` : String(teams.length)}
                 />
-              </div>
-
-              <div className="hidden lg:grid lg:grid-cols-5 gap-6 mb-10">
-                <StatBlock label="Format" value={FORMAT_LABELS[tournament.format] ?? tournament.format} />
+                <StatBlock label="Format" value={FORMAT_LABELS[tournament.format] ?? tournament.format} className="col-span-2" />
                 <StatBlock label="Broj igrača" value={String(tournament.players_per_team)} />
+
                 <StatBlock label="Dozvoljene izmene" value={String(tournament.substitutions_allowed)} />
                 <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} />
                 <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
+                <StatBlock
+                  label="Kotizacija"
+                  value={
+                    tournament.entry_fee_per_player != null
+                      ? `${tournament.entry_fee_per_player.toLocaleString('sr-Latn-RS')} RSD po igraču`
+                      : 'Bez kotizacije'
+                  }
+                  className="col-span-2"
+                />
               </div>
 
-              {/* Telefoni/tableti: Format i trajanje poluvremena razmenjuju mesto sa brojem timova */}
+              {/* Telefoni/tableti: Format i trajanje pauze razmenjuju mesto sa brojem timova */}
               <div className="grid grid-cols-2 lg:hidden gap-3 mb-10">
                 <StatBlock label="Grad" value={tournament.city || '—'} />
                 <StatBlock label="Lokacija" value={tournament.location || '—'} />
@@ -1021,15 +1029,15 @@ export default function TournamentDetail() {
                   value={tournament.max_teams ? `${teams.length} / ${tournament.max_teams}` : String(teams.length)}
                   className="col-span-2 text-center"
                 />
-              </div>
-
-              <div className="mb-10 bg-ink-900 border border-red-500/30 border-l-2 border-l-red-500 px-3 py-3 sm:px-5 sm:py-4 inline-block">
-                <p className="text-[10px] sm:text-[11px] uppercase tracking-widest text-paper-500 mb-1">Kotizacija</p>
-                <p className="font-display text-base sm:text-xl leading-tight">
-                  {tournament.entry_fee_per_player != null
-                    ? `${tournament.entry_fee_per_player.toLocaleString('sr-Latn-RS')} RSD po igraču`
-                    : 'Bez kotizacije'}
-                </p>
+                <StatBlock
+                  label="Kotizacija"
+                  value={
+                    tournament.entry_fee_per_player != null
+                      ? `${tournament.entry_fee_per_player.toLocaleString('sr-Latn-RS')} RSD po igraču`
+                      : 'Bez kotizacije'
+                  }
+                  className="col-span-2 text-center"
+                />
               </div>
 
               {isFinished &&
