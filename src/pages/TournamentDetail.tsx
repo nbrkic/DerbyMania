@@ -36,6 +36,8 @@ type TournamentDetail = {
   start_time: string | null;
   max_teams: number | null;
   entry_fee_per_player: number | null;
+  min_birth_year: number | null;
+  max_birth_year: number | null;
   format: string;
   players_per_team: number;
   substitutions_allowed: number;
@@ -142,6 +144,13 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+function formatAgeRestriction(minBirthYear: number | null, maxBirthYear: number | null) {
+  if (minBirthYear != null && maxBirthYear != null) return `Godište ${minBirthYear}–${maxBirthYear}.`;
+  if (minBirthYear != null) return `Godište ${minBirthYear}. ili kasnije`;
+  if (maxBirthYear != null) return `Godište ${maxBirthYear}. ili ranije`;
+  return 'Bez ograničenja';
+}
+
 export default function TournamentDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -198,7 +207,7 @@ export default function TournamentDetail() {
       const { data: tournamentRow } = await supabase
         .from('tournaments')
         .select(
-          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, description, start_date, start_time, max_teams, entry_fee_per_player, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, sport_id, status, roster_locked, sports(name)'
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, description, start_date, start_time, max_teams, entry_fee_per_player, min_birth_year, max_birth_year, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, sport_id, status, roster_locked, sports(name)'
         )
         .eq('id', id)
         .single();
@@ -776,6 +785,8 @@ export default function TournamentDetail() {
   const isBasketball = !!sportName && BASKETBALL_SPORT_NAMES.includes(sportName);
   const periodLabel = 'Trajanje pauze';
   const startLabel = tournament?.start_date ? formatDate(tournament.start_date) : null;
+  const ageRestrictionLabel = tournament ? formatAgeRestriction(tournament.min_birth_year, tournament.max_birth_year) : '—';
+  const squadLabel = tournament ? `${tournament.players_per_team}+${tournament.substitutions_allowed}` : '—';
   const topScorerTeam = topScorer ? teams.find((t) => t.id === topScorer.teamId) ?? null : null;
   const topAssisterTeam = topAssister ? teams.find((t) => t.id === topAssister.teamId) ?? null : null;
   const topKeeperTeam = topKeeper ? teams.find((t) => t.id === topKeeper.teamId) ?? null : null;
@@ -982,22 +993,22 @@ export default function TournamentDetail() {
             {activeTab === 'pocetna' && (
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
               {/* Desktop */}
-              <div className="hidden lg:grid lg:grid-cols-5 gap-6 mb-10">
-                <StatBlock label="Grad" value={tournament.city || '—'} />
-                <StatBlock label="Lokacija" value={tournament.location || '—'} className="col-span-2" />
-                <StatBlock label="Termin" value={startLabel || '—'} className="col-span-2" />
+              <div className="hidden lg:grid lg:grid-cols-10 gap-6 mb-10">
+                <StatBlock label="Grad" value={tournament.city || '—'} className="col-span-2" />
+                <StatBlock label="Lokacija" value={tournament.location || '—'} className="col-span-4" />
+                <StatBlock label="Termin" value={startLabel || '—'} className="col-span-4" />
 
-                <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} />
+                <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} className="col-span-2" />
                 <StatBlock
                   label="Timova"
                   value={tournament.max_teams ? `${teams.length} / ${tournament.max_teams}` : String(teams.length)}
+                  className="col-span-2"
                 />
-                <StatBlock label="Format" value={FORMAT_LABELS[tournament.format] ?? tournament.format} className="col-span-2" />
-                <StatBlock label="Broj igrača" value={String(tournament.players_per_team)} />
+                <StatBlock label="Broj igrača" value={squadLabel} className="col-span-2" />
+                <StatBlock label="Format" value={FORMAT_LABELS[tournament.format] ?? tournament.format} className="col-span-4" />
 
-                <StatBlock label="Dozvoljene izmene" value={String(tournament.substitutions_allowed)} />
-                <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} />
-                <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
+                <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} className="col-span-2" />
+                <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} className="col-span-2" />
                 <StatBlock
                   label="Kotizacija"
                   value={
@@ -1005,11 +1016,12 @@ export default function TournamentDetail() {
                       ? `${tournament.entry_fee_per_player.toLocaleString('sr-Latn-RS')} RSD po igraču`
                       : 'Bez kotizacije'
                   }
-                  className="col-span-2"
+                  className="col-span-3"
                 />
+                <StatBlock label="Starosno ograničenje" value={ageRestrictionLabel} className="col-span-3" />
               </div>
 
-              {/* Telefoni/tableti: Format i trajanje pauze razmenjuju mesto sa brojem timova */}
+              {/* Telefoni/tableti */}
               <div className="grid grid-cols-2 lg:hidden gap-3 mb-10">
                 <StatBlock label="Grad" value={tournament.city || '—'} />
                 <StatBlock label="Lokacija" value={tournament.location || '—'} />
@@ -1020,15 +1032,13 @@ export default function TournamentDetail() {
                   value={FORMAT_LABELS[tournament.format] ?? tournament.format}
                   className="col-span-2 text-center"
                 />
-                <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
-                <StatBlock label="Broj igrača" value={String(tournament.players_per_team)} />
-                <StatBlock label="Dozvoljene izmene" value={String(tournament.substitutions_allowed)} />
-                <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} />
+                <StatBlock label="Broj igrača" value={squadLabel} />
                 <StatBlock
                   label="Timova"
                   value={tournament.max_teams ? `${teams.length} / ${tournament.max_teams}` : String(teams.length)}
-                  className="col-span-2 text-center"
                 />
+                <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} />
+                <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
                 <StatBlock
                   label="Kotizacija"
                   value={
@@ -1038,6 +1048,7 @@ export default function TournamentDetail() {
                   }
                   className="col-span-2 text-center"
                 />
+                <StatBlock label="Starosno ograničenje" value={ageRestrictionLabel} className="col-span-2 text-center" />
               </div>
 
               {isFinished &&

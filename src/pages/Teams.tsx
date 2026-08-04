@@ -238,7 +238,7 @@ export default function Teams() {
           <div className="relative max-w-6xl mx-auto px-6 pt-16 sm:pt-20 pb-8 sm:pb-10 w-full">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
               <div className="rise-1">
-                <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Pridruži se timu ili napravi svoj</span>
+                <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Pridruži se ili napravi svoj tim</span>
                 <h1 className="font-display text-4xl sm:text-5xl mt-4 leading-tight">Pregled timova</h1>
               </div>
               <Link

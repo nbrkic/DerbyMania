@@ -57,24 +57,28 @@ type TicketFieldProps = {
   autoComplete?: string;
   required?: boolean;
   minLength?: number;
+  min?: number;
+  max?: number;
   dateDefaultViewYear?: number;
+  dateMin?: string;
   dateMax?: string;
   error?: string;
   prefix?: string;
   disabled?: boolean;
 };
 
-export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength, dateDefaultViewYear, dateMax, error, prefix, disabled }: TicketFieldProps) {
+export function TicketField({ n, label, id, type, value, onChange, autoComplete, required, minLength, min, max, dateDefaultViewYear, dateMin, dateMax, error, prefix, disabled }: TicketFieldProps) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
 
   return (
     <div>
-      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
-        <span className="text-red-400 font-bold">{n}</span> {label}
+      <label htmlFor={id} className="flex items-baseline text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        {n && <span className="text-red-400 font-bold mr-2">{n}</span>}
+        {label}
       </label>
       {type === 'date' ? (
-        <DatePicker id={id} value={value} onChange={onChange} defaultViewYear={dateDefaultViewYear} max={dateMax} disabled={disabled} />
+        <DatePicker id={id} value={value} onChange={onChange} defaultViewYear={dateDefaultViewYear} min={dateMin} max={dateMax} disabled={disabled} />
       ) : isPassword ? (
         <div className="relative">
           <input
@@ -106,6 +110,8 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
             required={required}
             autoComplete={autoComplete}
             minLength={minLength}
+            min={min}
+            max={max}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
@@ -207,8 +213,9 @@ export function UsernameField({ n, label, id, value, onChange, currentUsername, 
 
   return (
     <div>
-      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
-        <span className="text-red-400 font-bold">{n}</span> {label}
+      <label htmlFor={id} className="flex items-baseline text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        {n && <span className="text-red-400 font-bold mr-2">{n}</span>}
+        {label}
       </label>
       <div className="relative">
         <span className="absolute left-0 bottom-2.5 text-paper-500 select-none">@</span>
@@ -257,8 +264,9 @@ type TextAreaFieldProps = {
 export function TextAreaField({ n, label, id, value, onChange, required, rows = 4, placeholder, error }: TextAreaFieldProps) {
   return (
     <div>
-      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
-        <span className="text-red-400 font-bold">{n}</span> {label}
+      <label htmlFor={id} className="flex items-baseline text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        {n && <span className="text-red-400 font-bold mr-2">{n}</span>}
+        {label}
       </label>
       <textarea
         id={id}
@@ -280,7 +288,7 @@ type SelectFieldProps = {
   id: string;
   value: string;
   onChange: (value: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
   required?: boolean;
   placeholder?: string;
   error?: string;
@@ -289,8 +297,9 @@ type SelectFieldProps = {
 export function SelectField({ n, label, id, value, onChange, options, placeholder, error }: SelectFieldProps) {
   return (
     <div>
-      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
-        <span className="text-red-400 font-bold">{n}</span> {label}
+      <label htmlFor={id} className="flex items-baseline text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        {n && <span className="text-red-400 font-bold mr-2">{n}</span>}
+        {label}
       </label>
       <Dropdown id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} />
       {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
@@ -313,8 +322,9 @@ type ComboboxFieldProps = {
 export function ComboboxField({ n, label, id, value, onChange, options, placeholder, error, disabled }: ComboboxFieldProps) {
   return (
     <div>
-      <label htmlFor={id} className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-2">
-        <span className="text-red-400 font-bold">{n}</span> {label}
+      <label htmlFor={id} className="flex items-baseline text-[11px] uppercase tracking-widest text-paper-500 mb-2">
+        {n && <span className="text-red-400 font-bold mr-2">{n}</span>}
+        {label}
       </label>
       <Combobox id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} disabled={disabled} />
       {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
@@ -341,8 +351,9 @@ export function MultiSelectPills({ n, label, value, onChange, options }: MultiSe
 
   return (
     <div>
-      <label className="flex items-baseline gap-2 text-[11px] uppercase tracking-widest text-paper-500 mb-3">
-        <span className="text-red-400 font-bold">{n}</span> {label}
+      <label className="flex items-baseline text-[11px] uppercase tracking-widest text-paper-500 mb-3">
+        {n && <span className="text-red-400 font-bold mr-2">{n}</span>}
+        {label}
       </label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => {

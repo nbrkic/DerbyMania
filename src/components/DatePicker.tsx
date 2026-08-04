@@ -24,14 +24,16 @@ type DatePickerProps = {
   value: string;
   onChange: (value: string) => void;
   defaultViewYear?: number;
+  min?: string;
   max?: string;
   disabled?: boolean;
 };
 
-export function DatePicker({ id, value, onChange, defaultViewYear, max, disabled }: DatePickerProps) {
+export function DatePicker({ id, value, onChange, defaultViewYear, min, max, disabled }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const now = new Date();
   const [year, selectedMonth, selectedDay] = value ? value.split('-').map(Number) : [];
+  const [minYear, minMonth, minDay] = min ? min.split('-').map(Number) : [];
   const [maxYear, maxMonth, maxDay] = max ? max.split('-').map(Number) : [];
 
   const [viewYear, setViewYear] = useState(year ?? defaultViewYear ?? now.getFullYear());
@@ -71,6 +73,7 @@ export function DatePicker({ id, value, onChange, defaultViewYear, max, disabled
     if (m < 0) { m = 11; y -= 1; }
     if (m > 11) { m = 0; y += 1; }
     if (maxYear !== undefined && (y > maxYear || (y === maxYear && m + 1 > maxMonth))) return;
+    if (minYear !== undefined && (y < minYear || (y === minYear && m + 1 < minMonth))) return;
     setViewMonth(m);
     setViewYear(y);
   }
@@ -87,8 +90,11 @@ export function DatePicker({ id, value, onChange, defaultViewYear, max, disabled
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
-  const topYear = maxYear ?? now.getFullYear();
-  const years = Array.from({ length: 101 }, (_, i) => topYear - i);
+  const years = maxYear !== undefined
+    ? Array.from({ length: 101 }, (_, i) => maxYear - i)
+    : minYear !== undefined
+      ? Array.from({ length: 101 }, (_, i) => minYear + i)
+      : Array.from({ length: 101 }, (_, i) => now.getFullYear() - i);
 
   const isSelected = (day: number) =>
     year === viewYear && selectedMonth === viewMonth + 1 && selectedDay === day;
@@ -100,10 +106,19 @@ export function DatePicker({ id, value, onChange, defaultViewYear, max, disabled
     if (viewMonth + 1 !== maxMonth) return viewMonth + 1 > maxMonth;
     return day > maxDay;
   };
+  const isBeforeMin = (day: number) => {
+    if (!minYear) return false;
+    if (viewYear !== minYear) return viewYear < minYear;
+    if (viewMonth + 1 !== minMonth) return viewMonth + 1 < minMonth;
+    return day < minDay;
+  };
   const isNextMonthDisabled =
     maxYear !== undefined && viewYear === maxYear && viewMonth + 1 === maxMonth;
+  const isPrevMonthDisabled =
+    minYear !== undefined && viewYear === minYear && viewMonth + 1 === minMonth;
   const isMonthDisabled = (m: number) =>
-    maxYear !== undefined && viewYear === maxYear && m + 1 > maxMonth;
+    (maxYear !== undefined && viewYear === maxYear && m + 1 > maxMonth) ||
+    (minYear !== undefined && viewYear === minYear && m + 1 < minMonth);
 
   return (
     <div ref={containerRef} className="relative">
@@ -129,8 +144,9 @@ export function DatePicker({ id, value, onChange, defaultViewYear, max, disabled
             <button
               type="button"
               onClick={() => changeMonth(-1)}
+              disabled={isPrevMonthDisabled}
               aria-label="Prethodni mesec"
-              className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-paper-100 transition-colors"
+              className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-paper-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-red-400"
             >
               ‹
             </button>
@@ -182,9 +198,9 @@ export function DatePicker({ id, value, onChange, defaultViewYear, max, disabled
                   <button
                     type="button"
                     onClick={() => pickDay(day)}
-                    disabled={isAfterMax(day)}
+                    disabled={isAfterMax(day) || isBeforeMin(day)}
                     className={`w-8 h-8 text-sm transition-colors ${
-                      isAfterMax(day)
+                      isAfterMax(day) || isBeforeMin(day)
                         ? 'text-paper-500/30 cursor-not-allowed'
                         : isSelected(day)
                           ? 'bg-red-500 text-paper-100 font-bold'

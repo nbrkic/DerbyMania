@@ -13,6 +13,29 @@ import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
+const NAME_REGEX = /^[A-Za-z0-9ČĆŽŠĐčćžšđ]+(?: [A-Za-z0-9ČĆŽŠĐčćžšđ]+)*$/;
+const MIN_NAME_LENGTH = 3;
+const MIN_DESCRIPTION_LENGTH = 10;
+const MIN_PLAYERS_PER_TEAM = 1;
+const MAX_PLAYERS_PER_TEAM = 20;
+const MIN_SUBSTITUTIONS = 0;
+const MAX_SUBSTITUTIONS = 20;
+const MIN_MATCH_DURATION = 1;
+const MIN_PERIOD_DURATION = 0;
+const MIN_MAX_TEAMS = 2;
+const MIN_ENTRY_FEE = 1;
+const MIN_AGE_YEARS = 8;
+const MAX_AGE_YEARS = 80;
+const AGE_OPTIONS = Array.from({ length: MAX_AGE_YEARS - MIN_AGE_YEARS + 1 }, (_, i) => {
+  const age = MIN_AGE_YEARS + i;
+  return { value: String(age), label: String(age) };
+});
+
+function tomorrowISO() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const FORMAT_OPTIONS = [
   { value: 'grupe_i_eliminacija', label: 'Grupna faza + eliminacija' },
@@ -39,6 +62,7 @@ const STEP_IDS = [
   'trajanje',
   'termin',
   'kapacitet',
+  'starost',
   'opis',
   'kotizacija',
   'grb',
@@ -49,6 +73,7 @@ type StepId = (typeof STEP_IDS)[number];
 const STEP_LABELS: Record<StepId, string> = {
   sport: 'Sport',
   naziv: 'Naziv turnira',
+  starost: 'Starosno ograničenje',
   format: 'Format turnira',
   lokacija: 'Grad i lokacija',
   sastav: 'Sastav ekipa',
@@ -198,6 +223,10 @@ export default function CreateTournament() {
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [maxTeams, setMaxTeams] = useState('');
+  const [capacityMode, setCapacityMode] = useState<'limited' | 'unlimited'>('unlimited');
+  const [hasAgeRestriction, setHasAgeRestriction] = useState<boolean | null>(null);
+  const [minAge, setMinAge] = useState('');
+  const [maxAge, setMaxAge] = useState('');
   const [description, setDescription] = useState('');
   const [hasEntryFee, setHasEntryFee] = useState<boolean | null>(null);
   const [entryFeePerPlayer, setEntryFeePerPlayer] = useState('');
@@ -210,6 +239,7 @@ export default function CreateTournament() {
   const [submitting, setSubmitting] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(isEditMode);
   const [isFinishedTournament, setIsFinishedTournament] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [createdTournamentId, setCreatedTournamentId] = useState<string | null>(null);
@@ -260,6 +290,7 @@ export default function CreateTournament() {
         setStartDate(data.start_date ?? '');
         setStartTime(data.start_time ? data.start_time.slice(0, 5) : '');
         setMaxTeams(data.max_teams != null ? String(data.max_teams) : '');
+        setCapacityMode(data.max_teams != null ? 'limited' : 'unlimited');
         setHasEntryFee(data.entry_fee_per_player != null ? true : false);
         setEntryFeePerPlayer(data.entry_fee_per_player != null ? String(data.entry_fee_per_player) : '');
         setCrestPreview(data.crest_url);
@@ -286,13 +317,109 @@ export default function CreateTournament() {
 
   function goBack() {
     setError(null);
+    setAttempted(false);
     setStepIndex((i) => Math.max(0, i - 1));
   }
 
   function goNext() {
     setError(null);
+    setAttempted(false);
     setStepIndex((i) => Math.min(STEP_IDS.length - 1, i + 1));
   }
+
+  type StepFieldErrors = {
+    name?: string;
+    city?: string;
+    location?: string;
+    playersPerTeam?: string;
+    substitutionsAllowed?: string;
+    matchDuration?: string;
+    periodDuration?: string;
+    startTime?: string;
+    maxTeams?: string;
+    ageRestrictionChoice?: string;
+    ageRestrictionRange?: string;
+    description?: string;
+    entryFeeChoice?: string;
+    entryFeeAmount?: string;
+  };
+
+  function getStepFieldErrors(): StepFieldErrors {
+    const errors: StepFieldErrors = {};
+
+    if (step === 'naziv') {
+      const trimmed = name.trim();
+      if (!trimmed) errors.name = 'Unesi naziv turnira.';
+      else if (!NAME_REGEX.test(trimmed)) errors.name = 'Naziv turnira može sadržati samo slova, brojeve i razmak.';
+      else if (trimmed.length < MIN_NAME_LENGTH) errors.name = `Naziv turnira mora imati najmanje ${MIN_NAME_LENGTH} karaktera.`;
+    }
+
+    if (step === 'lokacija') {
+      const trimmedCity = city.trim();
+      if (!trimmedCity) {
+        errors.city = 'Unesi grad turnira.';
+      } else {
+        const matchedCity = cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(trimmedCity));
+        if (!matchedCity) errors.city = 'Izaberi grad iz ponuđene liste.';
+      }
+      if (!location.trim()) errors.location = 'Unesi lokaciju turnira.';
+    }
+
+    if (step === 'sastav') {
+      if (!playersPerTeam.trim()) errors.playersPerTeam = 'Unesi broj igrača na terenu.';
+      else if (Number(playersPerTeam) < MIN_PLAYERS_PER_TEAM || Number(playersPerTeam) > MAX_PLAYERS_PER_TEAM) {
+        errors.playersPerTeam = `Broj igrača mora biti između ${MIN_PLAYERS_PER_TEAM} i ${MAX_PLAYERS_PER_TEAM}.`;
+      }
+      if (!substitutionsAllowed.trim()) errors.substitutionsAllowed = 'Unesi broj dozvoljenih izmena.';
+      else if (Number(substitutionsAllowed) < MIN_SUBSTITUTIONS || Number(substitutionsAllowed) > MAX_SUBSTITUTIONS) {
+        errors.substitutionsAllowed = `Broj izmena mora biti između ${MIN_SUBSTITUTIONS} i ${MAX_SUBSTITUTIONS}.`;
+      }
+    }
+
+    if (step === 'trajanje') {
+      if (!matchDurationMinutes.trim()) errors.matchDuration = 'Unesi trajanje utakmice.';
+      else if (Number(matchDurationMinutes) < MIN_MATCH_DURATION) errors.matchDuration = `Trajanje utakmice mora biti bar ${MIN_MATCH_DURATION} minut.`;
+      if (!periodDurationMinutes.trim()) errors.periodDuration = 'Unesi trajanje pauze.';
+      else if (Number(periodDurationMinutes) < MIN_PERIOD_DURATION) errors.periodDuration = 'Trajanje pauze ne može biti negativno.';
+    }
+
+    if (step === 'termin' && !startTime) {
+      errors.startTime = 'Izaberi tačno vreme početka turnira.';
+    }
+
+    if (step === 'kapacitet' && capacityMode === 'limited') {
+      if (!maxTeams.trim()) errors.maxTeams = 'Unesi broj timova.';
+      else if (Number(maxTeams) < MIN_MAX_TEAMS) errors.maxTeams = `Turnir mora imati bar ${MIN_MAX_TEAMS} tima.`;
+    }
+
+    if (step === 'starost') {
+      if (hasAgeRestriction === null) {
+        errors.ageRestrictionChoice = 'Izaberi da li turnir ima starosno ograničenje.';
+      } else if (hasAgeRestriction) {
+        if (!minAge && !maxAge) {
+          errors.ageRestrictionRange = 'Izaberi bar jednu granicu starosti.';
+        } else if (minAge && maxAge && Number(minAge) > Number(maxAge)) {
+          errors.ageRestrictionRange = 'Minimalna starost mora biti manja ili jednaka maksimalnoj.';
+        }
+      }
+    }
+
+    if (step === 'opis') {
+      const normalizedLength = description.trim().replace(/\s+/g, ' ').length;
+      if (normalizedLength < MIN_DESCRIPTION_LENGTH) errors.description = `Opis mora imati najmanje ${MIN_DESCRIPTION_LENGTH} karaktera.`;
+    }
+
+    if (step === 'kotizacija') {
+      if (hasEntryFee === null) errors.entryFeeChoice = 'Izaberi da li se plaća kotizacija.';
+      else if (hasEntryFee && (!entryFeePerPlayer.trim() || Number(entryFeePerPlayer) < MIN_ENTRY_FEE)) {
+        errors.entryFeeAmount = `Iznos kotizacije mora biti bar ${MIN_ENTRY_FEE} din.`;
+      }
+    }
+
+    return errors;
+  }
+
+  const fieldErrors = attempted ? getStepFieldErrors() : {};
 
   function handleCrestSelect(file: File) {
     if (file.size > MAX_IMAGE_SIZE) {
@@ -445,6 +572,8 @@ export default function CreateTournament() {
         start_time: startTime || null,
         max_teams: maxTeams ? Number(maxTeams) : null,
         entry_fee_per_player: hasEntryFee ? Number(entryFeePerPlayer) : null,
+        min_birth_year: hasAgeRestriction && maxAge ? CURRENT_YEAR - Number(maxAge) : null,
+        max_birth_year: hasAgeRestriction && minAge ? CURRENT_YEAR - Number(minAge) : null,
         crest_url: crestUrl,
         crest_position_x: Math.round(crestPosition.x),
         crest_position_y: Math.round(crestPosition.y),
@@ -463,84 +592,26 @@ export default function CreateTournament() {
 
   function handleStepSubmit(e: FormEvent) {
     e.preventDefault();
+    setError(null);
 
-    if (step === 'naziv') {
-      if (!name.trim()) {
-        setError('Unesi naziv turnira.');
-        return;
-      }
+    if (
+      step === 'naziv' ||
+      step === 'lokacija' ||
+      step === 'sastav' ||
+      step === 'trajanje' ||
+      step === 'termin' ||
+      step === 'kapacitet' ||
+      step === 'starost' ||
+      step === 'opis' ||
+      step === 'kotizacija'
+    ) {
+      setAttempted(true);
+      if (Object.keys(getStepFieldErrors()).length > 0) return;
       goNext();
       return;
     }
 
-    if (step === 'lokacija') {
-      const matchedCity = city.trim() ? cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(city)) : undefined;
-      if (city.trim() && !matchedCity) {
-        setError('Izaberi grad iz ponuđene liste.');
-        return;
-      }
-      goNext();
-      return;
-    }
-
-    if (step === 'sastav') {
-      if (!playersPerTeam || Number(playersPerTeam) < 1) {
-        setError('Unesi broj igrača koji igraju.');
-        return;
-      }
-      if (!substitutionsAllowed || Number(substitutionsAllowed) < 0) {
-        setError('Unesi broj dozvoljenih izmena.');
-        return;
-      }
-      goNext();
-      return;
-    }
-
-    if (step === 'trajanje') {
-      if (!matchDurationMinutes || Number(matchDurationMinutes) < 1) {
-        setError('Unesi trajanje utakmice.');
-        return;
-      }
-      if (!periodDurationMinutes || Number(periodDurationMinutes) < 1) {
-        setError('Unesi trajanje pauze između poluvremena/četvrtina.');
-        return;
-      }
-      goNext();
-      return;
-    }
-
-    if (step === 'termin') {
-      if (!startTime) {
-        setError('Izaberi tačno vreme početka turnira.');
-        return;
-      }
-      goNext();
-      return;
-    }
-
-    if (step === 'kapacitet') {
-      if (maxTeams && Number(maxTeams) < 2) {
-        setError('Maksimalan broj timova mora biti bar 2.');
-        return;
-      }
-      goNext();
-      return;
-    }
-
-    if (step === 'kotizacija') {
-      if (hasEntryFee === null) {
-        setError('Izaberi da li se plaća kotizacija.');
-        return;
-      }
-      if (hasEntryFee && (!entryFeePerPlayer || Number(entryFeePerPlayer) <= 0)) {
-        setError('Unesi iznos kotizacije po igraču.');
-        return;
-      }
-      goNext();
-      return;
-    }
-
-    if (step === 'opis' || step === 'grb' || step === 'baner') {
+    if (step === 'grb' || step === 'baner') {
       goNext();
       return;
     }
@@ -553,6 +624,8 @@ export default function CreateTournament() {
   const selectedSportName = sports.find((s) => String(s.id) === sportId)?.name ?? null;
   const isBasketball = !!selectedSportName && BASKETBALL_SPORT_NAMES.includes(selectedSportName);
   const periodLabel = isBasketball ? 'Trajanje pauze između četvrtina (min)' : 'Trajanje pauze između poluvremena (min)';
+  const minAgeOptions = AGE_OPTIONS.map((o) => ({ ...o, disabled: maxAge !== '' && Number(o.value) > Number(maxAge) }));
+  const maxAgeOptions = AGE_OPTIONS.map((o) => ({ ...o, disabled: minAge !== '' && Number(o.value) < Number(minAge) }));
 
   if (loadingExisting) {
     return (
@@ -825,8 +898,6 @@ export default function CreateTournament() {
     );
   }
 
-  const locationEmpty = !city.trim() && !location.trim();
-
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
       <div className="grain" />
@@ -872,16 +943,16 @@ export default function CreateTournament() {
               </span>
             </div>
 
-            <form key={step} onSubmit={handleStepSubmit} className="rise-1 flex flex-col items-center text-center gap-8">
+            <form key={step} onSubmit={handleStepSubmit} noValidate className="rise-1 flex flex-col items-center text-center gap-8">
               {step === 'sport' && (
                 <>
                   <div>
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                       {STEP_LABELS.sport}
                     </span>
-                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">U kom sportu je turnir?</h1>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Za koji sport praviš turnir?</h1>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
+                  <div className="grid grid-cols-2 gap-3 w-full">
                     {sports.map((s) => (
                       <button
                         key={s.id}
@@ -912,7 +983,7 @@ export default function CreateTournament() {
                     <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Kako se zove turnir?</h1>
                   </div>
                   <div className="w-full max-w-xs text-left">
-                    <TicketField n="" label="" id="name" type="text" required value={name} onChange={setName} />
+                    <TicketField n="" label="" id="name" type="text" value={name} onChange={setName} error={fieldErrors.name} />
                   </div>
                 </>
               )}
@@ -923,7 +994,7 @@ export default function CreateTournament() {
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                       {STEP_LABELS.format}
                     </span>
-                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Koji format igrate?</h1>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">U kom formatu se igra turnir?</h1>
                   </div>
                   <div className="flex flex-col gap-3 w-full">
                     {FORMAT_OPTIONS.map((o) => (
@@ -954,11 +1025,10 @@ export default function CreateTournament() {
                       {STEP_LABELS.lokacija}
                     </span>
                     <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Gde se igra?</h1>
-                    <p className="text-paper-500 mt-3">Opciono — možeš i da preskočiš.</p>
                   </div>
                   <div className="w-full max-w-xs flex flex-col gap-6 text-left">
-                    <ComboboxField n="" label="Grad" id="city" value={city} onChange={setCity} options={cities} />
-                    <TicketField n="" label="Lokacija" id="location" type="text" value={location} onChange={setLocation} />
+                    <ComboboxField n="" label="Grad" id="city" value={city} onChange={setCity} options={cities} error={fieldErrors.city} />
+                    <TicketField n="" label="Lokacija" id="location" type="text" value={location} onChange={setLocation} error={fieldErrors.location} />
                   </div>
                 </>
               )}
@@ -969,7 +1039,7 @@ export default function CreateTournament() {
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                       {STEP_LABELS.sastav}
                     </span>
-                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Koliki je sastav ekipa?</h1>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Koliki je sastav svake ekipe?</h1>
                   </div>
                   <div className="w-full max-w-xs grid grid-cols-2 gap-4 text-left">
                     <TicketField
@@ -977,18 +1047,22 @@ export default function CreateTournament() {
                       label="Igrača na terenu"
                       id="players-per-team"
                       type="number"
-                      required
+                      min={MIN_PLAYERS_PER_TEAM}
+                      max={MAX_PLAYERS_PER_TEAM}
                       value={playersPerTeam}
                       onChange={setPlayersPerTeam}
+                      error={fieldErrors.playersPerTeam}
                     />
                     <TicketField
                       n=""
                       label="Dozvoljene izmene"
                       id="substitutions-allowed"
                       type="number"
-                      required
+                      min={MIN_SUBSTITUTIONS}
+                      max={MAX_SUBSTITUTIONS}
                       value={substitutionsAllowed}
                       onChange={setSubstitutionsAllowed}
+                      error={fieldErrors.substitutionsAllowed}
                     />
                   </div>
                 </>
@@ -1002,24 +1076,26 @@ export default function CreateTournament() {
                     </span>
                     <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Koliko traje utakmica?</h1>
                   </div>
-                  <div className="w-full max-w-xs grid grid-cols-2 gap-4 text-left">
+                  <div className="w-full max-w-xs flex flex-col gap-6 text-left">
                     <TicketField
                       n=""
                       label="Trajanje utakmice (min)"
                       id="match-duration"
                       type="number"
-                      required
+                      min={MIN_MATCH_DURATION}
                       value={matchDurationMinutes}
                       onChange={setMatchDurationMinutes}
+                      error={fieldErrors.matchDuration}
                     />
                     <TicketField
                       n=""
                       label={periodLabel}
                       id="period-duration"
                       type="number"
-                      required
+                      min={MIN_PERIOD_DURATION}
                       value={periodDurationMinutes}
                       onChange={setPeriodDurationMinutes}
+                      error={fieldErrors.periodDuration}
                     />
                   </div>
                 </>
@@ -1042,16 +1118,17 @@ export default function CreateTournament() {
                       value={startDate}
                       onChange={setStartDate}
                       dateDefaultViewYear={CURRENT_YEAR}
+                      dateMin={tomorrowISO()}
                     />
                     <SelectField
                       n=""
                       label="Vreme početka"
                       id="start-time"
-                      required
                       placeholder="Izaberi vreme"
                       value={startTime}
                       onChange={setStartTime}
                       options={START_TIME_OPTIONS}
+                      error={fieldErrors.startTime}
                     />
                   </div>
                 </>
@@ -1063,19 +1140,114 @@ export default function CreateTournament() {
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                       {STEP_LABELS.kapacitet}
                     </span>
-                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Koliko timova prihvatate?</h1>
-                    <p className="text-paper-500 mt-3">Opciono — ostavi prazno za neograničen broj.</p>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Koliko ekipa prima turnir?</h1>
                   </div>
-                  <div className="w-full max-w-xs text-left">
-                    <TicketField
-                      n=""
-                      label="Maks. broj timova"
-                      id="max-teams"
-                      type="number"
-                      value={maxTeams}
-                      onChange={setMaxTeams}
-                    />
+                  <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCapacityMode('limited')}
+                      className={`px-4 py-4 border transition-colors text-sm font-medium ${
+                        capacityMode === 'limited'
+                          ? 'border-red-400 bg-red-500/10 text-paper-100'
+                          : 'border-ink-700 hover:border-red-400/60 hover:bg-ink-800 text-paper-300'
+                      }`}
+                    >
+                      Broj timova
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCapacityMode('unlimited');
+                        setMaxTeams('');
+                      }}
+                      className={`px-4 py-4 border transition-colors text-sm font-medium ${
+                        capacityMode === 'unlimited'
+                          ? 'border-red-400 bg-red-500/10 text-paper-100'
+                          : 'border-ink-700 hover:border-red-400/60 hover:bg-ink-800 text-paper-300'
+                      }`}
+                    >
+                      Neograničeno
+                    </button>
                   </div>
+                  {capacityMode === 'limited' && (
+                    <div className="w-full max-w-xs text-left">
+                      <TicketField
+                        n=""
+                        label="Maks. broj timova"
+                        id="max-teams"
+                        type="number"
+                        min={MIN_MAX_TEAMS}
+                        value={maxTeams}
+                        onChange={setMaxTeams}
+                        error={fieldErrors.maxTeams}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {step === 'starost' && (
+                <>
+                  <div>
+                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
+                      {STEP_LABELS.starost}
+                    </span>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Da li turnir ima starosno ograničenje?</h1>
+                  </div>
+                  <div className="flex flex-col gap-3 w-full max-w-xs">
+                    <button
+                      type="button"
+                      onClick={() => setHasAgeRestriction(true)}
+                      className={`px-4 py-5 border transition-colors text-sm font-medium ${
+                        hasAgeRestriction === true
+                          ? 'border-red-400 bg-red-500/10 text-paper-100'
+                          : 'border-ink-700 hover:border-red-400/60 hover:bg-ink-800 text-paper-300'
+                      }`}
+                    >
+                      Da
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasAgeRestriction(false);
+                        setMinAge('');
+                        setMaxAge('');
+                      }}
+                      className={`px-4 py-5 border transition-colors text-sm font-medium ${
+                        hasAgeRestriction === false
+                          ? 'border-red-400 bg-red-500/10 text-paper-100'
+                          : 'border-ink-700 hover:border-red-400/60 hover:bg-ink-800 text-paper-300'
+                      }`}
+                    >
+                      Ne
+                    </button>
+                    {fieldErrors.ageRestrictionChoice && (
+                      <p className="text-[11px] text-red-400 text-left mt-1">{fieldErrors.ageRestrictionChoice}</p>
+                    )}
+                  </div>
+                  {hasAgeRestriction === true && (
+                    <div className="w-full max-w-xs flex flex-col gap-6 text-left">
+                      <SelectField
+                        n=""
+                        label="Minimalna starost (GOD)"
+                        id="min-age"
+                        value={minAge}
+                        onChange={setMinAge}
+                        options={minAgeOptions}
+                      />
+                      <SelectField
+                        n=""
+                        label="Maksimalna starost (GOD)"
+                        id="max-age"
+                        value={maxAge}
+                        onChange={setMaxAge}
+                        options={maxAgeOptions}
+                      />
+                      {fieldErrors.ageRestrictionRange && (
+                        <p className="text-[11px] text-red-400">{fieldErrors.ageRestrictionRange}</p>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 
@@ -1086,7 +1258,6 @@ export default function CreateTournament() {
                       {STEP_LABELS.opis}
                     </span>
                     <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Par reči o turniru?</h1>
-                    <p className="text-paper-500 mt-3">Opciono — možeš i da preskočiš.</p>
                   </div>
                   <div className="w-full max-w-sm text-left">
                     <TextAreaField
@@ -1095,7 +1266,7 @@ export default function CreateTournament() {
                       id="description"
                       value={description}
                       onChange={setDescription}
-                      placeholder="Par rečenica o turniru…"
+                      error={fieldErrors.description}
                     />
                   </div>
                 </>
@@ -1107,7 +1278,7 @@ export default function CreateTournament() {
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                       {STEP_LABELS.kotizacija}
                     </span>
-                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Da li se plaća kotizacija?</h1>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Da li ekipe plaćaju kotizaciju?</h1>
                   </div>
                   <div className="flex flex-col gap-3 w-full max-w-xs">
                     <button
@@ -1137,6 +1308,9 @@ export default function CreateTournament() {
                     >
                       Ne
                     </button>
+                    {fieldErrors.entryFeeChoice && (
+                      <p className="text-[11px] text-red-400 text-left mt-1">{fieldErrors.entryFeeChoice}</p>
+                    )}
                   </div>
                   {hasEntryFee === true && (
                     <div className="w-full max-w-xs text-left">
@@ -1145,9 +1319,10 @@ export default function CreateTournament() {
                         label="Iznos po igraču (RSD)"
                         id="entry-fee-amount"
                         type="number"
-                        required
+                        min={MIN_ENTRY_FEE}
                         value={entryFeePerPlayer}
                         onChange={setEntryFeePerPlayer}
+                        error={fieldErrors.entryFeeAmount}
                       />
                     </div>
                   )}
@@ -1170,6 +1345,7 @@ export default function CreateTournament() {
                     position={crestPosition}
                     onSelect={handleCrestSelect}
                     onPositionChange={setCrestPosition}
+                    emptyHint="Postavi logo turnira."
                   />
                 </>
               )}
@@ -1190,7 +1366,7 @@ export default function CreateTournament() {
                       shape="banner"
                       previewUrl={bannerPreview}
                       onSelect={handleBannerSelect}
-                      hint="Preporučeno široka slika (npr. 1200×500), maks. 5MB."
+                      hint="Preporučena dimenzija slike (npr. 1200×500), maksimalno 5MB."
                     />
                   </div>
                 </>
@@ -1231,11 +1407,7 @@ export default function CreateTournament() {
                     ? submitting
                       ? 'Kreiranje…'
                       : 'Napravi turnir'
-                    : (step === 'lokacija' && locationEmpty) ||
-                        (step === 'kapacitet' && !maxTeams.trim()) ||
-                        (step === 'opis' && !description.trim()) ||
-                        (step === 'grb' && !crestPreview) ||
-                        (step === 'baner' && !bannerPreview)
+                    : (step === 'grb' && !crestPreview) || (step === 'baner' && !bannerPreview)
                       ? 'Preskoči'
                       : 'Dalje'}
                 </button>

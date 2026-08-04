@@ -72,6 +72,7 @@ export function CrestField({
   position,
   onSelect,
   onPositionChange,
+  emptyHint = 'Postavi grb tima (maksimalno 5MB).',
 }: {
   n: string;
   label: string;
@@ -79,6 +80,7 @@ export function CrestField({
   position: ImagePosition;
   onSelect: (file: File) => void;
   onPositionChange: (position: ImagePosition) => void;
+  emptyHint?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -147,7 +149,7 @@ export function CrestField({
       </div>
 
       <p className="text-xs text-paper-500 mt-2 leading-relaxed max-w-[14rem]">
-        {previewUrl ? 'Prevuci sliku da podesiš poziciju.' : 'JPG, PNG ili WEBP, maks. 5MB.'}
+        {previewUrl ? 'Prevuci sliku da podesiš poziciju.' : emptyHint}
       </p>
       {previewUrl && (
         <button

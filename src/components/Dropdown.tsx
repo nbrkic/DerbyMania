@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-type DropdownOption = { value: string; label: string };
+type DropdownOption = { value: string; label: string; disabled?: boolean };
 
 type DropdownProps = {
   id: string;
@@ -93,9 +93,14 @@ export function Dropdown({ id, value, onChange, options, placeholder, triggerCla
               <button
                 key={o.value}
                 type="button"
-                onClick={() => pick(o.value)}
+                onClick={() => !o.disabled && pick(o.value)}
+                disabled={o.disabled}
                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  o.value === value ? 'bg-red-500 text-paper-100 font-semibold' : 'text-paper-300 hover:bg-red-500/20 hover:text-paper-100'
+                  o.disabled
+                    ? 'text-paper-500/30 cursor-not-allowed'
+                    : o.value === value
+                      ? 'bg-red-500 text-paper-100 font-semibold'
+                      : 'text-paper-300 hover:bg-red-500/20 hover:text-paper-100'
                 }`}
               >
                 {o.label}

@@ -11,6 +11,9 @@ import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
+const TEAM_NAME_REGEX = /^[A-Za-z0-9ČĆŽŠĐčćžšđ]+(?: [A-Za-z0-9ČĆŽŠĐčćžšđ]+)*$/;
+const MIN_TEAM_NAME_LENGTH = 3;
+const MIN_DESCRIPTION_LENGTH = 10;
 
 type Sport = { id: number; name: string };
 type Position = ImagePosition;
@@ -161,6 +164,7 @@ export default function CreateTeam() {
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [createdTeamId, setCreatedTeamId] = useState<string | null>(null);
@@ -198,13 +202,43 @@ export default function CreateTeam() {
 
   function goBack() {
     setError(null);
+    setAttempted(false);
     setStepIndex((i) => Math.max(0, i - 1));
   }
 
   function goNext() {
     setError(null);
+    setAttempted(false);
     setStepIndex((i) => Math.min(STEP_IDS.length - 1, i + 1));
   }
+
+  function getStepFieldError(): string | undefined {
+    if (step === 'naziv') {
+      const trimmed = name.trim();
+      if (!trimmed) return 'Unesi naziv tima.';
+      if (!TEAM_NAME_REGEX.test(trimmed)) return 'Naziv tima može sadržati samo slova, brojeve i razmak.';
+      if (trimmed.length < MIN_TEAM_NAME_LENGTH) return `Naziv tima mora imati najmanje ${MIN_TEAM_NAME_LENGTH} karaktera.`;
+      return undefined;
+    }
+
+    if (step === 'grad') {
+      const trimmed = city.trim();
+      if (!trimmed) return 'Unesi grad tima.';
+      const matchedCity = cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(trimmed));
+      if (!matchedCity) return 'Izaberi grad iz ponuđene liste.';
+      return undefined;
+    }
+
+    if (step === 'opis') {
+      const normalizedLength = description.trim().replace(/\s+/g, ' ').length;
+      if (normalizedLength < MIN_DESCRIPTION_LENGTH) return `Opis mora imati najmanje ${MIN_DESCRIPTION_LENGTH} karaktera.`;
+      return undefined;
+    }
+
+    return undefined;
+  }
+
+  const fieldError = attempted ? getStepFieldError() : undefined;
 
   function handleCrestSelect(file: File) {
     if (file.size > MAX_IMAGE_SIZE) {
@@ -276,27 +310,16 @@ export default function CreateTeam() {
 
   function handleStepSubmit(e: FormEvent) {
     e.preventDefault();
+    setError(null);
 
-    if (step === 'naziv') {
-      if (!name.trim()) {
-        setError('Unesi naziv tima.');
-        return;
-      }
+    if (step === 'naziv' || step === 'grad' || step === 'opis') {
+      setAttempted(true);
+      if (getStepFieldError()) return;
       goNext();
       return;
     }
 
-    if (step === 'grad') {
-      const matchedCity = city.trim() ? cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(city)) : undefined;
-      if (city.trim() && !matchedCity) {
-        setError('Izaberi grad iz ponuđene liste.');
-        return;
-      }
-      goNext();
-      return;
-    }
-
-    if (step === 'opis' || step === 'grb' || step === 'baner') {
+    if (step === 'grb' || step === 'baner') {
       goNext();
       return;
     }
@@ -371,16 +394,16 @@ export default function CreateTeam() {
               </span>
             </div>
 
-            <form key={step} onSubmit={handleStepSubmit} className="rise-1 flex flex-col items-center text-center gap-8">
+            <form key={step} onSubmit={handleStepSubmit} noValidate className="rise-1 flex flex-col items-center text-center gap-8">
               {step === 'sport' && (
                 <>
                   <div>
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                       {STEP_LABELS.sport}
                     </span>
-                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">U kom sportu igra tvoj tim?</h1>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Koji sport će igrati tvoj tim?</h1>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
+                  <div className="grid grid-cols-2 gap-3 w-full">
                     {sports.map((s) => (
                       <button
                         key={s.id}
@@ -408,10 +431,10 @@ export default function CreateTeam() {
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                       {STEP_LABELS.naziv}
                     </span>
-                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Kako se zove tvoj tim?</h1>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Kako će se zvati tvoj tim?</h1>
                   </div>
                   <div className="w-full max-w-xs text-left">
-                    <TicketField n="" label="" id="name" type="text" required value={name} onChange={setName} />
+                    <TicketField n="" label="" id="name" type="text" value={name} onChange={setName} error={fieldError} />
                   </div>
                 </>
               )}
@@ -422,10 +445,10 @@ export default function CreateTeam() {
                     <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                       {STEP_LABELS.grad}
                     </span>
-                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Odakle je tim?</h1>
+                    <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Iz kog grada je tvoj tim?</h1>
                   </div>
                   <div className="w-full max-w-xs text-left">
-                    <ComboboxField n="" label="" id="city" value={city} onChange={setCity} options={cities} />
+                    <ComboboxField n="" label="" id="city" value={city} onChange={setCity} options={cities} error={fieldError} />
                   </div>
                 </>
               )}
@@ -445,7 +468,7 @@ export default function CreateTeam() {
                       id="description"
                       value={description}
                       onChange={setDescription}
-                      placeholder="Par rečenica o tvom timu…"
+                      error={fieldError}
                     />
                   </div>
                 </>
@@ -485,7 +508,7 @@ export default function CreateTeam() {
                       shape="banner"
                       previewUrl={bannerPreview}
                       onSelect={handleBannerSelect}
-                      hint="Preporučeno široka slika (npr. 1200×500), maks. 5MB."
+                      hint="Preporučena dimenzija slike (npr. 1200×500), maksimalno 5MB."
                     />
                   </div>
                 </>
@@ -526,14 +549,9 @@ export default function CreateTeam() {
                     ? submitting
                       ? 'Kreiranje…'
                       : 'Napravi tim'
-                    : step === 'naziv'
-                      ? 'Dalje'
-                      : (step === 'grad' && !city.trim()) ||
-                          (step === 'opis' && !description.trim()) ||
-                          (step === 'grb' && !crestPreview) ||
-                          (step === 'baner' && !bannerPreview)
-                        ? 'Preskoči'
-                        : 'Dalje'}
+                    : (step === 'grb' && !crestPreview) || (step === 'baner' && !bannerPreview)
+                      ? 'Preskoči'
+                      : 'Dalje'}
                 </button>
               )}
             </form>
