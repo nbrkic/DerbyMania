@@ -8,6 +8,7 @@ import { TicketField, ComboboxField, TextAreaField } from '../components/AuthShe
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { normalizeForSearch } from '../lib/text';
 import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { playerCountLabel } from './Teams';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -45,6 +46,7 @@ function TeamPreviewCard({
   crestUrl,
   crestPosition,
   bannerUrl,
+  founderName,
 }: {
   name: string;
   sportName: string | null;
@@ -52,9 +54,10 @@ function TeamPreviewCard({
   crestUrl: string | null;
   crestPosition: Position;
   bannerUrl: string | null;
+  founderName: string | null;
 }) {
   return (
-    <div className="relative z-10 w-full max-w-sm bg-ink-900 border border-ink-700 overflow-hidden">
+    <div className="relative z-10 w-full max-w-sm bg-ink-900 border border-ink-700 overflow-hidden text-left">
       <div className="aspect-[21/9] bg-ink-800">
         {bannerUrl && <img src={bannerUrl} alt="" className="w-full h-full object-cover" />}
       </div>
@@ -76,11 +79,12 @@ function TeamPreviewCard({
         <h3 className="font-display text-xl leading-tight mb-1">{name || 'Naziv tima'}</h3>
         <p className="text-xs uppercase tracking-widest text-red-400 font-semibold mb-3">{sportName || 'Sport'}</p>
 
-        <div className="flex items-center justify-between text-xs text-paper-500 pt-3 border-t border-ink-700">
-          <span>{city || 'Grad'}</span>
-          <span>Osnovan {CURRENT_YEAR}.</span>
+        <div className="grid grid-cols-2 gap-y-1.5 text-xs text-paper-500 pt-3 border-t border-ink-700">
+          <span className="truncate pr-2">{city || 'Grad'}</span>
+          <span className="text-right">Osnovan {CURRENT_YEAR}.</span>
+          <span className="truncate pr-2 text-paper-100">{founderName || '—'}</span>
+          <span className="text-right">{playerCountLabel(0)}</span>
         </div>
-        <p className="text-xs text-paper-700 uppercase tracking-widest mt-2">0 igrača</p>
       </div>
     </div>
   );
@@ -148,7 +152,7 @@ function TeamCreatedCelebration({
 }
 
 export default function CreateTeam() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
 
   const [sports, setSports] = useState<Sport[]>([]);
@@ -508,7 +512,7 @@ export default function CreateTeam() {
                       shape="banner"
                       previewUrl={bannerPreview}
                       onSelect={handleBannerSelect}
-                      hint="Preporučena dimenzija slike (npr. 1200×500), maksimalno 5MB."
+                      hint="JPG / PNG / WEBP - Maksimalno 5MB"
                     />
                   </div>
                 </>
@@ -529,6 +533,7 @@ export default function CreateTeam() {
                     crestUrl={crestPreview}
                     crestPosition={crestPosition}
                     bannerUrl={bannerPreview}
+                    founderName={profile?.full_name ?? null}
                   />
                 </>
               )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
@@ -450,9 +450,7 @@ export default function TournamentDetail() {
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        const owned = data ?? [];
-        setOwnerTeams(owned);
-        if (owned.length) setSelectedOwnerTeamId(owned[0].id);
+        setOwnerTeams(data ?? []);
       });
   }, [user, tournament]);
 
@@ -534,8 +532,9 @@ export default function TournamentDetail() {
       .insert({ tournament_id: tournament.id, team_id: selectedOwnerTeamId });
 
     if (error) {
+      console.error('handleAddOwnTeam insert error', error);
       setAddingOwnTeam(false);
-      setAddOwnTeamError('Dodavanje tima nije uspelo. Pokušaj ponovo.');
+      setAddOwnTeamError(`Dodavanje tima nije uspelo: ${error.message} (${error.code ?? 'bez koda'})`);
       return;
     }
 
@@ -781,6 +780,18 @@ export default function TournamentDetail() {
   const isFinished = tournament?.status === 'finished';
   const isLocked = isFinished || !!tournament?.roster_locked;
   const ownedParticipatingTeams = teams.filter((t) => t.owner_id === user?.id);
+  const availableOwnerTeams = useMemo(
+    () => ownerTeams.filter((t) => !ownedParticipatingTeams.some((pt) => pt.id === t.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ownerTeams, teams, user?.id]
+  );
+
+  useEffect(() => {
+    if (!availableOwnerTeams.length) return;
+    if (availableOwnerTeams.some((t) => t.id === selectedOwnerTeamId)) return;
+    setSelectedOwnerTeamId(availableOwnerTeams[0].id);
+  }, [availableOwnerTeams, selectedOwnerTeamId]);
+
   const sportName = tournament?.sports?.name ?? null;
   const isBasketball = !!sportName && BASKETBALL_SPORT_NAMES.includes(sportName);
   const periodLabel = 'Trajanje pauze';
@@ -878,60 +889,18 @@ export default function TournamentDetail() {
                   </div>
 
                   <div className="mb-1 w-full sm:w-auto flex flex-col items-center sm:items-end gap-3">
-                    <Link
-                      to="/turniri"
-                      className="btn-line px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
-                    >
-                      Nazad na turnire
-                    </Link>
-
                     {user?.id === tournament.owner_id ? (
-                      <div className="w-full sm:w-auto flex flex-col items-center sm:items-end gap-3">
-                        <div className="flex items-center justify-center flex-wrap gap-3">
-                          <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
-                            {isFinished ? 'Turnir je završen' : isLocked ? 'Turnir je zaključan' : 'Ovo je tvoj turnir'}
-                          </span>
-                          {!isLocked && (
-                            <Link
-                              to={`/turniri/${tournament.id}/izmena`}
-                              className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
-                            >
-                              Izmeni turnir
-                            </Link>
-                          )}
-                        </div>
-
-                        {!isLocked && ownedParticipatingTeams.length === 0 && ownerTeams.length > 0 && (
-                          <div className="w-full sm:max-w-sm">
-                            <div className="flex flex-col sm:flex-row items-center gap-3">
-                              {ownerTeams.length > 1 && (
-                                <div className="w-full sm:w-48">
-                                  <Dropdown
-                                    id="owner-team"
-                                    value={selectedOwnerTeamId}
-                                    onChange={setSelectedOwnerTeamId}
-                                    options={ownerTeams.map((t) => ({ value: t.id, label: t.name }))}
-                                    triggerClassName="w-full bg-transparent border border-ink-700 hover:border-paper-100 transition-colors px-5 py-2.5 text-xs uppercase tracking-widest flex items-center justify-between gap-3"
-                                  />
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                onClick={handleAddOwnTeam}
-                                disabled={addingOwnTeam || isFull}
-                                className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
-                              >
-                                {addingOwnTeam
-                                  ? 'Dodavanje…'
-                                  : isFull
-                                    ? 'Turnir je popunjen'
-                                    : ownerTeams.length === 1
-                                      ? `Dodaj svoj tim „${ownerTeams[0].name}“`
-                                      : 'Dodaj svoj tim'}
-                              </button>
-                            </div>
-                            {addOwnTeamError && <p className="text-sm text-red-400 mt-3">{addOwnTeamError}</p>}
-                          </div>
+                      <div className="flex items-center justify-center flex-wrap gap-3">
+                        <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
+                          {isFinished ? 'Turnir je završen' : isLocked ? 'Turnir je zaključan' : 'Ovo je tvoj turnir'}
+                        </span>
+                        {!isLocked && (
+                          <Link
+                            to={`/turniri/${tournament.id}/izmena`}
+                            className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                          >
+                            Izmeni turnir
+                          </Link>
                         )}
                       </div>
                     ) : isLocked ? (
@@ -994,9 +963,9 @@ export default function TournamentDetail() {
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
               {/* Desktop */}
               <div className="hidden lg:grid lg:grid-cols-10 gap-6 mb-10">
-                <StatBlock label="Grad" value={tournament.city || '—'} className="col-span-2" />
+                <StatBlock label="Grad" value={tournament.city || '—'} className="col-span-3" />
                 <StatBlock label="Lokacija" value={tournament.location || '—'} className="col-span-4" />
-                <StatBlock label="Termin" value={startLabel || '—'} className="col-span-4" />
+                <StatBlock label="Datum" value={startLabel || '—'} className="col-span-3" />
 
                 <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} className="col-span-2" />
                 <StatBlock
@@ -1025,7 +994,7 @@ export default function TournamentDetail() {
               <div className="grid grid-cols-2 lg:hidden gap-3 mb-10">
                 <StatBlock label="Grad" value={tournament.city || '—'} />
                 <StatBlock label="Lokacija" value={tournament.location || '—'} />
-                <StatBlock label="Termin" value={startLabel || '—'} />
+                <StatBlock label="Datum" value={startLabel || '—'} />
                 <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} />
                 <StatBlock
                   label="Format"
@@ -1161,6 +1130,41 @@ export default function TournamentDetail() {
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">O turniru</span>
                   <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
                   <p className="text-sm text-paper-200 leading-relaxed whitespace-pre-line">{tournament.description}</p>
+                </div>
+              )}
+
+              {user?.id === tournament.owner_id && !isLocked && availableOwnerTeams.length > 0 && (
+                <div className="mb-10">
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Prijavi svoj tim</span>
+                  <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    {availableOwnerTeams.length > 1 && (
+                      <div className="w-full sm:w-64">
+                        <Dropdown
+                          id="owner-team"
+                          value={selectedOwnerTeamId}
+                          onChange={setSelectedOwnerTeamId}
+                          options={availableOwnerTeams.map((t) => ({ value: t.id, label: t.name }))}
+                          triggerClassName="w-full bg-transparent border border-ink-700 hover:border-paper-100 transition-colors px-5 py-2.5 text-xs uppercase tracking-widest flex items-center justify-between gap-3"
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAddOwnTeam}
+                      disabled={addingOwnTeam || isFull}
+                      className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
+                    >
+                      {addingOwnTeam
+                        ? 'Dodavanje…'
+                        : isFull
+                          ? 'Turnir je popunjen'
+                          : availableOwnerTeams.length === 1
+                            ? `Dodaj svoj tim „${availableOwnerTeams[0].name}“`
+                            : 'Dodaj svoj tim'}
+                    </button>
+                  </div>
+                  {addOwnTeamError && <p className="text-sm text-red-400 mt-3">{addOwnTeamError}</p>}
                 </div>
               )}
 

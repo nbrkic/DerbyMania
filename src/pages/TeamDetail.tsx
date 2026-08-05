@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
@@ -60,7 +60,7 @@ function StatBlock({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-5 py-4">
       <p className="text-[11px] uppercase tracking-widest text-paper-500 mb-1">{label}</p>
-      <p className="font-display text-xl leading-tight">{value}</p>
+      <p className="font-display text-xl leading-tight truncate" title={value}>{value}</p>
     </div>
   );
 }
@@ -116,6 +116,102 @@ function TeamTournamentRow({ tournament, index }: { tournament: TeamTournamentEn
   );
 }
 
+function MemberActionsMenu({
+  isCaptain,
+  isOwnerRow,
+  toggling,
+  kicking,
+  onToggleCaptain,
+  onKick,
+}: {
+  isCaptain: boolean;
+  isOwnerRow: boolean;
+  toggling: boolean;
+  kicking: boolean;
+  onToggleCaptain: () => void;
+  onKick: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(e: MouseEvent) {
+      if (containerRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  const busy = toggling || kicking;
+  const captainActionDisabled = isCaptain && isOwnerRow;
+  const captainActionLabel = !isCaptain
+    ? 'Postavi za kapitena'
+    : isOwnerRow
+      ? 'Već si kapiten'
+      : 'Preuzmi kapitensku traku';
+
+  return (
+    <div ref={containerRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={busy}
+        title="Opcije igrača"
+        className="w-11 h-full flex items-center justify-center border border-ink-700 text-paper-500 hover:text-paper-100 hover:border-red-400/50 hover:bg-ink-700 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 w-52 bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] py-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (captainActionDisabled) return;
+              setOpen(false);
+              onToggleCaptain();
+            }}
+            disabled={captainActionDisabled}
+            className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+              captainActionDisabled
+                ? 'text-paper-500/40 cursor-not-allowed'
+                : 'text-paper-300 hover:bg-red-500/20 hover:text-paper-100'
+            }`}
+          >
+            {captainActionLabel}
+          </button>
+          {!isOwnerRow && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onKick();
+              }}
+              className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+            >
+              Izbaci iz tima
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TeamDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -129,6 +225,7 @@ export default function TeamDetail() {
   const [members, setMembers] = useState<Player[]>([]);
   const [togglingCaptainId, setTogglingCaptainId] = useState<string | null>(null);
   const [captainError, setCaptainError] = useState<string | null>(null);
+  const [kickingMemberId, setKickingMemberId] = useState<string | null>(null);
   const [isMember, setIsMember] = useState(false);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -420,6 +517,31 @@ export default function TeamDetail() {
     setTeam((prev) => (prev ? { ...prev, captain_id: nextCaptainId } : prev));
   }
 
+  async function handleKickMember(memberId: string) {
+    if (!team || user?.id !== team.owner_id) return;
+
+    setKickingMemberId(memberId);
+    setCaptainError(null);
+
+    const { error } = await supabase.from('team_members').delete().eq('team_id', team.id).eq('user_id', memberId);
+
+    setKickingMemberId(null);
+
+    if (error) {
+      setCaptainError('Izbacivanje igrača nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    setMembers((prev) => prev.filter((m) => m.id !== memberId));
+    setPlayerCount((count) => Math.max(0, count - 1));
+
+    const currentCaptainId = team.captain_id ?? team.owner_id;
+    if (currentCaptainId === memberId) {
+      await supabase.from('teams').update({ captain_id: null }).eq('id', team.id);
+      setTeam((prev) => (prev ? { ...prev, captain_id: null } : prev));
+    }
+  }
+
   async function handleLeaveTeam() {
     if (!user || !team) return;
     setLeaving(true);
@@ -465,8 +587,8 @@ export default function TeamDetail() {
           <>
             <DetailHeroSkeleton />
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
-              <div className="grid sm:grid-cols-3 gap-6 mb-10">
-                {Array.from({ length: 3 }, (_, i) => (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                {Array.from({ length: 4 }, (_, i) => (
                   <StatBlockSkeleton key={i} />
                 ))}
               </div>
@@ -515,13 +637,6 @@ export default function TeamDetail() {
                   </div>
 
                   <div className="mb-1 flex flex-col items-end gap-3">
-                    <Link
-                      to="/timovi"
-                      className="btn-line px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
-                    >
-                      Nazad na timove
-                    </Link>
-
                     {user?.id === team.owner_id ? (
                       <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
                         Ovo je tvoj tim
@@ -550,22 +665,12 @@ export default function TeamDetail() {
             </section>
 
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
-              <div className="grid sm:grid-cols-3 gap-6 mb-10">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                 <StatBlock label="Grad" value={team.city || '—'} />
-                <StatBlock label="Godina osnivanja" value={team.founded_year ? String(team.founded_year) : '—'} />
                 <StatBlock label="Igrača" value={String(playerCount)} />
+                <StatBlock label="Osnivač" value={founderName || '—'} />
+                <StatBlock label="Godina osnivanja" value={team.founded_year ? String(team.founded_year) : '—'} />
               </div>
-
-              {founderName && (
-                <p className="text-sm text-paper-500 mb-10">
-                  Osnivač: <span className="text-paper-100">{founderName}</span>
-                  {(team.captain_id ?? team.owner_id) === team.owner_id && (
-                    <span className="ml-2 text-[11px] uppercase tracking-widest text-yellow-400 font-semibold">
-                      · Kapiten
-                    </span>
-                  )}
-                </p>
-              )}
 
               {fromTournamentId && (
                 <Link
@@ -578,7 +683,7 @@ export default function TeamDetail() {
 
               {team.description && (
                 <div className="mb-10">
-                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">O timu</span>
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Par reči o timu</span>
                   <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
                   <p className="text-sm text-paper-200 leading-relaxed whitespace-pre-line">{team.description}</p>
                 </div>
@@ -595,38 +700,21 @@ export default function TeamDetail() {
                       {members.map((member, index) => {
                         const captainId = team.captain_id ?? team.owner_id;
                         const isCaptain = member.id === captainId;
+                        const isOwnerViewing = user?.id === team.owner_id;
                         return (
                           <div key={member.id} className="flex items-stretch gap-2">
                             <div className="min-w-0 flex-1">
-                              <PlayerCard player={member} index={index} isCaptain={isCaptain} />
+                              <PlayerCard player={member} index={index} isCaptain={isCaptain} hideTeamCount />
                             </div>
-                            {user?.id === team.owner_id && (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleCaptain(member.id)}
-                                disabled={togglingCaptainId === member.id}
-                                title={isCaptain ? 'Ukloni kapitena' : 'Postavi za kapitena'}
-                                className={`shrink-0 w-24 flex flex-col items-center justify-center gap-1.5 border transition-colors duration-200 disabled:opacity-50 disabled:pointer-events-none ${
-                                  isCaptain
-                                    ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 hover:border-yellow-400/70'
-                                    : 'border-ink-700 text-paper-500 hover:text-paper-100 hover:border-red-400/50 hover:bg-ink-700'
-                                }`}
-                              >
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  fill={isCaptain ? 'currentColor' : 'none'}
-                                  stroke="currentColor"
-                                  strokeWidth="1.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="w-4 h-4"
-                                >
-                                  <path d="m12 3 2.6 5.8 6.4.6-4.8 4.3 1.4 6.3L12 16.9l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z" />
-                                </svg>
-                                <span className="text-[10px] font-semibold uppercase tracking-widest whitespace-nowrap">
-                                  {togglingCaptainId === member.id ? '…' : isCaptain ? 'Ukloni' : 'Kapiten'}
-                                </span>
-                              </button>
+                            {isOwnerViewing && (
+                              <MemberActionsMenu
+                                isCaptain={isCaptain}
+                                isOwnerRow={member.id === team.owner_id}
+                                toggling={togglingCaptainId === member.id}
+                                kicking={kickingMemberId === member.id}
+                                onToggleCaptain={() => handleToggleCaptain(member.id)}
+                                onKick={() => handleKickMember(member.id)}
+                              />
                             )}
                           </div>
                         );

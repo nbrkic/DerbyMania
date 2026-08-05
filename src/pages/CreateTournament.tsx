@@ -847,7 +847,7 @@ export default function CreateTournament() {
                       shape="banner"
                       previewUrl={bannerPreview}
                       onSelect={handleBannerSelect}
-                      hint="Preporučeno široka slika (npr. 1200×500), maks. 5MB."
+                      hint="JPG / PNG / WEBP - Maksimalno 5MB"
                     />
 
                     {error && (
@@ -1345,7 +1345,7 @@ export default function CreateTournament() {
                     position={crestPosition}
                     onSelect={handleCrestSelect}
                     onPositionChange={setCrestPosition}
-                    emptyHint="Postavi logo turnira."
+                    emptyHint="JPG / PNG / WEBP - Maksimalno 5MB"
                   />
                 </>
               )}
@@ -1366,7 +1366,7 @@ export default function CreateTournament() {
                       shape="banner"
                       previewUrl={bannerPreview}
                       onSelect={handleBannerSelect}
-                      hint="Preporučena dimenzija slike (npr. 1200×500), maksimalno 5MB."
+                      hint="JPG / PNG / WEBP - Maksimalno 5MB"
                     />
                   </div>
                 </>

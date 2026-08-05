@@ -102,10 +102,12 @@ export function PlayerCard({
   player,
   index,
   isCaptain,
+  hideTeamCount,
 }: {
   player: Player;
   index: number;
   isCaptain?: boolean;
+  hideTeamCount?: boolean;
 }) {
   const displayName = player.full_name || 'Igrač bez imena';
   return (
@@ -139,11 +141,13 @@ export function PlayerCard({
         </p>
       </div>
 
-      <div className="flex flex-col items-end gap-0.5 shrink-0">
-        <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold whitespace-nowrap">
-          {player.teamCount} {teamWord(player.teamCount)}
-        </span>
-      </div>
+      {!hideTeamCount && (
+        <div className="flex flex-col items-end gap-0.5 shrink-0">
+          <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold whitespace-nowrap">
+            {player.teamCount} {teamWord(player.teamCount)}
+          </span>
+        </div>
+      )}
     </Link>
   );
 }
@@ -461,7 +465,7 @@ export default function Players() {
 
                 <div className="grid sm:grid-cols-3 gap-3">
                   {pagedPlayers.map((player, index) => (
-                    <PlayerCard key={player.id} player={player} index={index} />
+                    <PlayerCard key={player.id} player={player} index={index} hideTeamCount />
                   ))}
                 </div>
 
