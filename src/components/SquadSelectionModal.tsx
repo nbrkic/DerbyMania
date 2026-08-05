@@ -79,7 +79,7 @@ export function SquadSelectionModal({
             <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Sastav za turnir</span>
             <h2 className="font-display text-xl leading-tight mt-2">{teamName}</h2>
             <p className="text-xs text-paper-500 mt-1">
-              Tim ima više igrača nego što je dozvoljeno — izaberi tačno{' '}
+              Tim ima više igrača nego što je dozvoljeno. Izaberi tačno{' '}
               <span className="text-paper-100 font-medium">{requiredSize}</span> koji putuju na turnir.
             </p>
           </div>
