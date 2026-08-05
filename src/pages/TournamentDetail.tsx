@@ -12,6 +12,15 @@ import { GroupsTabContent } from '../components/GroupsTabContent';
 import { EliminationTabContent } from '../components/EliminationTabContent';
 import { LeagueTabContent } from '../components/LeagueTabContent';
 import { TournamentGallery } from '../components/TournamentGallery';
+import { SquadSelectionModal } from '../components/SquadSelectionModal';
+import {
+  checkOwnerConflict,
+  loadEligibilityPool,
+  requiredSquadSize,
+  finalizeRoster,
+  releaseRoster,
+  type EligibilityPool,
+} from '../lib/tournamentRoster';
 
 type TabId = 'pocetna' | 'grupna' | 'eliminacija' | 'liga' | 'kup';
 
@@ -166,11 +175,16 @@ export default function TournamentDetail() {
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [selectedPool, setSelectedPool] = useState<EligibilityPool | null>(null);
 
   const [ownerTeams, setOwnerTeams] = useState<OwnedTeam[]>([]);
   const [selectedOwnerTeamId, setSelectedOwnerTeamId] = useState('');
   const [addingOwnTeam, setAddingOwnTeam] = useState(false);
   const [addOwnTeamError, setAddOwnTeamError] = useState<string | null>(null);
+  const [ownerPool, setOwnerPool] = useState<EligibilityPool | null>(null);
+
+  const [squadModal, setSquadModal] = useState<{ mode: 'request' | 'addOwn'; teamId: string; teamName: string; pool: EligibilityPool } | null>(null);
+  const [squadSubmitting, setSquadSubmitting] = useState(false);
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -268,7 +282,7 @@ export default function TournamentDetail() {
   }, [id]);
 
   useEffect(() => {
-    if (!tournament || tournament.status !== 'finished') {
+    if (!tournament) {
       setTopScorer(null);
       setTopAssister(null);
       setTopKeeper(null);
@@ -437,6 +451,20 @@ export default function TournamentDetail() {
   }, [user, tournament]);
 
   useEffect(() => {
+    if (!tournament || !selectedTeamId) {
+      setSelectedPool(null);
+      return;
+    }
+    let cancelled = false;
+    loadEligibilityPool(tournament.id, selectedTeamId, tournament).then((pool) => {
+      if (!cancelled) setSelectedPool(pool);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament, selectedTeamId]);
+
+  useEffect(() => {
     if (!user || !tournament || user.id !== tournament.owner_id) {
       setOwnerTeams([]);
       return;
@@ -453,6 +481,20 @@ export default function TournamentDetail() {
         setOwnerTeams(data ?? []);
       });
   }, [user, tournament]);
+
+  useEffect(() => {
+    if (!tournament || !selectedOwnerTeamId) {
+      setOwnerPool(null);
+      return;
+    }
+    let cancelled = false;
+    loadEligibilityPool(tournament.id, selectedOwnerTeamId, tournament).then((pool) => {
+      if (!cancelled) setOwnerPool(pool);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament, selectedOwnerTeamId]);
 
   useEffect(() => {
     if (!user || !tournament || user.id !== tournament.owner_id) {
@@ -522,17 +564,25 @@ export default function TournamentDetail() {
     setInviteQuery('');
   }
 
-  async function handleAddOwnTeam() {
-    if (!tournament || !selectedOwnerTeamId) return;
-
+  async function finishAddOwnTeam(teamId: string, userIds: string[]) {
+    setSquadSubmitting(true);
     setAddingOwnTeam(true);
     setAddOwnTeamError(null);
-    const { error } = await supabase
-      .from('tournament_teams')
-      .insert({ tournament_id: tournament.id, team_id: selectedOwnerTeamId });
+
+    const { error: rosterError } = await finalizeRoster(tournament!.id, teamId, userIds);
+    if (rosterError) {
+      setSquadSubmitting(false);
+      setAddingOwnTeam(false);
+      setAddOwnTeamError('Dodavanje tima nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    const { error } = await supabase.from('tournament_teams').insert({ tournament_id: tournament!.id, team_id: teamId });
 
     if (error) {
+      await releaseRoster(tournament!.id, teamId);
       console.error('handleAddOwnTeam insert error', error);
+      setSquadSubmitting(false);
       setAddingOwnTeam(false);
       setAddOwnTeamError(`Dodavanje tima nije uspelo: ${error.message} (${error.code ?? 'bez koda'})`);
       return;
@@ -541,20 +591,89 @@ export default function TournamentDetail() {
     const { data: teamRow } = await supabase
       .from('teams')
       .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name), deleted_at')
-      .eq('id', selectedOwnerTeamId)
+      .eq('id', teamId)
       .single();
 
     if (teamRow) {
       const { count } = await supabase
         .from('team_members')
         .select('id', { count: 'exact', head: true })
-        .eq('team_id', selectedOwnerTeamId);
+        .eq('team_id', teamId);
 
       const row = teamRow as unknown as Omit<Team, 'founderName' | 'playerCount'>;
       setTeams((prev) => [...prev, { ...row, founderName: organizerName, playerCount: count ?? 0 }]);
     }
 
+    setSquadSubmitting(false);
     setAddingOwnTeam(false);
+    setSquadModal(null);
+  }
+
+  async function handleAddOwnTeam() {
+    if (!tournament || !selectedOwnerTeamId || !user) return;
+
+    setAddingOwnTeam(true);
+    setAddOwnTeamError(null);
+
+    const conflict = await checkOwnerConflict(tournament.id, user.id, selectedOwnerTeamId);
+    if (conflict.blocked) {
+      setAddingOwnTeam(false);
+      setAddOwnTeamError(`Već imaš prijavljen tim „${conflict.teamName}“ na ovom turniru — kao osnivač možeš prijaviti samo jedan tim.`);
+      return;
+    }
+
+    const pool = await loadEligibilityPool(tournament.id, selectedOwnerTeamId, tournament);
+    const required = requiredSquadSize(tournament);
+    if (pool.eligible.length < required) {
+      setAddingOwnTeam(false);
+      setAddOwnTeamError(`Tim nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${required}, dostupno ${pool.eligible.length}).`);
+      return;
+    }
+
+    setAddingOwnTeam(false);
+
+    if (pool.eligible.length === required) {
+      await finishAddOwnTeam(selectedOwnerTeamId, pool.eligible.map((p) => p.id));
+      return;
+    }
+
+    setSquadModal({
+      mode: 'addOwn',
+      teamId: selectedOwnerTeamId,
+      teamName: ownerTeams.find((t) => t.id === selectedOwnerTeamId)?.name ?? '',
+      pool,
+    });
+  }
+
+  async function finishRequest(teamId: string, userIds: string[]) {
+    setSquadSubmitting(true);
+    setRequesting(true);
+    setRequestError(null);
+
+    const { error: rosterError } = await finalizeRoster(tournament!.id, teamId, userIds);
+    if (rosterError) {
+      setSquadSubmitting(false);
+      setRequesting(false);
+      setRequestError('Slanje prijave nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('tournament_team_requests')
+      .insert({ tournament_id: tournament!.id, team_id: teamId, requested_by: user!.id });
+
+    if (error) {
+      await releaseRoster(tournament!.id, teamId);
+      setSquadSubmitting(false);
+      setRequesting(false);
+      setRequestError('Slanje prijave nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    setTeamStatus((prev) => new Map(prev).set(teamId, 'pending'));
+    setSquadSubmitting(false);
+    setRequesting(false);
+    setSquadModal(null);
   }
 
   async function handleRequest() {
@@ -566,16 +685,35 @@ export default function TournamentDetail() {
 
     setRequesting(true);
     setRequestError(null);
-    const { error } = await supabase
-      .from('tournament_team_requests')
-      .insert({ tournament_id: tournament.id, team_id: selectedTeamId, requested_by: user.id });
-    setRequesting(false);
 
-    if (error) {
-      setRequestError('Slanje prijave nije uspelo. Pokušaj ponovo.');
+    const conflict = await checkOwnerConflict(tournament.id, user.id, selectedTeamId);
+    if (conflict.blocked) {
+      setRequesting(false);
+      setRequestError(`Već imaš prijavljen tim „${conflict.teamName}“ na ovom turniru — kao osnivač možeš prijaviti samo jedan tim.`);
       return;
     }
-    setTeamStatus((prev) => new Map(prev).set(selectedTeamId, 'pending'));
+
+    const pool = await loadEligibilityPool(tournament.id, selectedTeamId, tournament);
+    const required = requiredSquadSize(tournament);
+    if (pool.eligible.length < required) {
+      setRequesting(false);
+      setRequestError(`Tim nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${required}, dostupno ${pool.eligible.length}).`);
+      return;
+    }
+
+    setRequesting(false);
+
+    if (pool.eligible.length === required) {
+      await finishRequest(selectedTeamId, pool.eligible.map((p) => p.id));
+      return;
+    }
+
+    setSquadModal({
+      mode: 'request',
+      teamId: selectedTeamId,
+      teamName: ownedTeams.find((t) => t.id === selectedTeamId)?.name ?? '',
+      pool,
+    });
   }
 
   async function handleWithdraw(teamId: string) {
@@ -593,6 +731,7 @@ export default function TournamentDetail() {
       setWithdrawError('Povlačenje tima nije uspelo. Pokušaj ponovo.');
       return;
     }
+    await releaseRoster(tournament.id, teamId);
     setTeams((prev) => prev.filter((t) => t.id !== teamId));
     setTeamStatus((prev) => new Map(prev).set(teamId, 'none'));
   }
@@ -765,6 +904,10 @@ export default function TournamentDetail() {
     navigate('/turniri');
   }
 
+  const requiredSize = tournament ? requiredSquadSize(tournament) : 0;
+  const notEnoughForSelected = !!selectedPool && selectedPool.eligible.length < requiredSize;
+  const notEnoughForOwner = !!ownerPool && ownerPool.eligible.length < requiredSize;
+
   const currentStatus = teamStatus.get(selectedTeamId) ?? 'none';
   const requestLabel = requesting
     ? 'Slanje…'
@@ -772,9 +915,11 @@ export default function TournamentDetail() {
       ? 'Tim već učestvuje'
       : currentStatus === 'pending'
         ? 'Prijava je već poslata'
-        : ownedTeams.length === 1
-          ? `Prijavi tim „${ownedTeams[0].name}“`
-          : 'Prijavi tim';
+        : notEnoughForSelected
+          ? `Potrebno ${requiredSize} igrača (ima ${selectedPool?.eligible.length ?? 0})`
+          : ownedTeams.length === 1
+            ? `Prijavi tim „${ownedTeams[0].name}“`
+            : 'Prijavi tim';
 
   const isFull = tournament?.max_teams != null && teams.length >= tournament.max_teams;
   const isFinished = tournament?.status === 'finished';
@@ -923,7 +1068,12 @@ export default function TournamentDetail() {
                           <button
                             type="button"
                             onClick={handleRequest}
-                            disabled={requesting || currentStatus !== 'none' || (isFull && currentStatus === 'none')}
+                            disabled={
+                              requesting ||
+                              currentStatus !== 'none' ||
+                              (isFull && currentStatus === 'none') ||
+                              (notEnoughForSelected && currentStatus === 'none')
+                            }
                             className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
                           >
                             {isFull && currentStatus === 'none' ? 'Turnir je popunjen' : requestLabel}
@@ -1020,8 +1170,7 @@ export default function TournamentDetail() {
                 <StatBlock label="Starosno ograničenje" value={ageRestrictionLabel} className="col-span-2 text-center" />
               </div>
 
-              {isFinished &&
-                (topScorer || topAssister || (topKeeper && !isBasketball) || (topRebounder && isBasketball)) && (
+              {(topScorer || topAssister || (topKeeper && !isBasketball) || (topRebounder && isBasketball)) && (
                 <div className="mb-10">
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                     Najbolji igrači turnira
@@ -1152,16 +1301,18 @@ export default function TournamentDetail() {
                     <button
                       type="button"
                       onClick={handleAddOwnTeam}
-                      disabled={addingOwnTeam || isFull}
+                      disabled={addingOwnTeam || isFull || notEnoughForOwner}
                       className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
                     >
                       {addingOwnTeam
                         ? 'Dodavanje…'
                         : isFull
                           ? 'Turnir je popunjen'
-                          : availableOwnerTeams.length === 1
-                            ? `Dodaj svoj tim „${availableOwnerTeams[0].name}“`
-                            : 'Dodaj svoj tim'}
+                          : notEnoughForOwner
+                            ? `Potrebno ${requiredSize} igrača (ima ${ownerPool?.eligible.length ?? 0})`
+                            : availableOwnerTeams.length === 1
+                              ? `Dodaj svoj tim „${availableOwnerTeams[0].name}“`
+                              : 'Dodaj svoj tim'}
                     </button>
                   </div>
                   {addOwnTeamError && <p className="text-sm text-red-400 mt-3">{addOwnTeamError}</p>}
@@ -1370,6 +1521,21 @@ export default function TournamentDetail() {
           </>
         )}
       </main>
+
+      {squadModal && (
+        <SquadSelectionModal
+          teamName={squadModal.teamName}
+          requiredSize={requiredSize}
+          pool={squadModal.pool}
+          submitting={squadSubmitting}
+          onCancel={() => setSquadModal(null)}
+          onConfirm={(userIds) =>
+            squadModal.mode === 'request'
+              ? finishRequest(squadModal.teamId, userIds)
+              : finishAddOwnTeam(squadModal.teamId, userIds)
+          }
+        />
+      )}
 
       <SiteFooter />
     </div>

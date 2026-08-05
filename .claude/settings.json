@@ -17,7 +17,8 @@
       "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -o /tmp/openapi.json -w \"%{http_code}\\\\n\")",
       "Bash(npm run *)",
       "Bash(curl -s \"https://unpkg.com/lucide-static@latest/icons/settings.svg\")",
-      "Bash(curl -sL \"https://unpkg.com/lucide-static@latest/icons/settings.svg\")"
+      "Bash(curl -sL \"https://unpkg.com/lucide-static@latest/icons/settings.svg\")",
+      "Bash(git log *)"
     ]
   }
 }

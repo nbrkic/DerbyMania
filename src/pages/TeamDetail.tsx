@@ -532,6 +532,10 @@ export default function TeamDetail() {
       return;
     }
 
+    // Igrač koji više nije u timu ne sme da ostane "duh" u nečijem prijavljenom
+    // sastavu za turnir — oslobodi mu mesto svuda gde je bio izabran za ovaj tim.
+    await supabase.from('tournament_team_roster').delete().eq('team_id', team.id).eq('user_id', memberId);
+
     setMembers((prev) => prev.filter((m) => m.id !== memberId));
     setPlayerCount((count) => Math.max(0, count - 1));
 
@@ -553,6 +557,7 @@ export default function TeamDetail() {
       setLeaveError('Napuštanje tima nije uspelo. Pokušaj ponovo.');
       return;
     }
+    await supabase.from('tournament_team_roster').delete().eq('team_id', team.id).eq('user_id', user.id);
     setIsMember(false);
     setPlayerCount((count) => Math.max(0, count - 1));
     setMembers((prev) => prev.filter((m) => m.id !== user.id));

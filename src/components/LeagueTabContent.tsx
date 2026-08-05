@@ -982,8 +982,32 @@ export function LeagueTabContent({
     ids.forEach((tid) => fetchedRosterTeamIds.current.add(tid));
 
     async function loadRosters() {
-      const { data: memberRows } = await supabase.from('team_members').select('team_id, user_id').in('team_id', ids);
-      const userIds = [...new Set((memberRows ?? []).map((r) => r.user_id))];
+      // Prijavljeni sastav za ovaj turnir ima prednost; ako tim nema sastav (stara
+      // prijava od pre uvođenja ograničenja sastava), padamo nazad na ceo rošter tima.
+      const { data: rosterRows } = await supabase
+        .from('tournament_team_roster')
+        .select('team_id, user_id')
+        .eq('tournament_id', id)
+        .in('team_id', ids);
+
+      const userIdsByTeam = new Map<string, string[]>();
+      (rosterRows ?? []).forEach((r) => {
+        const list = userIdsByTeam.get(r.team_id) ?? [];
+        list.push(r.user_id);
+        userIdsByTeam.set(r.team_id, list);
+      });
+
+      const fallbackTeamIds = ids.filter((tid) => !userIdsByTeam.has(tid));
+      const { data: memberRows } = fallbackTeamIds.length
+        ? await supabase.from('team_members').select('team_id, user_id').in('team_id', fallbackTeamIds)
+        : { data: [] as { team_id: string; user_id: string }[] };
+      (memberRows ?? []).forEach((r) => {
+        const list = userIdsByTeam.get(r.team_id) ?? [];
+        list.push(r.user_id);
+        userIdsByTeam.set(r.team_id, list);
+      });
+
+      const userIds = [...new Set([...userIdsByTeam.values()].flat())];
       const { data: profiles } = userIds.length
         ? await supabase.from('public_profiles').select('id, full_name').in('id', userIds)
         : { data: [] as { id: string; full_name: string | null }[] };
@@ -992,12 +1016,8 @@ export function LeagueTabContent({
       setRosters((prev) => {
         const next = new Map(prev);
         ids.forEach((tid) => {
-          if (!next.has(tid)) next.set(tid, []);
-        });
-        (memberRows ?? []).forEach((r) => {
-          const list = next.get(r.team_id) ?? [];
-          list.push({ id: r.user_id, full_name: nameById.get(r.user_id) ?? null });
-          next.set(r.team_id, list);
+          const teamUserIds = userIdsByTeam.get(tid) ?? [];
+          next.set(tid, teamUserIds.map((uid) => ({ id: uid, full_name: nameById.get(uid) ?? null })));
         });
         return next;
       });
