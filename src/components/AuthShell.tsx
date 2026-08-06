@@ -127,7 +127,7 @@ export function TicketField({ n, label, id, type, value, onChange, autoComplete,
 export const USERNAME_REGEX = /^[A-Za-z0-9]{3,}$/;
 
 export function sanitizeUsernameInput(raw: string): string {
-  return raw.replace(/[^A-Za-z0-9]/g, '');
+  return raw.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
 }
 
 export type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';

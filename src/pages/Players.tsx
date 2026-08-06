@@ -112,7 +112,7 @@ export function PlayerCard({
   const displayName = player.full_name || 'Igrač bez imena';
   return (
     <Link
-      to={`/${player.username ?? player.id}`}
+      to={`/@${player.username ?? player.id}`}
       className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
     >
       <div className="relative shrink-0">
@@ -189,7 +189,7 @@ function TopScorersStrip({
           return (
             <Link
               key={player.id}
-              to={`/${player.username ?? player.id}`}
+              to={`/@${player.username ?? player.id}`}
               className={`group flex items-center gap-3 bg-ink-800 ${borderClasses} pl-4 pr-5 py-2.5 transition-colors duration-200 hover:bg-ink-700 hover:border-red-400/70`}
             >
               <span className={`font-display text-lg w-5 text-center shrink-0 transition-colors duration-200 ${rankText} group-hover:text-red-400`}>{rank}</span>

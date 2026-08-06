@@ -186,6 +186,12 @@ export default function TournamentDetail() {
   const [squadModal, setSquadModal] = useState<{ mode: 'request' | 'addOwn'; teamId: string; teamName: string; pool: EligibilityPool } | null>(null);
   const [squadSubmitting, setSquadSubmitting] = useState(false);
 
+  const [rosterPools, setRosterPools] = useState<Map<string, EligibilityPool>>(new Map());
+  const [rosterSelections, setRosterSelections] = useState<Map<string, string[]>>(new Map());
+  const [rosterEditModal, setRosterEditModal] = useState<{ teamId: string; teamName: string; pool: EligibilityPool; initialSelected: string[] } | null>(null);
+  const [rosterEditSubmitting, setRosterEditSubmitting] = useState(false);
+  const [rosterEditError, setRosterEditError] = useState<string | null>(null);
+
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -507,6 +513,8 @@ export default function TournamentDetail() {
       return;
     }
 
+    let cancelled = false;
+
     async function loadInviteData() {
       const { data: teamRows } = await supabase
         .from('teams')
@@ -514,7 +522,16 @@ export default function TournamentDetail() {
         .eq('sport_id', tournament!.sport_id)
         .is('deleted_at', null)
         .order('name', { ascending: true });
-      setInviteTeams((teamRows as InviteTeamOption[]) ?? []);
+
+      // Ne prikazuj timove koji uopšte ne mogu da igraju na ovom turniru: nemaju
+      // dovoljno igrača, dovoljno igrača koji ispunjavaju starosno ograničenje, ili im
+      // deo igrača već igra za drugi tim na istom turniru (isti sastav kao pri prijavi).
+      const participatingIds = new Set(teams.map((t) => t.id));
+      const candidates = ((teamRows as InviteTeamOption[]) ?? []).filter((t) => !participatingIds.has(t.id));
+      const required = requiredSquadSize(tournament!);
+      const pools = await Promise.all(candidates.map((t) => loadEligibilityPool(tournament!.id, t.id, tournament!)));
+      if (cancelled) return;
+      setInviteTeams(candidates.filter((_, i) => pools[i].eligible.length >= required));
 
       const { data: pendingInvites } = await supabase
         .from('tournament_team_requests')
@@ -522,11 +539,15 @@ export default function TournamentDetail() {
         .eq('tournament_id', tournament!.id)
         .eq('type', 'invite')
         .eq('status', 'pending');
+      if (cancelled) return;
       setInvitedTeamIds(new Set((pendingInvites ?? []).map((r) => r.team_id)));
     }
 
     loadInviteData();
-  }, [user, tournament]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, tournament, teams]);
 
   useEffect(() => {
     if (!inviteOpen) return;
@@ -924,7 +945,20 @@ export default function TournamentDetail() {
   const isFull = tournament?.max_teams != null && teams.length >= tournament.max_teams;
   const isFinished = tournament?.status === 'finished';
   const isLocked = isFinished || !!tournament?.roster_locked;
-  const ownedParticipatingTeams = teams.filter((t) => t.owner_id === user?.id);
+  const tournamentStartTimestamp =
+    tournament?.start_date != null
+      ? new Date(`${tournament.start_date}T${tournament.start_time ?? '00:00:00'}`).getTime()
+      : null;
+  const tournamentStarted = tournamentStartTimestamp != null && Date.now() >= tournamentStartTimestamp;
+  // Isti prag koji zatvara "Opasna zona" povlačenje tima (žreb/raspored napravljen ili
+  // turnir završen) mora da zatvori i izmenu sastava — u suprotnom bi se sastav mogao
+  // menjati posle žreba iako je tim već raspoređen na mečeve.
+  const rosterEditClosed = isLocked || tournamentStarted;
+  const rosterEditClosedReason = isFinished ? 'Turnir je završen' : tournament?.roster_locked ? 'Raspored je napravljen' : 'Turnir je počeo';
+  const ownedParticipatingTeams = useMemo(
+    () => teams.filter((t) => t.owner_id === user?.id),
+    [teams, user?.id]
+  );
   const availableOwnerTeams = useMemo(
     () => ownerTeams.filter((t) => !ownedParticipatingTeams.some((pt) => pt.id === t.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -936,6 +970,39 @@ export default function TournamentDetail() {
     if (availableOwnerTeams.some((t) => t.id === selectedOwnerTeamId)) return;
     setSelectedOwnerTeamId(availableOwnerTeams[0].id);
   }, [availableOwnerTeams, selectedOwnerTeamId]);
+
+  useEffect(() => {
+    if (!tournament || !ownedParticipatingTeams.length) {
+      setRosterPools(new Map());
+      setRosterSelections(new Map());
+      return;
+    }
+    let cancelled = false;
+
+    async function loadRosterData() {
+      const teamIds = ownedParticipatingTeams.map((t) => t.id);
+      const [poolEntries, { data: rosterRows }] = await Promise.all([
+        Promise.all(teamIds.map(async (teamId) => [teamId, await loadEligibilityPool(tournament!.id, teamId, tournament!)] as const)),
+        supabase.from('tournament_team_roster').select('team_id, user_id').eq('tournament_id', tournament!.id).in('team_id', teamIds),
+      ]);
+      if (cancelled) return;
+
+      setRosterPools(new Map(poolEntries));
+
+      const selections = new Map<string, string[]>();
+      (rosterRows ?? []).forEach((r) => {
+        const list = selections.get(r.team_id) ?? [];
+        list.push(r.user_id);
+        selections.set(r.team_id, list);
+      });
+      setRosterSelections(selections);
+    }
+
+    loadRosterData();
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament, ownedParticipatingTeams]);
 
   const sportName = tournament?.sports?.name ?? null;
   const isBasketball = !!sportName && BASKETBALL_SPORT_NAMES.includes(sportName);
@@ -1179,7 +1246,7 @@ export default function TournamentDetail() {
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {topScorer && (
                       <Link
-                        to={`/${topScorer.username ?? topScorer.playerId}`}
+                        to={`/@${topScorer.username ?? topScorer.playerId}`}
                         className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                       >
                         <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
@@ -1207,7 +1274,7 @@ export default function TournamentDetail() {
 
                     {topAssister && (
                       <Link
-                        to={`/${topAssister.username ?? topAssister.playerId}`}
+                        to={`/@${topAssister.username ?? topAssister.playerId}`}
                         className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                       >
                         <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
@@ -1229,7 +1296,7 @@ export default function TournamentDetail() {
 
                     {!isBasketball && topKeeper && (
                       <Link
-                        to={`/${topKeeper.username ?? topKeeper.playerId}`}
+                        to={`/@${topKeeper.username ?? topKeeper.playerId}`}
                         className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                       >
                         <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
@@ -1251,7 +1318,7 @@ export default function TournamentDetail() {
 
                     {isBasketball && topRebounder && (
                       <Link
-                        to={`/${topRebounder.username ?? topRebounder.playerId}`}
+                        to={`/@${topRebounder.username ?? topRebounder.playerId}`}
                         className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                       >
                         <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
@@ -1405,6 +1472,65 @@ export default function TournamentDetail() {
                 </div>
               )}
 
+              {ownedParticipatingTeams.length > 0 && (
+                <div className="mt-16 border border-red-500/20 bg-ink-900/60">
+                  <div className="px-6 py-4 border-b border-red-500/20 flex items-center justify-between gap-4 flex-wrap">
+                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Izmena igrača</span>
+                    <span className="text-[11px] text-paper-500">
+                      {rosterEditClosed
+                        ? `${rosterEditClosedReason} — sastav se više ne može menjati.`
+                        : startLabel
+                          ? `Sastav možeš menjati do ${startLabel}${
+                              tournament.start_time ? ` u ${tournament.start_time.slice(0, 5)}` : ''
+                            }.`
+                          : 'Sastav možeš menjati do početka turnira.'}
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-ink-800">
+                    {ownedParticipatingTeams.map((team) => {
+                      const pool = rosterPools.get(team.id);
+                      const selectedIds = rosterSelections.get(team.id) ?? [];
+                      const selectedPlayers = pool ? pool.eligible.filter((p) => selectedIds.includes(p.id)) : [];
+                      const notEnoughEligible = !!pool && pool.eligible.length < requiredSize;
+                      const canSwap = !!pool && pool.eligible.length > requiredSize;
+                      const disabled = !pool || !canSwap || rosterEditClosed;
+                      return (
+                        <div key={team.id} className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-paper-100">{team.name}</p>
+                            <p className="text-xs text-paper-500 mt-1">
+                              {!pool
+                                ? 'Učitavanje sastava…'
+                                : notEnoughEligible
+                                  ? `Tim trenutno nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${requiredSize}, dostupno ${pool.eligible.length}).`
+                                  : `Izabrano ${selectedIds.length} / ${requiredSize} igrača${
+                                      canSwap ? '' : ' — ceo tim je već u sastavu'
+                                    }`}
+                            </p>
+                            {selectedPlayers.length > 0 && (
+                              <p className="text-xs text-paper-500/80 mt-1 truncate">
+                                {selectedPlayers.map((p) => p.full_name || 'Igrač').join(', ')}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              pool && setRosterEditModal({ teamId: team.id, teamName: team.name, pool, initialSelected: selectedIds })
+                            }
+                            disabled={disabled}
+                            className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          >
+                            {rosterEditClosed ? rosterEditClosedReason : 'Izmeni sastav'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {(ownedParticipatingTeams.length > 0 || (user?.id === tournament.owner_id && !isFinished)) && (
                 <div className="mt-16 border border-red-500/20 bg-ink-900/60">
                   <div className="px-6 py-4 border-b border-red-500/20">
@@ -1534,6 +1660,37 @@ export default function TournamentDetail() {
               ? finishRequest(squadModal.teamId, userIds)
               : finishAddOwnTeam(squadModal.teamId, userIds)
           }
+        />
+      )}
+
+      {rosterEditModal && (
+        <SquadSelectionModal
+          teamName={rosterEditModal.teamName}
+          requiredSize={requiredSize}
+          pool={rosterEditModal.pool}
+          initialSelected={rosterEditModal.initialSelected}
+          submitting={rosterEditSubmitting}
+          error={rosterEditError}
+          onCancel={() => {
+            setRosterEditModal(null);
+            setRosterEditError(null);
+          }}
+          onConfirm={async (userIds) => {
+            if (rosterEditClosed) {
+              setRosterEditError(`${rosterEditClosedReason} u međuvremenu — sastav se više ne može menjati.`);
+              return;
+            }
+            setRosterEditSubmitting(true);
+            setRosterEditError(null);
+            const { error } = await finalizeRoster(tournament!.id, rosterEditModal.teamId, userIds);
+            setRosterEditSubmitting(false);
+            if (error) {
+              setRosterEditError('Izmena sastava nije uspela. Pokušaj ponovo.');
+              return;
+            }
+            setRosterSelections((prev) => new Map(prev).set(rosterEditModal.teamId, userIds));
+            setRosterEditModal(null);
+          }}
         />
       )}
 

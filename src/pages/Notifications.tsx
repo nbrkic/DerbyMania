@@ -63,6 +63,7 @@ export default function Notifications() {
   const [squadModal, setSquadModal] = useState<InviteSquadModal | null>(null);
   const [squadSubmitting, setSquadSubmitting] = useState(false);
   const [inviteFlowError, setInviteFlowError] = useState<string | null>(null);
+  const [respondError, setRespondError] = useState<string | null>(null);
 
   async function load() {
     if (!user) return;
@@ -111,13 +112,19 @@ export default function Notifications() {
   }, [user]);
 
   async function respond(notification: NotificationRow, status: 'accepted' | 'rejected') {
+    setRespondError(null);
+
     if (notification.join_request_id) {
       setRespondingId(notification.id);
-      await supabase
+      const { error } = await supabase
         .from('team_join_requests')
         .update({ status, responded_at: new Date().toISOString() })
         .eq('id', notification.join_request_id);
       setRespondingId(null);
+      if (error) {
+        setRespondError('Akcija nije uspela. Pokušaj ponovo.');
+        return;
+      }
       await load();
       return;
     }
@@ -127,10 +134,15 @@ export default function Notifications() {
     if (status === 'rejected') {
       setRespondingId(notification.id);
       const req = notification.tournament_team_requests;
-      await supabase
+      const { error } = await supabase
         .from('tournament_team_requests')
         .update({ status, responded_at: new Date().toISOString() })
         .eq('id', notification.tournament_request_id);
+      if (error) {
+        setRespondingId(null);
+        setRespondError('Akcija nije uspela. Pokušaj ponovo.');
+        return;
+      }
       if (req?.tournament_id && req?.team_id) await releaseRoster(req.tournament_id, req.team_id);
       setRespondingId(null);
       await load();
@@ -145,11 +157,15 @@ export default function Notifications() {
     }
 
     setRespondingId(notification.id);
-    await supabase
+    const { error } = await supabase
       .from('tournament_team_requests')
       .update({ status, responded_at: new Date().toISOString() })
       .eq('id', notification.tournament_request_id);
     setRespondingId(null);
+    if (error) {
+      setRespondError('Akcija nije uspela. Pokušaj ponovo.');
+      return;
+    }
     await load();
   }
 
@@ -232,26 +248,41 @@ export default function Notifications() {
       setInviteFlowError('Prihvatanje poziva nije uspelo. Pokušaj ponovo.');
       return;
     }
-    await supabase
+    const { error } = await supabase
       .from('tournament_team_requests')
       .update({ status: 'accepted', responded_at: new Date().toISOString() })
       .eq('id', notification.tournament_request_id!);
+    if (error) {
+      await releaseRoster(tournamentId, teamId);
+      setSquadSubmitting(false);
+      setInviteFlowError('Prihvatanje poziva nije uspelo. Pokušaj ponovo.');
+      return;
+    }
     setSquadSubmitting(false);
     setSquadModal(null);
     await load();
   }
 
   async function dismiss(id: string) {
+    const removed = notifications.find((n) => n.id === id);
     setNotifications((prev) => prev.filter((n) => n.id !== id));
-    await supabase.from('notifications').delete().eq('id', id);
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error && removed) {
+      setNotifications((prev) => (prev.some((n) => n.id === id) ? prev : [...prev, removed].sort((a, b) => b.created_at.localeCompare(a.created_at))));
+      setRespondError('Uklanjanje obaveštenja nije uspelo. Pokušaj ponovo.');
+    }
   }
 
   async function dismissAll() {
     if (!user) return;
     setDismissingAll(true);
-    await supabase.from('notifications').delete().eq('user_id', user.id);
-    setNotifications([]);
+    const { error } = await supabase.from('notifications').delete().eq('user_id', user.id);
     setDismissingAll(false);
+    if (error) {
+      setRespondError('Brisanje obaveštenja nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    setNotifications([]);
     setConfirmingDismissAll(false);
   }
 
@@ -301,9 +332,9 @@ export default function Notifications() {
               )}
             </div>
 
-            {inviteFlowError && (
+            {(inviteFlowError || respondError) && (
               <div className="bg-red-500/10 border border-red-500/30 px-5 py-3 mb-6">
-                <p className="text-sm text-red-400">{inviteFlowError}</p>
+                <p className="text-sm text-red-400">{inviteFlowError || respondError}</p>
               </div>
             )}
 

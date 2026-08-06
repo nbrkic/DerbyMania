@@ -116,13 +116,17 @@ export default function PlayerDetail() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
+  // Linkovi u aplikaciji vode na /@username radi lepšeg izgleda, ali u bazi
+  // (kolona player_usernames.username) ime je bez "@" — skini ga pre pretrage.
+  const cleanHandle = handle?.startsWith('@') ? handle.slice(1) : handle;
+
   useEffect(() => {
-    if (!handle) return;
+    if (!cleanHandle) return;
 
     async function load() {
-      let id = handle;
-      if (handle && !UUID_REGEX.test(handle)) {
-        const { data: lookup } = await supabase.from('player_usernames').select('id').eq('username', handle).single();
+      let id = cleanHandle!;
+      if (!UUID_REGEX.test(cleanHandle!)) {
+        const { data: lookup } = await supabase.from('player_usernames').select('id').eq('username', cleanHandle).single();
         if (!lookup) {
           setPlayer(null);
           setLoading(false);
@@ -234,7 +238,7 @@ export default function PlayerDetail() {
     }
 
     load();
-  }, [handle]);
+  }, [cleanHandle]);
 
   useEffect(() => {
     if (!user || !player || user.id === player.id) {

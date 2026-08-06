@@ -39,6 +39,8 @@ export function SquadSelectionModal({
   requiredSize,
   pool,
   submitting,
+  initialSelected,
+  error,
   onConfirm,
   onCancel,
 }: {
@@ -46,10 +48,14 @@ export function SquadSelectionModal({
   requiredSize: number;
   pool: EligibilityPool;
   submitting: boolean;
+  initialSelected?: string[];
+  error?: string | null;
   onConfirm: (userIds: string[]) => void;
   onCancel: () => void;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set(pool.eligible.slice(0, requiredSize).map((p) => p.id)));
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(initialSelected ?? pool.eligible.slice(0, requiredSize).map((p) => p.id))
+  );
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -134,6 +140,8 @@ export function SquadSelectionModal({
             </div>
           )}
         </div>
+
+        {error && <p className="px-6 pt-3 text-xs text-red-400">{error}</p>}
 
         <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-ink-700">
           <span className="text-xs uppercase tracking-widest text-paper-500">
