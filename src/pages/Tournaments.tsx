@@ -6,6 +6,7 @@ import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
 import { CardSkeletonGrid } from '../components/Skeleton';
 import { normalizeForSearch } from '../lib/text';
+import { Seo } from '../components/Seo';
 
 type Sport = { id: number; name: string };
 
@@ -235,6 +236,12 @@ export default function Tournaments() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title="Turniri"
+        description="Pregledaj sve aktivne i završene fudbalske i košarkaške turnire na DerbyManiji. Prijavi svoju ekipu i prati raspored, tabelu i rezultate uživo."
+        path="/turniri"
+        keywords={['fudbalski turniri', 'košarkaški turniri', 'lista turnira', 'prijava na turnir', 'raspored turnira']}
+      />
       <div className="grain" />
       <SiteHeader />
 

@@ -7,6 +7,7 @@ import { Dropdown } from '../components/Dropdown';
 import { FOOTBALL_POSITION_OPTIONS, BASKETBALL_POSITION_OPTIONS } from '../lib/positions';
 import { normalizeForSearch } from '../lib/text';
 import { RowSkeletonGrid, RowSkeleton } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
 
 export type Player = {
   id: string;
@@ -332,6 +333,12 @@ export default function Players() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title="Igrači"
+        description="Pretraži profile fudbalera i košarkaša na DerbyManiji. Statistika golova, asistencija i odbrana za svakog igrača na jednom mestu."
+        path="/igraci"
+        keywords={['profili igrača', 'statistika fudbalera', 'statistika košarkaša', 'igrači turnira', 'pretraga igrača']}
+      />
       <div className="grain" />
       <SiteHeader />
 

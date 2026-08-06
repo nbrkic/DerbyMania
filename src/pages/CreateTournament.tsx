@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { TicketField, SelectField, ComboboxField, TextAreaField } from '../components/AuthShell';
+import { Seo } from '../components/Seo';
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { normalizeForSearch } from '../lib/text';
@@ -1063,6 +1064,12 @@ export default function CreateTournament() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title={tournamentId ? 'Izmena turnira' : 'Novi turnir'}
+        description={tournamentId ? 'Izmeni podatke turnira na DerbyManiji.' : 'Napravi novi turnir na DerbyManiji.'}
+        path={tournamentId ? `/turniri/${tournamentId}/izmena` : '/turniri/novi'}
+        noindex
+      />
       <div className="grain" />
       <SiteHeader />
 

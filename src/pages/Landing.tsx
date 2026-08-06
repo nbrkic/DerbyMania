@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
+import { Seo } from '../components/Seo';
+import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '../lib/seo';
 
 /* ─── DATA ──────────────────────────────────────────────────── */
 const FEATURES = [
@@ -66,6 +68,8 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo title={DEFAULT_TITLE} description={DEFAULT_DESCRIPTION} path="/" isHome />
+
       <style>{`
         .feature-card {
           border-top: 1px solid var(--ink-700);

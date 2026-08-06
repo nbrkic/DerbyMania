@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { AuthShell, TicketField, UsernameField, type UsernameStatus } from '../components/AuthShell';
+import { Seo } from '../components/Seo';
 
 const MIN_AGE_YEARS = 8;
 
@@ -115,7 +116,14 @@ export default function Register() {
   }
 
   return (
-    <AuthShell
+    <>
+      <Seo
+        title="Registracija"
+        description="Napravi besplatan DerbyMania nalog i pokreni prvi turnir za manje od pet minuta."
+        path="/register"
+        noindex
+      />
+      <AuthShell
       flip
       headline={
         <>
@@ -170,6 +178,7 @@ export default function Register() {
           {submitting ? 'Kreiranje naloga…' : 'Registruj se'}
         </button>
       </form>
-    </AuthShell>
+      </AuthShell>
+    </>
   );
 }

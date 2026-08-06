@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { TicketField, ComboboxField, TextAreaField } from '../components/AuthShell';
+import { Seo } from '../components/Seo';
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { normalizeForSearch } from '../lib/text';
 import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
@@ -355,6 +356,7 @@ export default function CreateTeam() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo title="Novi tim" description="Napravi novi tim na DerbyManiji." path="/timovi/novi" noindex />
       <div className="grain" />
       <SiteHeader />
 

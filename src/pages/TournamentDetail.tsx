@@ -8,6 +8,8 @@ import { Dropdown } from '../components/Dropdown';
 import { TeamRow, type Team } from './Teams';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
+import { absoluteUrl, truncateDescription } from '../lib/seo';
 import { GroupsTabContent } from '../components/GroupsTabContent';
 import { EliminationTabContent } from '../components/EliminationTabContent';
 import { LeagueTabContent } from '../components/LeagueTabContent';
@@ -1031,8 +1033,45 @@ export default function TournamentDetail() {
     tabs.push({ id: 'kup', label: 'Kup' });
   }
 
+  const tournamentImage = tournament?.banner_url ?? tournament?.crest_url ?? undefined;
+  const tournamentDescription = tournament
+    ? truncateDescription(
+        tournament.description?.trim()
+          ? tournament.description
+          : `Pogledaj turnir ${tournament.name}${tournament.city ? ` u gradu ${tournament.city}` : ''}. Raspored, tabela i rezultati uživo na DerbyManiji.`
+      )
+    : 'Detalji turnira, raspored, tabela i rezultati uživo na DerbyManiji.';
+
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title={tournament ? `Pogledaj turnir ${tournament.name}` : 'Turnir'}
+        description={tournamentDescription}
+        path={`/turniri/${id ?? ''}`}
+        image={tournamentImage}
+        imageAlt={tournament ? `Grb i banner turnira ${tournament.name}` : undefined}
+        noindex={!loading && !tournament}
+        jsonLd={
+          tournament
+            ? {
+                '@context': 'https://schema.org',
+                '@type': 'SportsEvent',
+                name: tournament.name,
+                sport: tournament.sports?.name,
+                description: tournamentDescription,
+                url: absoluteUrl(`/turniri/${tournament.id}`),
+                image: tournamentImage ? absoluteUrl(tournamentImage) : undefined,
+                startDate: tournament.start_date
+                  ? `${tournament.start_date}${tournament.start_time ? `T${tournament.start_time}` : ''}`
+                  : undefined,
+                location: tournament.city
+                  ? { '@type': 'Place', name: tournament.location ?? tournament.city, address: tournament.city }
+                  : undefined,
+                organizer: organizerName ? { '@type': 'Person', name: organizerName } : undefined,
+              }
+            : undefined
+        }
+      />
       <div className="grain" />
       <SiteHeader />
 

@@ -15,6 +15,8 @@ import {
 import { TeamRow, type Team } from './Teams';
 import { TournamentRow, type Tournament } from './Tournaments';
 import { PlayerHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
+import { absoluteUrl, truncateDescription } from '../lib/seo';
 
 type PlayerDetail = {
   id: string;
@@ -321,8 +323,37 @@ export default function PlayerDetail() {
           ? `Pozovi u tim „${ownedTeams[0].name}“`
           : 'Pozovi u tim';
 
+  const playerName = player?.full_name?.trim() || (handle ? handle.replace(/^@/, '') : 'Igrač');
+  const playerDescription = player
+    ? truncateDescription(
+        `Pogledaj profil igrača ${playerName}${player.city ? ` iz grada ${player.city}` : ''}. Statistika golova, asistencija i nastupa na DerbyManiji.`
+      )
+    : 'Profil igrača, statistika i istorija nastupa na DerbyManiji.';
+
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title={player ? `Pogledaj igrača ${playerName}` : 'Igrač'}
+        description={playerDescription}
+        path={`/${handle ?? ''}`}
+        image={player?.avatar_url ?? undefined}
+        imageAlt={player ? `Profilna fotografija igrača ${playerName}` : undefined}
+        type="profile"
+        noindex={!loading && !player}
+        jsonLd={
+          player
+            ? {
+                '@context': 'https://schema.org',
+                '@type': 'Person',
+                name: playerName,
+                description: playerDescription,
+                url: absoluteUrl(`/${handle ?? ''}`),
+                image: player.avatar_url ? absoluteUrl(player.avatar_url) : undefined,
+                homeLocation: player.city ? { '@type': 'Place', name: player.city } : undefined,
+              }
+            : undefined
+        }
+      />
       <div className="grain" />
       <SiteHeader />
 

@@ -6,6 +6,7 @@ import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
 import { CardSkeletonGrid } from '../components/Skeleton';
 import { normalizeForSearch } from '../lib/text';
+import { Seo } from '../components/Seo';
 
 type Sport = { id: number; name: string };
 
@@ -220,6 +221,12 @@ export default function Teams() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title="Timovi"
+        description="Pronađi fudbalske i košarkaške ekipe na DerbyManiji. Pogledaj grb, sastav i istoriju svakog tima i prijavi svoju ekipu na sledeći turnir."
+        path="/timovi"
+        keywords={['fudbalske ekipe', 'košarkaški timovi', 'lista timova', 'sastav ekipe', 'pridruži se timu']}
+      />
       <div className="grain" />
       <SiteHeader />
 

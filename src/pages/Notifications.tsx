@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { TextCardSkeletonList } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
 import { SquadSelectionModal } from '../components/SquadSelectionModal';
 import {
   checkOwnerConflict,
@@ -288,6 +289,7 @@ export default function Notifications() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo title="Obaveštenja" description="Tvoja obaveštenja na DerbyManiji." path="/obavestenja" noindex />
       <div className="grain" />
       <SiteHeader />
 

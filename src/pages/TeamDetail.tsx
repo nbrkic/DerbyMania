@@ -6,6 +6,8 @@ import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { PlayerCard, type Player } from './Players';
 import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
+import { absoluteUrl, truncateDescription } from '../lib/seo';
 
 type TeamDetail = {
   id: string;
@@ -582,8 +584,39 @@ export default function TeamDetail() {
     navigate('/timovi');
   }
 
+  const teamImage = team?.banner_url ?? team?.crest_url ?? undefined;
+  const teamDescription = team
+    ? truncateDescription(
+        team.description?.trim()
+          ? team.description
+          : `Pogledaj tim ${team.name}${team.city ? ` iz grada ${team.city}` : ''}. Sastav, istorija i turniri na DerbyManiji.`
+      )
+    : 'Grb, sastav i istorija tima na DerbyManiji.';
+
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title={team ? `Pogledaj tim ${team.name}` : 'Tim'}
+        description={teamDescription}
+        path={`/timovi/${id ?? ''}`}
+        image={teamImage}
+        imageAlt={team ? `Grb i banner tima ${team.name}` : undefined}
+        noindex={!loading && !team}
+        jsonLd={
+          team
+            ? {
+                '@context': 'https://schema.org',
+                '@type': 'SportsTeam',
+                name: team.name,
+                sport: team.sports?.name,
+                description: teamDescription,
+                url: absoluteUrl(`/timovi/${team.id}`),
+                image: teamImage ? absoluteUrl(teamImage) : undefined,
+                location: team.city ? { '@type': 'Place', name: team.city } : undefined,
+              }
+            : undefined
+        }
+      />
       <div className="grain" />
       <SiteHeader />
 
