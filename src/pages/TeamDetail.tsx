@@ -8,6 +8,7 @@ import { PlayerCard, type Player } from './Players';
 import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
 import { Seo } from '../components/Seo';
 import { absoluteUrl, truncateDescription } from '../lib/seo';
+import { ShareInviteButton } from '../components/ShareInviteButton';
 
 type TeamDetail = {
   id: string;
@@ -676,9 +677,16 @@ export default function TeamDetail() {
 
                   <div className="mb-1 flex flex-col items-end gap-3">
                     {user?.id === team.owner_id ? (
-                      <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
-                        Ovo je tvoj tim
-                      </span>
+                      <div className="flex items-center flex-wrap justify-end gap-3">
+                        <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
+                          Ovo je tvoj tim
+                        </span>
+                        <ShareInviteButton
+                          url={`${window.location.origin}/timovi/${team.id}?invite=1`}
+                          title={`Pridruži se timu ${team.name}`}
+                          text={`Pridruži se timu ${team.name} u DerbyManiji!`}
+                        />
+                      </div>
                     ) : isMember ? (
                       <span className="text-xs uppercase tracking-widest text-paper-500 border border-ink-700 px-4 py-2.5 inline-block">
                         Već si član tima

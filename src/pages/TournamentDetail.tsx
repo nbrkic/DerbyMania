@@ -10,6 +10,7 @@ import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
 import { Seo } from '../components/Seo';
 import { absoluteUrl, truncateDescription } from '../lib/seo';
+import { ShareInviteButton } from '../components/ShareInviteButton';
 import { GroupsTabContent } from '../components/GroupsTabContent';
 import { EliminationTabContent } from '../components/EliminationTabContent';
 import { LeagueTabContent } from '../components/LeagueTabContent';
@@ -140,6 +141,7 @@ type InviteTeamOption = {
   crest_url: string | null;
   crest_position_x: number;
   crest_position_y: number;
+  eligibleCount: number;
 };
 
 function StatBlock({ label, value, className = '' }: { label: string; value: string; className?: string }) {
@@ -200,6 +202,9 @@ export default function TournamentDetail() {
 
   const [withdrawingTeamId, setWithdrawingTeamId] = useState<string | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [confirmingKickTeamId, setConfirmingKickTeamId] = useState<string | null>(null);
+  const [kickingTeamId, setKickingTeamId] = useState<string | null>(null);
+  const [kickError, setKickError] = useState<string | null>(null);
   const [groupsFormed, setGroupsFormed] = useState(false);
 
   const [topScorer, setTopScorer] = useState<TopScorer | null>(null);
@@ -525,15 +530,14 @@ export default function TournamentDetail() {
         .is('deleted_at', null)
         .order('name', { ascending: true });
 
-      // Ne prikazuj timove koji uopšte ne mogu da igraju na ovom turniru: nemaju
-      // dovoljno igrača, dovoljno igrača koji ispunjavaju starosno ograničenje, ili im
-      // deo igrača već igra za drugi tim na istom turniru (isti sastav kao pri prijavi).
+      // Prikaži sve timove koji još ne učestvuju na turniru; timovi koji trenutno nemaju
+      // dovoljno igrača koji ispunjavaju uslove turnira ostaju vidljivi u pretrazi, ali se
+      // ne mogu pozvati dok ne prošire sastav (videti eligibleCount niže).
       const participatingIds = new Set(teams.map((t) => t.id));
       const candidates = ((teamRows as InviteTeamOption[]) ?? []).filter((t) => !participatingIds.has(t.id));
-      const required = requiredSquadSize(tournament!);
       const pools = await Promise.all(candidates.map((t) => loadEligibilityPool(tournament!.id, t.id, tournament!)));
       if (cancelled) return;
-      setInviteTeams(candidates.filter((_, i) => pools[i].eligible.length >= required));
+      setInviteTeams(candidates.map((t, i) => ({ ...t, eligibleCount: pools[i].eligible.length })));
 
       const { data: pendingInvites } = await supabase
         .from('tournament_team_requests')
@@ -759,6 +763,27 @@ export default function TournamentDetail() {
     setTeamStatus((prev) => new Map(prev).set(teamId, 'none'));
   }
 
+  async function handleKickTeam(teamId: string) {
+    if (!tournament) return;
+    setKickingTeamId(teamId);
+    setKickError(null);
+    const { error } = await supabase
+      .from('tournament_teams')
+      .delete()
+      .eq('tournament_id', tournament.id)
+      .eq('team_id', teamId);
+    setKickingTeamId(null);
+
+    if (error) {
+      setKickError('Izbacivanje tima nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    await releaseRoster(tournament.id, teamId);
+    setTeams((prev) => prev.filter((t) => t.id !== teamId));
+    setTeamStatus((prev) => new Map(prev).set(teamId, 'none'));
+    setConfirmingKickTeamId(null);
+  }
+
   async function handleDeleteTournament() {
     if (!tournament) return;
     setDeleting(true);
@@ -961,6 +986,10 @@ export default function TournamentDetail() {
     () => teams.filter((t) => t.owner_id === user?.id),
     [teams, user?.id]
   );
+  const otherParticipatingTeams = useMemo(
+    () => (tournament && user?.id === tournament.owner_id ? teams.filter((t) => t.owner_id !== user?.id) : []),
+    [teams, user?.id, tournament]
+  );
   const availableOwnerTeams = useMemo(
     () => ownerTeams.filter((t) => !ownedParticipatingTeams.some((pt) => pt.id === t.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1153,6 +1182,11 @@ export default function TournamentDetail() {
                             Izmeni turnir
                           </Link>
                         )}
+                        <ShareInviteButton
+                          url={`${window.location.origin}/turniri/${tournament.id}?invite=1`}
+                          title={`Pridruži se turniru ${tournament.name}`}
+                          text={`Pridruži se turniru ${tournament.name} u DerbyManiji!`}
+                        />
                       </div>
                     ) : isLocked ? (
                       <span className="text-xs uppercase tracking-widest text-paper-500 border border-ink-700 px-4 py-2.5 inline-block">
@@ -1469,6 +1503,7 @@ export default function TournamentDetail() {
                       <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] max-h-72 overflow-y-auto">
                         {inviteMatches.map((t) => {
                           const alreadyInvited = invitedTeamIds.has(t.id);
+                          const notEnoughPlayers = t.eligibleCount < requiredSize;
                           return (
                             <div
                               key={t.id}
@@ -1486,11 +1521,19 @@ export default function TournamentDetail() {
                                   <span className="font-display text-xs text-paper-500">{t.name[0]?.toUpperCase()}</span>
                                 )}
                               </div>
-                              <span className="flex-1 min-w-0 truncate text-sm text-paper-100">{t.name}</span>
+                              <div className="flex-1 min-w-0">
+                                <span className="block truncate text-sm text-paper-100">{t.name}</span>
+                                {notEnoughPlayers && (
+                                  <span className="block text-[10px] text-paper-500">
+                                    Nedovoljno igrača ({t.eligibleCount}/{requiredSize})
+                                  </span>
+                                )}
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => handleInviteTeam(t.id)}
-                                disabled={alreadyInvited || invitingTeamId === t.id}
+                                disabled={alreadyInvited || notEnoughPlayers || invitingTeamId === t.id}
+                                title={notEnoughPlayers ? `Tim nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${requiredSize}, dostupno ${t.eligibleCount}).` : undefined}
                                 className="shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                               >
                                 {invitingTeamId === t.id ? 'Slanje…' : alreadyInvited ? 'Poziv poslat' : 'Pozovi'}
@@ -1601,6 +1644,54 @@ export default function TournamentDetail() {
                           >
                             {withdrawingTeamId === team.id ? 'Povlačenje…' : 'Povuci tim'}
                           </button>
+                        )}
+                      </div>
+                    ))}
+
+                    {otherParticipatingTeams.map((team) => (
+                      <div key={team.id} className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-paper-100">Izbaci tim „{team.name}“</p>
+                          <p className="text-xs text-paper-500 mt-1">
+                            {groupsFormed
+                              ? 'Grupe su već formirane – tim više ne može da se izbaci sa turnira.'
+                              : tournament.roster_locked
+                                ? 'Tabela je već formirana – tim više ne može da se izbaci sa turnira.'
+                                : 'Tim više neće učestvovati na ovom turniru.'}
+                          </p>
+                          {kickError && confirmingKickTeamId === team.id && (
+                            <p className="text-xs text-red-400 mt-2">{kickError}</p>
+                          )}
+                        </div>
+                        {!groupsFormed && !tournament.roster_locked && (
+                          confirmingKickTeamId === team.id ? (
+                            <div className="flex items-center gap-3 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleKickTeam(team.id)}
+                                disabled={kickingTeamId === team.id}
+                                className="px-4 py-2 text-xs uppercase tracking-widest text-paper-100 bg-red-500 hover:bg-red-400 transition-colors"
+                              >
+                                {kickingTeamId === team.id ? 'Izbacivanje…' : 'Potvrdi'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmingKickTeamId(null)}
+                                disabled={kickingTeamId === team.id}
+                                className="text-xs uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors"
+                              >
+                                Otkaži
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmingKickTeamId(team.id)}
+                              className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors"
+                            >
+                              Izbaci tim
+                            </button>
+                          )
                         )}
                       </div>
                     ))}

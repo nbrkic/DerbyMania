@@ -84,31 +84,33 @@ async function supabaseGet(path: string): Promise<SupabaseRow[]> {
   return (await res.json()) as SupabaseRow[];
 }
 
-async function tournamentResponse(id: string, url: string): Promise<Response | undefined> {
+async function tournamentResponse(id: string, url: string, invite: boolean): Promise<Response | undefined> {
   const rows = await supabaseGet(
     `tournaments?id=eq.${encodeURIComponent(id)}&select=name,description,city,banner_url,crest_url`
   );
   const t = rows[0] as { name?: string; description?: string; city?: string; banner_url?: string; crest_url?: string } | undefined;
   if (!t?.name) return undefined;
 
-  const title = `Pogledaj turnir ${t.name} | ${SITE_NAME}`;
-  const description =
-    t.description?.trim() ||
-    `Pogledaj turnir ${t.name}${t.city ? ` u gradu ${t.city}` : ''}. Raspored, tabela i rezultati uživo na DerbyManiji.`;
+  const title = invite ? `Pridruži se turniru ${t.name} u DerbyManiji` : `Pogledaj turnir ${t.name} | ${SITE_NAME}`;
+  const description = invite
+    ? `Prijavi svoj tim na turnir ${t.name}${t.city ? ` u gradu ${t.city}` : ''} i zaigraj na DerbyManiji.`
+    : t.description?.trim() ||
+      `Pogledaj turnir ${t.name}${t.city ? ` u gradu ${t.city}` : ''}. Raspored, tabela i rezultati uživo na DerbyManiji.`;
   const image = t.banner_url || t.crest_url || DEFAULT_OG_IMAGE;
 
   return renderHtml({ title, description, url, image });
 }
 
-async function teamResponse(id: string, url: string): Promise<Response | undefined> {
+async function teamResponse(id: string, url: string, invite: boolean): Promise<Response | undefined> {
   const rows = await supabaseGet(`teams?id=eq.${encodeURIComponent(id)}&deleted_at=is.null&select=name,description,city,banner_url,crest_url`);
   const t = rows[0] as { name?: string; description?: string; city?: string; banner_url?: string; crest_url?: string } | undefined;
   if (!t?.name) return undefined;
 
-  const title = `Pogledaj tim ${t.name} | ${SITE_NAME}`;
-  const description =
-    t.description?.trim() ||
-    `Pogledaj tim ${t.name}${t.city ? ` iz grada ${t.city}` : ''}. Sastav, istorija i turniri na DerbyManiji.`;
+  const title = invite ? `Pridruži se timu ${t.name} u DerbyManiji` : `Pogledaj tim ${t.name} | ${SITE_NAME}`;
+  const description = invite
+    ? `${t.name} te poziva da im se pridružiš na DerbyManiji${t.city ? ` (${t.city})` : ''}. Klikni i pridruži se timu.`
+    : t.description?.trim() ||
+      `Pogledaj tim ${t.name}${t.city ? ` iz grada ${t.city}` : ''}. Sastav, istorija i turniri na DerbyManiji.`;
   const image = t.banner_url || t.crest_url || DEFAULT_OG_IMAGE;
 
   return renderHtml({ title, description, url, image });
@@ -146,13 +148,14 @@ export default async function middleware(request: Request): Promise<Response | u
   const url = new URL(request.url);
   const segments = url.pathname.split('/').filter(Boolean);
   const canonicalUrl = `${SITE_URL}${url.pathname}`;
+  const invite = url.searchParams.get('invite') === '1';
 
   try {
     if (segments[0] === 'turniri' && segments[1] && segments.length === 2) {
-      return (await tournamentResponse(segments[1], canonicalUrl)) ?? next();
+      return (await tournamentResponse(segments[1], canonicalUrl, invite)) ?? next();
     }
     if (segments[0] === 'timovi' && segments[1] && segments.length === 2) {
-      return (await teamResponse(segments[1], canonicalUrl)) ?? next();
+      return (await teamResponse(segments[1], canonicalUrl, invite)) ?? next();
     }
     if (segments.length === 1 && !STATIC_TOP_LEVEL.has(segments[0])) {
       return (await playerResponse(segments[0], canonicalUrl)) ?? next();
