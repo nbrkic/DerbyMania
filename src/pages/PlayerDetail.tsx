@@ -15,6 +15,8 @@ import {
 import { TeamRow, type Team } from './Teams';
 import { TournamentRow, type Tournament } from './Tournaments';
 import { PlayerHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
+import { absoluteUrl, truncateDescription } from '../lib/seo';
 
 type PlayerDetail = {
   id: string;
@@ -117,13 +119,17 @@ export default function PlayerDetail() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
+  // Linkovi u aplikaciji vode na /@username radi lepšeg izgleda, ali u bazi
+  // (kolona player_usernames.username) ime je bez "@" — skini ga pre pretrage.
+  const cleanHandle = handle?.startsWith('@') ? handle.slice(1) : handle;
+
   useEffect(() => {
-    if (!handle) return;
+    if (!cleanHandle) return;
 
     async function load() {
-      let id = handle;
-      if (handle && !UUID_REGEX.test(handle)) {
-        const { data: lookup } = await supabase.from('player_usernames').select('id').eq('username', handle).single();
+      let id = cleanHandle!;
+      if (!UUID_REGEX.test(cleanHandle!)) {
+        const { data: lookup } = await supabase.from('player_usernames').select('id').eq('username', cleanHandle).single();
         if (!lookup) {
           setPlayer(null);
           setLoading(false);
@@ -235,7 +241,7 @@ export default function PlayerDetail() {
     }
 
     load();
-  }, [handle]);
+  }, [cleanHandle]);
 
   useEffect(() => {
     if (!user || !player || user.id === player.id) {
@@ -318,8 +324,37 @@ export default function PlayerDetail() {
           ? `Pozovi u tim „${ownedTeams[0].name}“`
           : 'Pozovi u tim';
 
+  const playerName = player?.full_name?.trim() || (handle ? handle.replace(/^@/, '') : 'Igrač');
+  const playerDescription = player
+    ? truncateDescription(
+        `Pogledaj profil igrača ${playerName}${player.city ? ` iz grada ${player.city}` : ''}. Statistika golova, asistencija i nastupa na DerbyManiji.`
+      )
+    : 'Profil igrača, statistika i istorija nastupa na DerbyManiji.';
+
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title={player ? `Pogledaj igrača ${playerName}` : 'Igrač'}
+        description={playerDescription}
+        path={`/${handle ?? ''}`}
+        image={player?.avatar_url ?? undefined}
+        imageAlt={player ? `Profilna fotografija igrača ${playerName}` : undefined}
+        type="profile"
+        noindex={!loading && !player}
+        jsonLd={
+          player
+            ? {
+                '@context': 'https://schema.org',
+                '@type': 'Person',
+                name: playerName,
+                description: playerDescription,
+                url: absoluteUrl(`/${handle ?? ''}`),
+                image: player.avatar_url ? absoluteUrl(player.avatar_url) : undefined,
+                homeLocation: player.city ? { '@type': 'Place', name: player.city } : undefined,
+              }
+            : undefined
+        }
+      />
       <div className="grain" />
       <SiteHeader />
 

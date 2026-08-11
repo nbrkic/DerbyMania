@@ -15,7 +15,20 @@
       "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/sports?select=id,name&limit=3\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
       "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")",
       "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -H \"Authorization: Bearer sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\" -o /tmp/openapi.json -w \"%{http_code}\\\\n\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(curl -s \"https://unpkg.com/lucide-static@latest/icons/settings.svg\")",
+      "Bash(curl -sL \"https://unpkg.com/lucide-static@latest/icons/settings.svg\")",
+      "Bash(git log *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/react-router-dom/package.json'\\).version\\)\")",
+      "Bash(xargs grep -l \"compilePath\")",
+      "Bash(pkill -f \"vite --port 5173\")",
+      "Bash(node -e \"console.log\\(process.version\\)\")",
+      "Bash(npm ls *)",
+      "Bash(npm ping *)",
+      "Bash(python3 -c ' *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('sharp'\\); console.log\\('sharp ok'\\)\")"
     ]
   }
 }

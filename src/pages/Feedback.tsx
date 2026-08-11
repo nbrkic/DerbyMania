@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { TicketField, SelectField, TextAreaField } from '../components/AuthShell';
+import { Seo } from '../components/Seo';
 
 const CATEGORY_OPTIONS = [
   { value: 'komentar', label: 'Komentar' },
@@ -109,6 +110,12 @@ export default function Feedback() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title="Kontakt i povratne informacije"
+        description="Imaš predlog ili si naišao na problem? Pošalji nam povratnu informaciju i pomozi nam da DerbyManiju učinimo još boljom."
+        path="/feedback"
+        keywords={['kontakt DerbyMania', 'podrška', 'povratne informacije', 'prijava problema']}
+      />
       <div className="grain" />
       <SiteHeader />
 

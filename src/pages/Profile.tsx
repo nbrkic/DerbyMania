@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
+import { Seo } from '../components/Seo';
 import { SiteFooter } from '../components/SiteFooter';
 import { TicketField, SelectField, ComboboxField, MultiSelectPills, UsernameField, USERNAME_REGEX, type UsernameStatus } from '../components/AuthShell';
 import { normalizeForSearch } from '../lib/text';
@@ -522,6 +523,7 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo title="Tvoj profil" description="Podešavanja profila na DerbyManiji." path="/profile" noindex />
       <div className="grain" />
       <SiteHeader />
 

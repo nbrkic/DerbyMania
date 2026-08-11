@@ -4,6 +4,16 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { TextCardSkeletonList } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
+import { SquadSelectionModal } from '../components/SquadSelectionModal';
+import {
+  checkOwnerConflict,
+  loadEligibilityPool,
+  requiredSquadSize,
+  finalizeRoster,
+  releaseRoster,
+  type EligibilityPool,
+} from '../lib/tournamentRoster';
 
 type NotificationRow = {
   id: string;
@@ -15,7 +25,16 @@ type NotificationRow = {
   join_request_id: string | null;
   team_join_requests: { status: string } | null;
   tournament_request_id: string | null;
-  tournament_team_requests: { status: string } | null;
+  tournament_team_requests: { status: string; team_id: string; tournament_id: string } | null;
+};
+
+type InviteSquadModal = {
+  notification: NotificationRow;
+  teamName: string;
+  tournamentId: string;
+  teamId: string;
+  pool: EligibilityPool;
+  requiredSize: number;
 };
 
 function formatDate(iso: string) {
@@ -42,6 +61,10 @@ export default function Notifications() {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [confirmingDismissAll, setConfirmingDismissAll] = useState(false);
   const [dismissingAll, setDismissingAll] = useState(false);
+  const [squadModal, setSquadModal] = useState<InviteSquadModal | null>(null);
+  const [squadSubmitting, setSquadSubmitting] = useState(false);
+  const [inviteFlowError, setInviteFlowError] = useState<string | null>(null);
+  const [respondError, setRespondError] = useState<string | null>(null);
 
   async function load() {
     if (!user) return;
@@ -49,7 +72,7 @@ export default function Notifications() {
     const { data } = await supabase
       .from('notifications')
       .select(
-        'id, type, title, body, read, created_at, join_request_id, team_join_requests(status), tournament_request_id, tournament_team_requests(status)'
+        'id, type, title, body, read, created_at, join_request_id, team_join_requests(status), tournament_request_id, tournament_team_requests(status, team_id, tournament_id)'
       )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
@@ -90,41 +113,183 @@ export default function Notifications() {
   }, [user]);
 
   async function respond(notification: NotificationRow, status: 'accepted' | 'rejected') {
+    setRespondError(null);
+
     if (notification.join_request_id) {
       setRespondingId(notification.id);
-      await supabase
+      const { error } = await supabase
         .from('team_join_requests')
         .update({ status, responded_at: new Date().toISOString() })
         .eq('id', notification.join_request_id);
       setRespondingId(null);
+      if (error) {
+        setRespondError('Akcija nije uspela. Pokušaj ponovo.');
+        return;
+      }
       await load();
-    } else if (notification.tournament_request_id) {
+      return;
+    }
+
+    if (!notification.tournament_request_id) return;
+
+    if (status === 'rejected') {
       setRespondingId(notification.id);
-      await supabase
+      const req = notification.tournament_team_requests;
+      const { error } = await supabase
         .from('tournament_team_requests')
         .update({ status, responded_at: new Date().toISOString() })
         .eq('id', notification.tournament_request_id);
+      if (error) {
+        setRespondingId(null);
+        setRespondError('Akcija nije uspela. Pokušaj ponovo.');
+        return;
+      }
+      if (req?.tournament_id && req?.team_id) await releaseRoster(req.tournament_id, req.team_id);
       setRespondingId(null);
       await load();
+      return;
     }
+
+    // Prihvatanje poziva turnira (tournament_invite) je prvi trenutak kada se tim
+    // zvanično izjašnjava da igra — tu se proverava sastav, baš kao pri slanju zahteva.
+    if (notification.type === 'tournament_invite') {
+      await openInviteSquadFlow(notification);
+      return;
+    }
+
+    setRespondingId(notification.id);
+    const { error } = await supabase
+      .from('tournament_team_requests')
+      .update({ status, responded_at: new Date().toISOString() })
+      .eq('id', notification.tournament_request_id);
+    setRespondingId(null);
+    if (error) {
+      setRespondError('Akcija nije uspela. Pokušaj ponovo.');
+      return;
+    }
+    await load();
+  }
+
+  async function openInviteSquadFlow(notification: NotificationRow) {
+    const req = notification.tournament_team_requests;
+    if (!req?.team_id || !req?.tournament_id) return;
+
+    setRespondingId(notification.id);
+    setInviteFlowError(null);
+
+    const { data: tournamentRow } = await supabase
+      .from('tournaments')
+      .select('id, players_per_team, substitutions_allowed, min_birth_year, max_birth_year, max_teams, status, roster_locked')
+      .eq('id', req.tournament_id)
+      .single();
+
+    if (!tournamentRow) {
+      setRespondingId(null);
+      setInviteFlowError('Turnir više ne postoji.');
+      return;
+    }
+    if (tournamentRow.status === 'finished' || tournamentRow.roster_locked) {
+      setRespondingId(null);
+      setInviteFlowError('Prijave za ovaj turnir su u međuvremenu zatvorene.');
+      return;
+    }
+
+    const { count } = await supabase
+      .from('tournament_teams')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', req.tournament_id);
+    if (tournamentRow.max_teams != null && (count ?? 0) >= tournamentRow.max_teams) {
+      setRespondingId(null);
+      setInviteFlowError('Turnir je u međuvremenu popunjen.');
+      return;
+    }
+
+    const { data: teamRow } = await supabase.from('teams').select('id, name, owner_id').eq('id', req.team_id).single();
+    if (!teamRow) {
+      setRespondingId(null);
+      return;
+    }
+
+    const conflict = await checkOwnerConflict(req.tournament_id, teamRow.owner_id, req.team_id);
+    if (conflict.blocked) {
+      setRespondingId(null);
+      setInviteFlowError(`Osnivač već ima prijavljen tim „${conflict.teamName}“ na ovom turniru — može da prijavi samo jedan tim.`);
+      return;
+    }
+
+    const pool = await loadEligibilityPool(req.tournament_id, req.team_id, tournamentRow);
+    const required = requiredSquadSize(tournamentRow);
+    setRespondingId(null);
+
+    if (pool.eligible.length < required) {
+      setInviteFlowError(`Tim nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${required}, dostupno ${pool.eligible.length}).`);
+      return;
+    }
+
+    if (pool.eligible.length === required) {
+      await finishAcceptInvite(notification, req.tournament_id, req.team_id, pool.eligible.map((p) => p.id));
+      return;
+    }
+
+    setSquadModal({
+      notification,
+      teamName: teamRow.name,
+      tournamentId: req.tournament_id,
+      teamId: req.team_id,
+      pool,
+      requiredSize: required,
+    });
+  }
+
+  async function finishAcceptInvite(notification: NotificationRow, tournamentId: string, teamId: string, userIds: string[]) {
+    setSquadSubmitting(true);
+    const { error: rosterError } = await finalizeRoster(tournamentId, teamId, userIds);
+    if (rosterError) {
+      setSquadSubmitting(false);
+      setInviteFlowError('Prihvatanje poziva nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    const { error } = await supabase
+      .from('tournament_team_requests')
+      .update({ status: 'accepted', responded_at: new Date().toISOString() })
+      .eq('id', notification.tournament_request_id!);
+    if (error) {
+      await releaseRoster(tournamentId, teamId);
+      setSquadSubmitting(false);
+      setInviteFlowError('Prihvatanje poziva nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    setSquadSubmitting(false);
+    setSquadModal(null);
+    await load();
   }
 
   async function dismiss(id: string) {
+    const removed = notifications.find((n) => n.id === id);
     setNotifications((prev) => prev.filter((n) => n.id !== id));
-    await supabase.from('notifications').delete().eq('id', id);
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error && removed) {
+      setNotifications((prev) => (prev.some((n) => n.id === id) ? prev : [...prev, removed].sort((a, b) => b.created_at.localeCompare(a.created_at))));
+      setRespondError('Uklanjanje obaveštenja nije uspelo. Pokušaj ponovo.');
+    }
   }
 
   async function dismissAll() {
     if (!user) return;
     setDismissingAll(true);
-    await supabase.from('notifications').delete().eq('user_id', user.id);
-    setNotifications([]);
+    const { error } = await supabase.from('notifications').delete().eq('user_id', user.id);
     setDismissingAll(false);
+    if (error) {
+      setRespondError('Brisanje obaveštenja nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    setNotifications([]);
     setConfirmingDismissAll(false);
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo title="Obaveštenja" description="Tvoja obaveštenja na DerbyManiji." path="/obavestenja" noindex />
       <div className="grain" />
       <SiteHeader />
 
@@ -168,6 +333,12 @@ export default function Notifications() {
                 )
               )}
             </div>
+
+            {(inviteFlowError || respondError) && (
+              <div className="bg-red-500/10 border border-red-500/30 px-5 py-3 mb-6">
+                <p className="text-sm text-red-400">{inviteFlowError || respondError}</p>
+              </div>
+            )}
 
             {loading ? (
               <TextCardSkeletonList count={4} />
@@ -268,6 +439,17 @@ export default function Notifications() {
           </div>
         </section>
       </main>
+
+      {squadModal && (
+        <SquadSelectionModal
+          teamName={squadModal.teamName}
+          requiredSize={squadModal.requiredSize}
+          pool={squadModal.pool}
+          submitting={squadSubmitting}
+          onCancel={() => setSquadModal(null)}
+          onConfirm={(userIds) => finishAcceptInvite(squadModal.notification, squadModal.tournamentId, squadModal.teamId, userIds)}
+        />
+      )}
 
       <SiteFooter />
     </div>

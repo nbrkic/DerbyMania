@@ -5,11 +5,13 @@ import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { TicketField, SelectField, ComboboxField, TextAreaField } from '../components/AuthShell';
+import { Seo } from '../components/Seo';
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { normalizeForSearch } from '../lib/text';
 import { FormSkeleton } from '../components/Skeleton';
 import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { formatStartDate, teamCountLabel } from './Tournaments';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -99,6 +101,9 @@ function TournamentPreviewCard({
   name,
   sportName,
   city,
+  startDate,
+  founderName,
+  maxTeams,
   crestUrl,
   crestPosition,
   bannerUrl,
@@ -106,12 +111,16 @@ function TournamentPreviewCard({
   name: string;
   sportName: string | null;
   city: string;
+  startDate: string;
+  founderName: string | null;
+  maxTeams: number | null;
   crestUrl: string | null;
   crestPosition: Position;
   bannerUrl: string | null;
 }) {
+  const dateRange = formatStartDate(startDate || null);
   return (
-    <div className="relative z-10 w-full max-w-sm bg-ink-900 border border-ink-700 overflow-hidden">
+    <div className="relative z-10 w-full max-w-sm bg-ink-900 border border-ink-700 overflow-hidden text-left">
       <div className="aspect-[21/9] bg-ink-800">
         {bannerUrl && <img src={bannerUrl} alt="" className="w-full h-full object-cover" />}
       </div>
@@ -135,8 +144,12 @@ function TournamentPreviewCard({
 
         <div className="flex items-center justify-between text-xs text-paper-500 pt-3 border-t border-ink-700">
           <span>{city || 'Grad'}</span>
+          <span>{dateRange || ''}</span>
         </div>
-        <p className="text-xs text-paper-700 uppercase tracking-widest mt-2">0 timova</p>
+        <div className="flex items-center justify-between text-xs text-paper-500 mt-2">
+          <span className="text-paper-100">{founderName || ''}</span>
+          <span>{teamCountLabel(0, maxTeams)}</span>
+        </div>
       </div>
     </div>
   );
@@ -206,7 +219,7 @@ function TournamentCreatedCelebration({
 export default function CreateTournament() {
   const { id: tournamentId } = useParams<{ id: string }>();
   const isEditMode = !!tournamentId;
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
 
   const [sports, setSports] = useState<Sport[]>([]);
@@ -240,6 +253,7 @@ export default function CreateTournament() {
   const [loadingExisting, setLoadingExisting] = useState(isEditMode);
   const [isFinishedTournament, setIsFinishedTournament] = useState(false);
   const [attempted, setAttempted] = useState(false);
+  const [editAttempted, setEditAttempted] = useState(false);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [createdTournamentId, setCreatedTournamentId] = useState<string | null>(null);
@@ -270,7 +284,7 @@ export default function CreateTournament() {
       const { data } = await supabase
         .from('tournaments')
         .select(
-          'sport_id, name, city, location, description, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, start_date, start_time, max_teams, entry_fee_per_player, crest_url, crest_position_x, crest_position_y, banner_url, status'
+          'sport_id, name, city, location, description, format, players_per_team, substitutions_allowed, match_duration_minutes, period_duration_minutes, start_date, start_time, max_teams, min_birth_year, max_birth_year, entry_fee_per_player, crest_url, crest_position_x, crest_position_y, banner_url, status'
         )
         .eq('id', tournamentId)
         .single();
@@ -291,6 +305,9 @@ export default function CreateTournament() {
         setStartTime(data.start_time ? data.start_time.slice(0, 5) : '');
         setMaxTeams(data.max_teams != null ? String(data.max_teams) : '');
         setCapacityMode(data.max_teams != null ? 'limited' : 'unlimited');
+        setHasAgeRestriction(data.min_birth_year != null || data.max_birth_year != null);
+        setMinAge(data.max_birth_year != null ? String(CURRENT_YEAR - data.max_birth_year) : '');
+        setMaxAge(data.min_birth_year != null ? String(CURRENT_YEAR - data.min_birth_year) : '');
         setHasEntryFee(data.entry_fee_per_player != null ? true : false);
         setEntryFeePerPlayer(data.entry_fee_per_player != null ? String(data.entry_fee_per_player) : '');
         setCrestPreview(data.crest_url);
@@ -328,13 +345,16 @@ export default function CreateTournament() {
   }
 
   type StepFieldErrors = {
+    sport?: string;
     name?: string;
     city?: string;
     location?: string;
+    format?: string;
     playersPerTeam?: string;
     substitutionsAllowed?: string;
     matchDuration?: string;
     periodDuration?: string;
+    startDate?: string;
     startTime?: string;
     maxTeams?: string;
     ageRestrictionChoice?: string;
@@ -383,8 +403,9 @@ export default function CreateTournament() {
       else if (Number(periodDurationMinutes) < MIN_PERIOD_DURATION) errors.periodDuration = 'Trajanje pauze ne može biti negativno.';
     }
 
-    if (step === 'termin' && !startTime) {
-      errors.startTime = 'Izaberi tačno vreme početka turnira.';
+    if (step === 'termin') {
+      if (!startDate) errors.startDate = 'Unesi datum početka turnira.';
+      if (!startTime) errors.startTime = 'Izaberi tačno vreme početka turnira.';
     }
 
     if (step === 'kapacitet' && capacityMode === 'limited') {
@@ -421,6 +442,94 @@ export default function CreateTournament() {
 
   const fieldErrors = attempted ? getStepFieldErrors() : {};
 
+  function getEditFieldErrors(): StepFieldErrors {
+    const errors: StepFieldErrors = {};
+
+    if (!sportId) errors.sport = 'Izaberi sport.';
+
+    const trimmedName = name.trim();
+    if (!trimmedName) errors.name = 'Unesi naziv turnira.';
+    else if (!NAME_REGEX.test(trimmedName)) errors.name = 'Naziv turnira može sadržati samo slova, brojeve i razmak.';
+    else if (trimmedName.length < MIN_NAME_LENGTH) errors.name = `Naziv turnira mora imati najmanje ${MIN_NAME_LENGTH} karaktera.`;
+
+    const trimmedCity = city.trim();
+    if (!trimmedCity) {
+      errors.city = 'Unesi grad turnira.';
+    } else {
+      const matchedCity = cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(trimmedCity));
+      if (!matchedCity) errors.city = 'Izaberi grad iz ponuđene liste.';
+    }
+    if (!location.trim()) errors.location = 'Unesi lokaciju turnira.';
+
+    if (!format) errors.format = 'Izaberi format turnira.';
+
+    if (!playersPerTeam.trim()) errors.playersPerTeam = 'Unesi broj igrača na terenu.';
+    else if (Number(playersPerTeam) < MIN_PLAYERS_PER_TEAM || Number(playersPerTeam) > MAX_PLAYERS_PER_TEAM) {
+      errors.playersPerTeam = `Broj igrača mora biti između ${MIN_PLAYERS_PER_TEAM} i ${MAX_PLAYERS_PER_TEAM}.`;
+    }
+    if (!substitutionsAllowed.trim()) errors.substitutionsAllowed = 'Unesi broj dozvoljenih izmena.';
+    else if (Number(substitutionsAllowed) < MIN_SUBSTITUTIONS || Number(substitutionsAllowed) > MAX_SUBSTITUTIONS) {
+      errors.substitutionsAllowed = `Broj izmena mora biti između ${MIN_SUBSTITUTIONS} i ${MAX_SUBSTITUTIONS}.`;
+    }
+
+    if (!matchDurationMinutes.trim()) errors.matchDuration = 'Unesi trajanje utakmice.';
+    else if (Number(matchDurationMinutes) < MIN_MATCH_DURATION) errors.matchDuration = `Trajanje utakmice mora biti bar ${MIN_MATCH_DURATION} minut.`;
+    if (!periodDurationMinutes.trim()) errors.periodDuration = 'Unesi trajanje pauze.';
+    else if (Number(periodDurationMinutes) < MIN_PERIOD_DURATION) errors.periodDuration = 'Trajanje pauze ne može biti negativno.';
+
+    if (!startDate) errors.startDate = 'Unesi datum početka turnira.';
+    if (!startTime) errors.startTime = 'Izaberi tačno vreme početka turnira.';
+
+    if (capacityMode === 'limited') {
+      if (!maxTeams.trim()) errors.maxTeams = 'Unesi broj timova.';
+      else if (Number(maxTeams) < MIN_MAX_TEAMS) errors.maxTeams = `Turnir mora imati bar ${MIN_MAX_TEAMS} tima.`;
+    }
+
+    if (hasAgeRestriction === null) {
+      errors.ageRestrictionChoice = 'Izaberi da li turnir ima starosno ograničenje.';
+    } else if (hasAgeRestriction) {
+      if (!minAge && !maxAge) {
+        errors.ageRestrictionRange = 'Izaberi bar jednu granicu starosti.';
+      } else if (minAge && maxAge && Number(minAge) > Number(maxAge)) {
+        errors.ageRestrictionRange = 'Minimalna starost mora biti manja ili jednaka maksimalnoj.';
+      }
+    }
+
+    const normalizedDescriptionLength = description.trim().replace(/\s+/g, ' ').length;
+    if (normalizedDescriptionLength < MIN_DESCRIPTION_LENGTH) {
+      errors.description = `Opis mora imati najmanje ${MIN_DESCRIPTION_LENGTH} karaktera.`;
+    }
+
+    if (hasEntryFee === null) errors.entryFeeChoice = 'Izaberi da li se plaća kotizacija.';
+    else if (hasEntryFee && (!entryFeePerPlayer.trim() || Number(entryFeePerPlayer) < MIN_ENTRY_FEE)) {
+      errors.entryFeeAmount = `Iznos kotizacije mora biti bar ${MIN_ENTRY_FEE} din.`;
+    }
+
+    return errors;
+  }
+
+  const EDIT_FIELD_IDS: { key: keyof StepFieldErrors; id: string }[] = [
+    { key: 'sport', id: 'sport' },
+    { key: 'name', id: 'name' },
+    { key: 'city', id: 'city' },
+    { key: 'location', id: 'location' },
+    { key: 'format', id: 'format' },
+    { key: 'playersPerTeam', id: 'players-per-team' },
+    { key: 'substitutionsAllowed', id: 'substitutions-allowed' },
+    { key: 'matchDuration', id: 'match-duration' },
+    { key: 'periodDuration', id: 'period-duration' },
+    { key: 'startDate', id: 'start-date' },
+    { key: 'startTime', id: 'start-time' },
+    { key: 'maxTeams', id: 'max-teams' },
+    { key: 'ageRestrictionChoice', id: 'age-restriction-choice' },
+    { key: 'ageRestrictionRange', id: 'min-age' },
+    { key: 'description', id: 'description' },
+    { key: 'entryFeeChoice', id: 'entry-fee-choice' },
+    { key: 'entryFeeAmount', id: 'entry-fee-amount' },
+  ];
+
+  const editFieldErrors = editAttempted ? getEditFieldErrors() : {};
+
   function handleCrestSelect(file: File) {
     if (file.size > MAX_IMAGE_SIZE) {
       setError('Logo je prevelik (maks. 5MB).');
@@ -456,51 +565,15 @@ export default function CreateTournament() {
     e.preventDefault();
     if (!user) return;
 
-    if (!sportId) {
-      setError('Izaberi sport.');
+    setEditAttempted(true);
+    const errors = getEditFieldErrors();
+    const firstInvalid = EDIT_FIELD_IDS.find(({ key }) => errors[key]);
+    if (firstInvalid) {
+      document.getElementById(firstInvalid.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    if (!name.trim()) {
-      setError('Unesi naziv turnira.');
-      return;
-    }
-    const matchedCity = city.trim() ? cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(city)) : undefined;
-    if (city.trim() && !matchedCity) {
-      setError('Izaberi grad iz ponuđene liste.');
-      return;
-    }
-    if (!format) {
-      setError('Izaberi format turnira.');
-      return;
-    }
-    if (!playersPerTeam || Number(playersPerTeam) < 1) {
-      setError('Unesi broj igrača koji igraju.');
-      return;
-    }
-    if (!substitutionsAllowed || Number(substitutionsAllowed) < 0) {
-      setError('Unesi broj dozvoljenih izmena.');
-      return;
-    }
-    if (!matchDurationMinutes || Number(matchDurationMinutes) < 1) {
-      setError('Unesi trajanje utakmice.');
-      return;
-    }
-    if (!periodDurationMinutes || Number(periodDurationMinutes) < 1) {
-      setError('Unesi trajanje pauze između poluvremena/četvrtina.');
-      return;
-    }
-    if (!startTime) {
-      setError('Izaberi tačno vreme početka turnira.');
-      return;
-    }
-    if (maxTeams && Number(maxTeams) < 2) {
-      setError('Maksimalan broj timova mora biti bar 2.');
-      return;
-    }
-    if (hasEntryFee && (!entryFeePerPlayer || Number(entryFeePerPlayer) <= 0)) {
-      setError('Unesi iznos kotizacije po igraču.');
-      return;
-    }
+
+    const matchedCity = cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(city.trim()));
 
     setError(null);
     setSubmitting(true);
@@ -523,7 +596,9 @@ export default function CreateTournament() {
         period_duration_minutes: Number(periodDurationMinutes),
         start_date: startDate || null,
         start_time: startTime || null,
-        max_teams: maxTeams ? Number(maxTeams) : null,
+        max_teams: capacityMode === 'limited' && maxTeams ? Number(maxTeams) : null,
+        min_birth_year: hasAgeRestriction && maxAge ? CURRENT_YEAR - Number(maxAge) : null,
+        max_birth_year: hasAgeRestriction && minAge ? CURRENT_YEAR - Number(minAge) : null,
         entry_fee_per_player: hasEntryFee ? Number(entryFeePerPlayer) : null,
         crest_url: crestUrl,
         crest_position_x: Math.round(crestPosition.x),
@@ -686,6 +761,9 @@ export default function CreateTournament() {
                   name={name}
                   sportName={selectedSportName}
                   city={city}
+                  startDate={startDate}
+                  founderName={profile?.full_name ?? null}
+                  maxTeams={maxTeams ? Number(maxTeams) : null}
                   crestUrl={crestPreview}
                   crestPosition={crestPosition}
                   bannerUrl={bannerPreview}
@@ -697,7 +775,7 @@ export default function CreateTournament() {
                 <div className="w-full max-w-sm lg:max-w-none">
                   <h1 className="font-display text-3xl sm:text-4xl mb-10 leading-tight">Izmeni turnir</h1>
 
-                  <form onSubmit={handleSubmit} className="flex flex-col gap-7">
+                  <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-7">
                     <SelectField
                       n="01"
                       label="Sport"
@@ -707,10 +785,11 @@ export default function CreateTournament() {
                       value={sportId}
                       onChange={setSportId}
                       options={sports.map((s) => ({ value: String(s.id), label: s.name }))}
+                      error={editFieldErrors.sport}
                     />
-                    <TicketField n="02" label="Naziv turnira" id="name" type="text" required value={name} onChange={setName} />
-                    <ComboboxField n="03" label="Grad" id="city" value={city} onChange={setCity} options={cities} />
-                    <TicketField n="04" label="Lokacija" id="location" type="text" value={location} onChange={setLocation} />
+                    <TicketField n="02" label="Naziv turnira" id="name" type="text" required value={name} onChange={setName} error={editFieldErrors.name} />
+                    <ComboboxField n="03" label="Grad" id="city" value={city} onChange={setCity} options={cities} error={editFieldErrors.city} />
+                    <TicketField n="04" label="Lokacija" id="location" type="text" value={location} onChange={setLocation} error={editFieldErrors.location} />
 
                     <SelectField
                       n="05"
@@ -721,6 +800,7 @@ export default function CreateTournament() {
                       value={format}
                       onChange={setFormat}
                       options={FORMAT_OPTIONS}
+                      error={editFieldErrors.format}
                     />
 
                     <div className="grid grid-cols-2 gap-4">
@@ -730,8 +810,11 @@ export default function CreateTournament() {
                         id="players-per-team"
                         type="number"
                         required
+                        min={MIN_PLAYERS_PER_TEAM}
+                        max={MAX_PLAYERS_PER_TEAM}
                         value={playersPerTeam}
                         onChange={setPlayersPerTeam}
+                        error={editFieldErrors.playersPerTeam}
                       />
                       <TicketField
                         n="07"
@@ -739,8 +822,11 @@ export default function CreateTournament() {
                         id="substitutions-allowed"
                         type="number"
                         required
+                        min={MIN_SUBSTITUTIONS}
+                        max={MAX_SUBSTITUTIONS}
                         value={substitutionsAllowed}
                         onChange={setSubstitutionsAllowed}
+                        error={editFieldErrors.substitutionsAllowed}
                       />
                     </div>
 
@@ -751,8 +837,10 @@ export default function CreateTournament() {
                         id="match-duration"
                         type="number"
                         required
+                        min={MIN_MATCH_DURATION}
                         value={matchDurationMinutes}
                         onChange={setMatchDurationMinutes}
+                        error={editFieldErrors.matchDuration}
                       />
                       <TicketField
                         n="09"
@@ -760,8 +848,10 @@ export default function CreateTournament() {
                         id="period-duration"
                         type="number"
                         required
+                        min={MIN_PERIOD_DURATION}
                         value={periodDurationMinutes}
                         onChange={setPeriodDurationMinutes}
+                        error={editFieldErrors.periodDuration}
                       />
                     </div>
 
@@ -771,9 +861,11 @@ export default function CreateTournament() {
                         label="Datum početka"
                         id="start-date"
                         type="date"
+                        required
                         value={startDate}
                         onChange={setStartDate}
                         dateDefaultViewYear={CURRENT_YEAR}
+                        error={editFieldErrors.startDate}
                       />
                       <SelectField
                         n="11"
@@ -784,29 +876,99 @@ export default function CreateTournament() {
                         value={startTime}
                         onChange={setStartTime}
                         options={START_TIME_OPTIONS}
+                        error={editFieldErrors.startTime}
                       />
                     </div>
 
-                    <TicketField
+                    <SelectField
                       n="12"
-                      label="Maks. broj timova"
-                      id="max-teams"
-                      type="number"
-                      value={maxTeams}
-                      onChange={setMaxTeams}
+                      label="Broj timova"
+                      id="capacity-mode"
+                      required
+                      placeholder="Izaberi"
+                      value={capacityMode}
+                      onChange={(v) => {
+                        setCapacityMode(v as 'limited' | 'unlimited');
+                        if (v === 'unlimited') setMaxTeams('');
+                      }}
+                      options={[
+                        { value: 'unlimited', label: 'Neograničeno' },
+                        { value: 'limited', label: 'Ograničen broj' },
+                      ]}
                     />
-
-                    <TextAreaField
-                      n="13"
-                      label="O turniru (opciono)"
-                      id="description"
-                      value={description}
-                      onChange={setDescription}
-                      placeholder="Par rečenica o turniru…"
-                    />
+                    {capacityMode === 'limited' && (
+                      <TicketField
+                        n="13"
+                        label="Maks. broj timova"
+                        id="max-teams"
+                        type="number"
+                        required
+                        min={MIN_MAX_TEAMS}
+                        value={maxTeams}
+                        onChange={setMaxTeams}
+                        error={editFieldErrors.maxTeams}
+                      />
+                    )}
 
                     <SelectField
                       n="14"
+                      label="Starosno ograničenje"
+                      id="age-restriction-choice"
+                      required
+                      placeholder="Da li turnir ima starosno ograničenje?"
+                      value={hasAgeRestriction === true ? 'da' : hasAgeRestriction === false ? 'ne' : ''}
+                      onChange={(v) => {
+                        setHasAgeRestriction(v === 'da');
+                        if (v !== 'da') {
+                          setMinAge('');
+                          setMaxAge('');
+                        }
+                      }}
+                      options={[
+                        { value: 'ne', label: 'Ne' },
+                        { value: 'da', label: 'Da' },
+                      ]}
+                      error={editFieldErrors.ageRestrictionChoice}
+                    />
+                    {hasAgeRestriction === true && (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="grid grid-cols-2 gap-4">
+                          <SelectField
+                            n="15"
+                            label="Minimalna starost (GOD)"
+                            id="min-age"
+                            value={minAge}
+                            onChange={setMinAge}
+                            options={minAgeOptions}
+                          />
+                          <SelectField
+                            n="16"
+                            label="Maksimalna starost (GOD)"
+                            id="max-age"
+                            value={maxAge}
+                            onChange={setMaxAge}
+                            options={maxAgeOptions}
+                          />
+                        </div>
+                        {editFieldErrors.ageRestrictionRange && (
+                          <p className="text-[11px] text-red-400">{editFieldErrors.ageRestrictionRange}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <TextAreaField
+                      n="17"
+                      label="O turniru"
+                      id="description"
+                      required
+                      value={description}
+                      onChange={setDescription}
+                      placeholder="Par rečenica o turniru…"
+                      error={editFieldErrors.description}
+                    />
+
+                    <SelectField
+                      n="18"
                       label="Kotizacija"
                       id="entry-fee-choice"
                       required
@@ -820,21 +982,23 @@ export default function CreateTournament() {
                         { value: 'ne', label: 'Ne' },
                         { value: 'da', label: 'Da' },
                       ]}
+                      error={editFieldErrors.entryFeeChoice}
                     />
                     {hasEntryFee && (
                       <TicketField
-                        n="15"
+                        n="19"
                         label="Iznos po igraču (RSD)"
                         id="entry-fee-amount"
                         type="number"
                         required
                         value={entryFeePerPlayer}
                         onChange={setEntryFeePerPlayer}
+                        error={editFieldErrors.entryFeeAmount}
                       />
                     )}
 
                     <CrestField
-                      n="16"
+                      n="20"
                       label="Logo turnira"
                       previewUrl={crestPreview}
                       position={crestPosition}
@@ -842,12 +1006,12 @@ export default function CreateTournament() {
                       onPositionChange={setCrestPosition}
                     />
                     <ImageField
-                      n="17"
+                      n="21"
                       label="Baner turnira"
                       shape="banner"
                       previewUrl={bannerPreview}
                       onSelect={handleBannerSelect}
-                      hint="Preporučeno široka slika (npr. 1200×500), maks. 5MB."
+                      hint="JPG / PNG / WEBP - Maksimalno 5MB"
                     />
 
                     {error && (
@@ -900,6 +1064,12 @@ export default function CreateTournament() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title={tournamentId ? 'Izmena turnira' : 'Novi turnir'}
+        description={tournamentId ? 'Izmeni podatke turnira na DerbyManiji.' : 'Napravi novi turnir na DerbyManiji.'}
+        path={tournamentId ? `/turniri/${tournamentId}/izmena` : '/turniri/novi'}
+        noindex
+      />
       <div className="grain" />
       <SiteHeader />
 
@@ -1112,13 +1282,15 @@ export default function CreateTournament() {
                   <div className="w-full max-w-xs flex flex-col gap-6 text-left">
                     <TicketField
                       n=""
-                      label="Datum početka (opciono)"
+                      label="Datum početka"
                       id="start-date"
                       type="date"
+                      required
                       value={startDate}
                       onChange={setStartDate}
                       dateDefaultViewYear={CURRENT_YEAR}
                       dateMin={tomorrowISO()}
+                      error={fieldErrors.startDate}
                     />
                     <SelectField
                       n=""
@@ -1345,7 +1517,7 @@ export default function CreateTournament() {
                     position={crestPosition}
                     onSelect={handleCrestSelect}
                     onPositionChange={setCrestPosition}
-                    emptyHint="Postavi logo turnira."
+                    emptyHint="JPG / PNG / WEBP - Maksimalno 5MB"
                   />
                 </>
               )}
@@ -1366,7 +1538,7 @@ export default function CreateTournament() {
                       shape="banner"
                       previewUrl={bannerPreview}
                       onSelect={handleBannerSelect}
-                      hint="Preporučena dimenzija slike (npr. 1200×500), maksimalno 5MB."
+                      hint="JPG / PNG / WEBP - Maksimalno 5MB"
                     />
                   </div>
                 </>
@@ -1384,6 +1556,9 @@ export default function CreateTournament() {
                     name={name}
                     sportName={selectedSportName}
                     city={city}
+                    startDate={startDate}
+                    founderName={profile?.full_name ?? null}
+                    maxTeams={maxTeams ? Number(maxTeams) : null}
                     crestUrl={crestPreview}
                     crestPosition={crestPosition}
                     bannerUrl={bannerPreview}

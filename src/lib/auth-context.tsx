@@ -52,11 +52,48 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const NOTIFICATION_RETENTION_DAYS = 7;
 
-// Notifications the user never dismisses would otherwise pile up forever,
-// so anything older than the retention window is purged on every session load.
+// Notification types that still need a Prihvati/Odbij response — their underlying
+// request row can outlive the retention window, and the Notifications page is the
+// only place a user can act on it, so purging the notification would strand it.
+const ACTIONABLE_NOTIFICATION_TYPES = new Set(['join_request', 'team_invite', 'tournament_request', 'tournament_invite']);
+
+type PendingCheckRow = {
+  id: string;
+  type: string;
+  join_request_id: string | null;
+  team_join_requests: { status: string } | null;
+  tournament_request_id: string | null;
+  tournament_team_requests: { status: string } | null;
+};
+
+// Notifications the user never dismisses would otherwise pile up forever, so anything
+// older than the retention window is purged on every session load — except a still-pending
+// join/invite/request notification, which stays until it's answered or manually dismissed.
 export async function cleanupOldNotifications(userId: string) {
   const cutoff = new Date(Date.now() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  await supabase.from('notifications').delete().eq('user_id', userId).lt('created_at', cutoff);
+
+  const { data } = await supabase
+    .from('notifications')
+    .select(
+      'id, type, join_request_id, team_join_requests(status), tournament_request_id, tournament_team_requests(status)'
+    )
+    .eq('user_id', userId)
+    .lt('created_at', cutoff);
+
+  const oldRows = (data as unknown as PendingCheckRow[]) ?? [];
+  if (!oldRows.length) return;
+
+  const deletableIds = oldRows
+    .filter((n) => {
+      if (!ACTIONABLE_NOTIFICATION_TYPES.has(n.type)) return true;
+      const status = n.join_request_id ? n.team_join_requests?.status : n.tournament_team_requests?.status;
+      return status !== 'pending';
+    })
+    .map((n) => n.id);
+
+  if (deletableIds.length) {
+    await supabase.from('notifications').delete().in('id', deletableIds);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

@@ -7,6 +7,7 @@ import { Dropdown } from '../components/Dropdown';
 import { FOOTBALL_POSITION_OPTIONS, BASKETBALL_POSITION_OPTIONS } from '../lib/positions';
 import { normalizeForSearch } from '../lib/text';
 import { RowSkeletonGrid, RowSkeleton } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
 
 export type Player = {
   id: string;
@@ -102,15 +103,17 @@ export function PlayerCard({
   player,
   index,
   isCaptain,
+  hideTeamCount,
 }: {
   player: Player;
   index: number;
   isCaptain?: boolean;
+  hideTeamCount?: boolean;
 }) {
   const displayName = player.full_name || 'Igrač bez imena';
   return (
     <Link
-      to={`/${player.username ?? player.id}`}
+      to={`/@${player.username ?? player.id}`}
       className={`group flex items-center gap-3 bg-ink-800 border border-ink-700 border-l-2 border-l-red-500/40 px-4 py-3 transition-colors duration-200 hover:bg-ink-700 hover:border-red-500/50 ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
     >
       <div className="relative shrink-0">
@@ -139,11 +142,13 @@ export function PlayerCard({
         </p>
       </div>
 
-      <div className="flex flex-col items-end gap-0.5 shrink-0">
-        <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold whitespace-nowrap">
-          {player.teamCount} {teamWord(player.teamCount)}
-        </span>
-      </div>
+      {!hideTeamCount && (
+        <div className="flex flex-col items-end gap-0.5 shrink-0">
+          <span className="text-[11px] uppercase tracking-widest text-red-400 font-semibold whitespace-nowrap">
+            {player.teamCount} {teamWord(player.teamCount)}
+          </span>
+        </div>
+      )}
     </Link>
   );
 }
@@ -185,7 +190,7 @@ function TopScorersStrip({
           return (
             <Link
               key={player.id}
-              to={`/${player.username ?? player.id}`}
+              to={`/@${player.username ?? player.id}`}
               className={`group flex items-center gap-3 bg-ink-800 ${borderClasses} pl-4 pr-5 py-2.5 transition-colors duration-200 hover:bg-ink-700 hover:border-red-400/70`}
             >
               <span className={`font-display text-lg w-5 text-center shrink-0 transition-colors duration-200 ${rankText} group-hover:text-red-400`}>{rank}</span>
@@ -328,6 +333,12 @@ export default function Players() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title="Igrači"
+        description="Pretraži profile fudbalera i košarkaša na DerbyManiji. Statistika golova, asistencija i odbrana za svakog igrača na jednom mestu."
+        path="/igraci"
+        keywords={['profili igrača', 'statistika fudbalera', 'statistika košarkaša', 'igrači turnira', 'pretraga igrača']}
+      />
       <div className="grain" />
       <SiteHeader />
 
@@ -461,7 +472,7 @@ export default function Players() {
 
                 <div className="grid sm:grid-cols-3 gap-3">
                   {pagedPlayers.map((player, index) => (
-                    <PlayerCard key={player.id} player={player} index={index} />
+                    <PlayerCard key={player.id} player={player} index={index} hideTeamCount />
                   ))}
                 </div>
 

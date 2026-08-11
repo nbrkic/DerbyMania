@@ -6,6 +6,7 @@ import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
 import { CardSkeletonGrid } from '../components/Skeleton';
 import { normalizeForSearch } from '../lib/text';
+import { Seo } from '../components/Seo';
 
 type Sport = { id: number; name: string };
 
@@ -37,6 +38,10 @@ function SearchIcon({ className }: { className?: string }) {
 
 const RISE_CLASSES = ['rise-1', 'rise-2', 'rise-3', 'rise-4'];
 const PAGE_SIZE = 9;
+
+export function playerCountLabel(count: number) {
+  return `${count} ${count === 1 ? 'Igrač' : 'Igrača'}`;
+}
 
 export function TeamCard({ team, index }: { team: Team; index: number }) {
   return (
@@ -80,16 +85,12 @@ export function TeamCard({ team, index }: { team: Team; index: number }) {
           <p className="text-xs uppercase tracking-widest text-red-400 font-semibold mb-3">{team.sports.name}</p>
         )}
 
-        <div className="flex items-center justify-between text-xs text-paper-500 pt-3 border-t border-ink-700">
-          <span>{team.city || '—'}</span>
-          <span>{team.founded_year ? `Osnovan ${team.founded_year}.` : ''}</span>
+        <div className="grid grid-cols-2 gap-y-1.5 text-xs text-paper-500 pt-3 border-t border-ink-700">
+          <span className="truncate pr-2">{team.city || '—'}</span>
+          <span className="text-right">{team.founded_year ? `Osnovan ${team.founded_year}.` : '—'}</span>
+          <span className="truncate pr-2 text-paper-100">{team.founderName || '—'}</span>
+          <span className="text-right">{playerCountLabel(team.playerCount)}</span>
         </div>
-        {team.founderName && (
-          <p className="text-xs text-paper-500 mt-2">
-            Osnivač: <span className="text-paper-100">{team.founderName}</span>
-          </p>
-        )}
-        <p className="text-xs text-paper-700 uppercase tracking-widest mt-2">{team.playerCount} igrača</p>
       </div>
     </Link>
   );
@@ -220,6 +221,12 @@ export default function Teams() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title="Timovi"
+        description="Pronađi fudbalske i košarkaške ekipe na DerbyManiji. Pogledaj grb, sastav i istoriju svakog tima i prijavi svoju ekipu na sledeći turnir."
+        path="/timovi"
+        keywords={['fudbalske ekipe', 'košarkaški timovi', 'lista timova', 'sastav ekipe', 'pridruži se timu']}
+      />
       <div className="grain" />
       <SiteHeader />
 

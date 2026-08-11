@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
@@ -8,10 +8,22 @@ import { Dropdown } from '../components/Dropdown';
 import { TeamRow, type Team } from './Teams';
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { DetailHeroSkeleton, StatBlockSkeleton, RowSkeletonGrid } from '../components/Skeleton';
+import { Seo } from '../components/Seo';
+import { absoluteUrl, truncateDescription } from '../lib/seo';
+import { ShareInviteButton } from '../components/ShareInviteButton';
 import { GroupsTabContent } from '../components/GroupsTabContent';
 import { EliminationTabContent } from '../components/EliminationTabContent';
 import { LeagueTabContent } from '../components/LeagueTabContent';
 import { TournamentGallery } from '../components/TournamentGallery';
+import { SquadSelectionModal } from '../components/SquadSelectionModal';
+import {
+  checkOwnerConflict,
+  loadEligibilityPool,
+  requiredSquadSize,
+  finalizeRoster,
+  releaseRoster,
+  type EligibilityPool,
+} from '../lib/tournamentRoster';
 
 type TabId = 'pocetna' | 'grupna' | 'eliminacija' | 'liga' | 'kup';
 
@@ -129,6 +141,7 @@ type InviteTeamOption = {
   crest_url: string | null;
   crest_position_x: number;
   crest_position_y: number;
+  eligibleCount: number;
 };
 
 function StatBlock({ label, value, className = '' }: { label: string; value: string; className?: string }) {
@@ -166,11 +179,22 @@ export default function TournamentDetail() {
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [selectedPool, setSelectedPool] = useState<EligibilityPool | null>(null);
 
   const [ownerTeams, setOwnerTeams] = useState<OwnedTeam[]>([]);
   const [selectedOwnerTeamId, setSelectedOwnerTeamId] = useState('');
   const [addingOwnTeam, setAddingOwnTeam] = useState(false);
   const [addOwnTeamError, setAddOwnTeamError] = useState<string | null>(null);
+  const [ownerPool, setOwnerPool] = useState<EligibilityPool | null>(null);
+
+  const [squadModal, setSquadModal] = useState<{ mode: 'request' | 'addOwn'; teamId: string; teamName: string; pool: EligibilityPool } | null>(null);
+  const [squadSubmitting, setSquadSubmitting] = useState(false);
+
+  const [rosterPools, setRosterPools] = useState<Map<string, EligibilityPool>>(new Map());
+  const [rosterSelections, setRosterSelections] = useState<Map<string, string[]>>(new Map());
+  const [rosterEditModal, setRosterEditModal] = useState<{ teamId: string; teamName: string; pool: EligibilityPool; initialSelected: string[] } | null>(null);
+  const [rosterEditSubmitting, setRosterEditSubmitting] = useState(false);
+  const [rosterEditError, setRosterEditError] = useState<string | null>(null);
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -178,6 +202,9 @@ export default function TournamentDetail() {
 
   const [withdrawingTeamId, setWithdrawingTeamId] = useState<string | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [confirmingKickTeamId, setConfirmingKickTeamId] = useState<string | null>(null);
+  const [kickingTeamId, setKickingTeamId] = useState<string | null>(null);
+  const [kickError, setKickError] = useState<string | null>(null);
   const [groupsFormed, setGroupsFormed] = useState(false);
 
   const [topScorer, setTopScorer] = useState<TopScorer | null>(null);
@@ -268,7 +295,7 @@ export default function TournamentDetail() {
   }, [id]);
 
   useEffect(() => {
-    if (!tournament || tournament.status !== 'finished') {
+    if (!tournament) {
       setTopScorer(null);
       setTopAssister(null);
       setTopKeeper(null);
@@ -437,6 +464,20 @@ export default function TournamentDetail() {
   }, [user, tournament]);
 
   useEffect(() => {
+    if (!tournament || !selectedTeamId) {
+      setSelectedPool(null);
+      return;
+    }
+    let cancelled = false;
+    loadEligibilityPool(tournament.id, selectedTeamId, tournament).then((pool) => {
+      if (!cancelled) setSelectedPool(pool);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament, selectedTeamId]);
+
+  useEffect(() => {
     if (!user || !tournament || user.id !== tournament.owner_id) {
       setOwnerTeams([]);
       return;
@@ -450,11 +491,23 @@ export default function TournamentDetail() {
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        const owned = data ?? [];
-        setOwnerTeams(owned);
-        if (owned.length) setSelectedOwnerTeamId(owned[0].id);
+        setOwnerTeams(data ?? []);
       });
   }, [user, tournament]);
+
+  useEffect(() => {
+    if (!tournament || !selectedOwnerTeamId) {
+      setOwnerPool(null);
+      return;
+    }
+    let cancelled = false;
+    loadEligibilityPool(tournament.id, selectedOwnerTeamId, tournament).then((pool) => {
+      if (!cancelled) setOwnerPool(pool);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament, selectedOwnerTeamId]);
 
   useEffect(() => {
     if (!user || !tournament || user.id !== tournament.owner_id) {
@@ -467,6 +520,8 @@ export default function TournamentDetail() {
       return;
     }
 
+    let cancelled = false;
+
     async function loadInviteData() {
       const { data: teamRows } = await supabase
         .from('teams')
@@ -474,7 +529,15 @@ export default function TournamentDetail() {
         .eq('sport_id', tournament!.sport_id)
         .is('deleted_at', null)
         .order('name', { ascending: true });
-      setInviteTeams((teamRows as InviteTeamOption[]) ?? []);
+
+      // Prikaži sve timove koji još ne učestvuju na turniru; timovi koji trenutno nemaju
+      // dovoljno igrača koji ispunjavaju uslove turnira ostaju vidljivi u pretrazi, ali se
+      // ne mogu pozvati dok ne prošire sastav (videti eligibleCount niže).
+      const participatingIds = new Set(teams.map((t) => t.id));
+      const candidates = ((teamRows as InviteTeamOption[]) ?? []).filter((t) => !participatingIds.has(t.id));
+      const pools = await Promise.all(candidates.map((t) => loadEligibilityPool(tournament!.id, t.id, tournament!)));
+      if (cancelled) return;
+      setInviteTeams(candidates.map((t, i) => ({ ...t, eligibleCount: pools[i].eligible.length })));
 
       const { data: pendingInvites } = await supabase
         .from('tournament_team_requests')
@@ -482,11 +545,15 @@ export default function TournamentDetail() {
         .eq('tournament_id', tournament!.id)
         .eq('type', 'invite')
         .eq('status', 'pending');
+      if (cancelled) return;
       setInvitedTeamIds(new Set((pendingInvites ?? []).map((r) => r.team_id)));
     }
 
     loadInviteData();
-  }, [user, tournament]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, tournament, teams]);
 
   useEffect(() => {
     if (!inviteOpen) return;
@@ -524,38 +591,116 @@ export default function TournamentDetail() {
     setInviteQuery('');
   }
 
-  async function handleAddOwnTeam() {
-    if (!tournament || !selectedOwnerTeamId) return;
-
+  async function finishAddOwnTeam(teamId: string, userIds: string[]) {
+    setSquadSubmitting(true);
     setAddingOwnTeam(true);
     setAddOwnTeamError(null);
-    const { error } = await supabase
-      .from('tournament_teams')
-      .insert({ tournament_id: tournament.id, team_id: selectedOwnerTeamId });
 
-    if (error) {
+    const { error: rosterError } = await finalizeRoster(tournament!.id, teamId, userIds);
+    if (rosterError) {
+      setSquadSubmitting(false);
       setAddingOwnTeam(false);
       setAddOwnTeamError('Dodavanje tima nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    const { error } = await supabase.from('tournament_teams').insert({ tournament_id: tournament!.id, team_id: teamId });
+
+    if (error) {
+      await releaseRoster(tournament!.id, teamId);
+      console.error('handleAddOwnTeam insert error', error);
+      setSquadSubmitting(false);
+      setAddingOwnTeam(false);
+      setAddOwnTeamError(`Dodavanje tima nije uspelo: ${error.message} (${error.code ?? 'bez koda'})`);
       return;
     }
 
     const { data: teamRow } = await supabase
       .from('teams')
       .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name), deleted_at')
-      .eq('id', selectedOwnerTeamId)
+      .eq('id', teamId)
       .single();
 
     if (teamRow) {
       const { count } = await supabase
         .from('team_members')
         .select('id', { count: 'exact', head: true })
-        .eq('team_id', selectedOwnerTeamId);
+        .eq('team_id', teamId);
 
       const row = teamRow as unknown as Omit<Team, 'founderName' | 'playerCount'>;
       setTeams((prev) => [...prev, { ...row, founderName: organizerName, playerCount: count ?? 0 }]);
     }
 
+    setSquadSubmitting(false);
     setAddingOwnTeam(false);
+    setSquadModal(null);
+  }
+
+  async function handleAddOwnTeam() {
+    if (!tournament || !selectedOwnerTeamId || !user) return;
+
+    setAddingOwnTeam(true);
+    setAddOwnTeamError(null);
+
+    const conflict = await checkOwnerConflict(tournament.id, user.id, selectedOwnerTeamId);
+    if (conflict.blocked) {
+      setAddingOwnTeam(false);
+      setAddOwnTeamError(`Već imaš prijavljen tim „${conflict.teamName}“ na ovom turniru — kao osnivač možeš prijaviti samo jedan tim.`);
+      return;
+    }
+
+    const pool = await loadEligibilityPool(tournament.id, selectedOwnerTeamId, tournament);
+    const required = requiredSquadSize(tournament);
+    if (pool.eligible.length < required) {
+      setAddingOwnTeam(false);
+      setAddOwnTeamError(`Tim nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${required}, dostupno ${pool.eligible.length}).`);
+      return;
+    }
+
+    setAddingOwnTeam(false);
+
+    if (pool.eligible.length === required) {
+      await finishAddOwnTeam(selectedOwnerTeamId, pool.eligible.map((p) => p.id));
+      return;
+    }
+
+    setSquadModal({
+      mode: 'addOwn',
+      teamId: selectedOwnerTeamId,
+      teamName: ownerTeams.find((t) => t.id === selectedOwnerTeamId)?.name ?? '',
+      pool,
+    });
+  }
+
+  async function finishRequest(teamId: string, userIds: string[]) {
+    setSquadSubmitting(true);
+    setRequesting(true);
+    setRequestError(null);
+
+    const { error: rosterError } = await finalizeRoster(tournament!.id, teamId, userIds);
+    if (rosterError) {
+      setSquadSubmitting(false);
+      setRequesting(false);
+      setRequestError('Slanje prijave nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('tournament_team_requests')
+      .insert({ tournament_id: tournament!.id, team_id: teamId, requested_by: user!.id });
+
+    if (error) {
+      await releaseRoster(tournament!.id, teamId);
+      setSquadSubmitting(false);
+      setRequesting(false);
+      setRequestError('Slanje prijave nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+
+    setTeamStatus((prev) => new Map(prev).set(teamId, 'pending'));
+    setSquadSubmitting(false);
+    setRequesting(false);
+    setSquadModal(null);
   }
 
   async function handleRequest() {
@@ -567,16 +712,35 @@ export default function TournamentDetail() {
 
     setRequesting(true);
     setRequestError(null);
-    const { error } = await supabase
-      .from('tournament_team_requests')
-      .insert({ tournament_id: tournament.id, team_id: selectedTeamId, requested_by: user.id });
-    setRequesting(false);
 
-    if (error) {
-      setRequestError('Slanje prijave nije uspelo. Pokušaj ponovo.');
+    const conflict = await checkOwnerConflict(tournament.id, user.id, selectedTeamId);
+    if (conflict.blocked) {
+      setRequesting(false);
+      setRequestError(`Već imaš prijavljen tim „${conflict.teamName}“ na ovom turniru — kao osnivač možeš prijaviti samo jedan tim.`);
       return;
     }
-    setTeamStatus((prev) => new Map(prev).set(selectedTeamId, 'pending'));
+
+    const pool = await loadEligibilityPool(tournament.id, selectedTeamId, tournament);
+    const required = requiredSquadSize(tournament);
+    if (pool.eligible.length < required) {
+      setRequesting(false);
+      setRequestError(`Tim nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${required}, dostupno ${pool.eligible.length}).`);
+      return;
+    }
+
+    setRequesting(false);
+
+    if (pool.eligible.length === required) {
+      await finishRequest(selectedTeamId, pool.eligible.map((p) => p.id));
+      return;
+    }
+
+    setSquadModal({
+      mode: 'request',
+      teamId: selectedTeamId,
+      teamName: ownedTeams.find((t) => t.id === selectedTeamId)?.name ?? '',
+      pool,
+    });
   }
 
   async function handleWithdraw(teamId: string) {
@@ -594,8 +758,30 @@ export default function TournamentDetail() {
       setWithdrawError('Povlačenje tima nije uspelo. Pokušaj ponovo.');
       return;
     }
+    await releaseRoster(tournament.id, teamId);
     setTeams((prev) => prev.filter((t) => t.id !== teamId));
     setTeamStatus((prev) => new Map(prev).set(teamId, 'none'));
+  }
+
+  async function handleKickTeam(teamId: string) {
+    if (!tournament) return;
+    setKickingTeamId(teamId);
+    setKickError(null);
+    const { error } = await supabase
+      .from('tournament_teams')
+      .delete()
+      .eq('tournament_id', tournament.id)
+      .eq('team_id', teamId);
+    setKickingTeamId(null);
+
+    if (error) {
+      setKickError('Izbacivanje tima nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    await releaseRoster(tournament.id, teamId);
+    setTeams((prev) => prev.filter((t) => t.id !== teamId));
+    setTeamStatus((prev) => new Map(prev).set(teamId, 'none'));
+    setConfirmingKickTeamId(null);
   }
 
   async function handleDeleteTournament() {
@@ -766,6 +952,10 @@ export default function TournamentDetail() {
     navigate('/turniri');
   }
 
+  const requiredSize = tournament ? requiredSquadSize(tournament) : 0;
+  const notEnoughForSelected = !!selectedPool && selectedPool.eligible.length < requiredSize;
+  const notEnoughForOwner = !!ownerPool && ownerPool.eligible.length < requiredSize;
+
   const currentStatus = teamStatus.get(selectedTeamId) ?? 'none';
   const requestLabel = requesting
     ? 'Slanje…'
@@ -773,14 +963,78 @@ export default function TournamentDetail() {
       ? 'Tim već učestvuje'
       : currentStatus === 'pending'
         ? 'Prijava je već poslata'
-        : ownedTeams.length === 1
-          ? `Prijavi tim „${ownedTeams[0].name}“`
-          : 'Prijavi tim';
+        : notEnoughForSelected
+          ? `Potrebno ${requiredSize} igrača (ima ${selectedPool?.eligible.length ?? 0})`
+          : ownedTeams.length === 1
+            ? `Prijavi tim „${ownedTeams[0].name}“`
+            : 'Prijavi tim';
 
   const isFull = tournament?.max_teams != null && teams.length >= tournament.max_teams;
   const isFinished = tournament?.status === 'finished';
   const isLocked = isFinished || !!tournament?.roster_locked;
-  const ownedParticipatingTeams = teams.filter((t) => t.owner_id === user?.id);
+  const tournamentStartTimestamp =
+    tournament?.start_date != null
+      ? new Date(`${tournament.start_date}T${tournament.start_time ?? '00:00:00'}`).getTime()
+      : null;
+  const tournamentStarted = tournamentStartTimestamp != null && Date.now() >= tournamentStartTimestamp;
+  // Isti prag koji zatvara "Opasna zona" povlačenje tima (žreb/raspored napravljen ili
+  // turnir završen) mora da zatvori i izmenu sastava — u suprotnom bi se sastav mogao
+  // menjati posle žreba iako je tim već raspoređen na mečeve.
+  const rosterEditClosed = isLocked || tournamentStarted;
+  const rosterEditClosedReason = isFinished ? 'Turnir je završen' : tournament?.roster_locked ? 'Raspored je napravljen' : 'Turnir je počeo';
+  const ownedParticipatingTeams = useMemo(
+    () => teams.filter((t) => t.owner_id === user?.id),
+    [teams, user?.id]
+  );
+  const otherParticipatingTeams = useMemo(
+    () => (tournament && user?.id === tournament.owner_id ? teams.filter((t) => t.owner_id !== user?.id) : []),
+    [teams, user?.id, tournament]
+  );
+  const availableOwnerTeams = useMemo(
+    () => ownerTeams.filter((t) => !ownedParticipatingTeams.some((pt) => pt.id === t.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ownerTeams, teams, user?.id]
+  );
+
+  useEffect(() => {
+    if (!availableOwnerTeams.length) return;
+    if (availableOwnerTeams.some((t) => t.id === selectedOwnerTeamId)) return;
+    setSelectedOwnerTeamId(availableOwnerTeams[0].id);
+  }, [availableOwnerTeams, selectedOwnerTeamId]);
+
+  useEffect(() => {
+    if (!tournament || !ownedParticipatingTeams.length) {
+      setRosterPools(new Map());
+      setRosterSelections(new Map());
+      return;
+    }
+    let cancelled = false;
+
+    async function loadRosterData() {
+      const teamIds = ownedParticipatingTeams.map((t) => t.id);
+      const [poolEntries, { data: rosterRows }] = await Promise.all([
+        Promise.all(teamIds.map(async (teamId) => [teamId, await loadEligibilityPool(tournament!.id, teamId, tournament!)] as const)),
+        supabase.from('tournament_team_roster').select('team_id, user_id').eq('tournament_id', tournament!.id).in('team_id', teamIds),
+      ]);
+      if (cancelled) return;
+
+      setRosterPools(new Map(poolEntries));
+
+      const selections = new Map<string, string[]>();
+      (rosterRows ?? []).forEach((r) => {
+        const list = selections.get(r.team_id) ?? [];
+        list.push(r.user_id);
+        selections.set(r.team_id, list);
+      });
+      setRosterSelections(selections);
+    }
+
+    loadRosterData();
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament, ownedParticipatingTeams]);
+
   const sportName = tournament?.sports?.name ?? null;
   const isBasketball = !!sportName && BASKETBALL_SPORT_NAMES.includes(sportName);
   const periodLabel = 'Trajanje pauze';
@@ -808,8 +1062,45 @@ export default function TournamentDetail() {
     tabs.push({ id: 'kup', label: 'Kup' });
   }
 
+  const tournamentImage = tournament?.banner_url ?? tournament?.crest_url ?? undefined;
+  const tournamentDescription = tournament
+    ? truncateDescription(
+        tournament.description?.trim()
+          ? tournament.description
+          : `Pogledaj turnir ${tournament.name}${tournament.city ? ` u gradu ${tournament.city}` : ''}. Raspored, tabela i rezultati uživo na DerbyManiji.`
+      )
+    : 'Detalji turnira, raspored, tabela i rezultati uživo na DerbyManiji.';
+
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title={tournament ? `Pogledaj turnir ${tournament.name}` : 'Turnir'}
+        description={tournamentDescription}
+        path={`/turniri/${id ?? ''}`}
+        image={tournamentImage}
+        imageAlt={tournament ? `Grb i banner turnira ${tournament.name}` : undefined}
+        noindex={!loading && !tournament}
+        jsonLd={
+          tournament
+            ? {
+                '@context': 'https://schema.org',
+                '@type': 'SportsEvent',
+                name: tournament.name,
+                sport: tournament.sports?.name,
+                description: tournamentDescription,
+                url: absoluteUrl(`/turniri/${tournament.id}`),
+                image: tournamentImage ? absoluteUrl(tournamentImage) : undefined,
+                startDate: tournament.start_date
+                  ? `${tournament.start_date}${tournament.start_time ? `T${tournament.start_time}` : ''}`
+                  : undefined,
+                location: tournament.city
+                  ? { '@type': 'Place', name: tournament.location ?? tournament.city, address: tournament.city }
+                  : undefined,
+                organizer: organizerName ? { '@type': 'Person', name: organizerName } : undefined,
+              }
+            : undefined
+        }
+      />
       <div className="grain" />
       <SiteHeader />
 
@@ -878,61 +1169,24 @@ export default function TournamentDetail() {
                   </div>
 
                   <div className="mb-1 w-full sm:w-auto flex flex-col items-center sm:items-end gap-3">
-                    <Link
-                      to="/turniri"
-                      className="btn-line px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
-                    >
-                      Nazad na turnire
-                    </Link>
-
                     {user?.id === tournament.owner_id ? (
-                      <div className="w-full sm:w-auto flex flex-col items-center sm:items-end gap-3">
-                        <div className="flex items-center justify-center flex-wrap gap-3">
-                          <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
-                            {isFinished ? 'Turnir je završen' : isLocked ? 'Turnir je zaključan' : 'Ovo je tvoj turnir'}
-                          </span>
-                          {!isLocked && (
-                            <Link
-                              to={`/turniri/${tournament.id}/izmena`}
-                              className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
-                            >
-                              Izmeni turnir
-                            </Link>
-                          )}
-                        </div>
-
-                        {!isLocked && ownedParticipatingTeams.length === 0 && ownerTeams.length > 0 && (
-                          <div className="w-full sm:max-w-sm">
-                            <div className="flex flex-col sm:flex-row items-center gap-3">
-                              {ownerTeams.length > 1 && (
-                                <div className="w-full sm:w-48">
-                                  <Dropdown
-                                    id="owner-team"
-                                    value={selectedOwnerTeamId}
-                                    onChange={setSelectedOwnerTeamId}
-                                    options={ownerTeams.map((t) => ({ value: t.id, label: t.name }))}
-                                    triggerClassName="w-full bg-transparent border border-ink-700 hover:border-paper-100 transition-colors px-5 py-2.5 text-xs uppercase tracking-widest flex items-center justify-between gap-3"
-                                  />
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                onClick={handleAddOwnTeam}
-                                disabled={addingOwnTeam || isFull}
-                                className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
-                              >
-                                {addingOwnTeam
-                                  ? 'Dodavanje…'
-                                  : isFull
-                                    ? 'Turnir je popunjen'
-                                    : ownerTeams.length === 1
-                                      ? `Dodaj svoj tim „${ownerTeams[0].name}“`
-                                      : 'Dodaj svoj tim'}
-                              </button>
-                            </div>
-                            {addOwnTeamError && <p className="text-sm text-red-400 mt-3">{addOwnTeamError}</p>}
-                          </div>
+                      <div className="flex items-center justify-center flex-wrap gap-3">
+                        <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
+                          {isFinished ? 'Turnir je završen' : isLocked ? 'Turnir je zaključan' : 'Ovo je tvoj turnir'}
+                        </span>
+                        {!isLocked && (
+                          <Link
+                            to={`/turniri/${tournament.id}/izmena`}
+                            className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                          >
+                            Izmeni turnir
+                          </Link>
                         )}
+                        <ShareInviteButton
+                          url={`${window.location.origin}/turniri/${tournament.id}?invite=1`}
+                          title={`Pridruži se turniru ${tournament.name}`}
+                          text={`Pridruži se turniru ${tournament.name} u DerbyManiji!`}
+                        />
                       </div>
                     ) : isLocked ? (
                       <span className="text-xs uppercase tracking-widest text-paper-500 border border-ink-700 px-4 py-2.5 inline-block">
@@ -954,7 +1208,12 @@ export default function TournamentDetail() {
                           <button
                             type="button"
                             onClick={handleRequest}
-                            disabled={requesting || currentStatus !== 'none' || (isFull && currentStatus === 'none')}
+                            disabled={
+                              requesting ||
+                              currentStatus !== 'none' ||
+                              (isFull && currentStatus === 'none') ||
+                              (notEnoughForSelected && currentStatus === 'none')
+                            }
                             className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
                           >
                             {isFull && currentStatus === 'none' ? 'Turnir je popunjen' : requestLabel}
@@ -994,9 +1253,9 @@ export default function TournamentDetail() {
             <section className="flex-1 max-w-6xl mx-auto px-6 py-12 sm:py-16 w-full">
               {/* Desktop */}
               <div className="hidden lg:grid lg:grid-cols-10 gap-6 mb-10">
-                <StatBlock label="Grad" value={tournament.city || '—'} className="col-span-2" />
+                <StatBlock label="Grad" value={tournament.city || '—'} className="col-span-3" />
                 <StatBlock label="Lokacija" value={tournament.location || '—'} className="col-span-4" />
-                <StatBlock label="Termin" value={startLabel || '—'} className="col-span-4" />
+                <StatBlock label="Datum" value={startLabel || '—'} className="col-span-3" />
 
                 <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} className="col-span-2" />
                 <StatBlock
@@ -1025,7 +1284,7 @@ export default function TournamentDetail() {
               <div className="grid grid-cols-2 lg:hidden gap-3 mb-10">
                 <StatBlock label="Grad" value={tournament.city || '—'} />
                 <StatBlock label="Lokacija" value={tournament.location || '—'} />
-                <StatBlock label="Termin" value={startLabel || '—'} />
+                <StatBlock label="Datum" value={startLabel || '—'} />
                 <StatBlock label="Vreme početka" value={tournament.start_time ? tournament.start_time.slice(0, 5) : '—'} />
                 <StatBlock
                   label="Format"
@@ -1051,8 +1310,7 @@ export default function TournamentDetail() {
                 <StatBlock label="Starosno ograničenje" value={ageRestrictionLabel} className="col-span-2 text-center" />
               </div>
 
-              {isFinished &&
-                (topScorer || topAssister || (topKeeper && !isBasketball) || (topRebounder && isBasketball)) && (
+              {(topScorer || topAssister || (topKeeper && !isBasketball) || (topRebounder && isBasketball)) && (
                 <div className="mb-10">
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
                     Najbolji igrači turnira
@@ -1061,7 +1319,7 @@ export default function TournamentDetail() {
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {topScorer && (
                       <Link
-                        to={`/${topScorer.username ?? topScorer.playerId}`}
+                        to={`/@${topScorer.username ?? topScorer.playerId}`}
                         className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                       >
                         <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
@@ -1089,7 +1347,7 @@ export default function TournamentDetail() {
 
                     {topAssister && (
                       <Link
-                        to={`/${topAssister.username ?? topAssister.playerId}`}
+                        to={`/@${topAssister.username ?? topAssister.playerId}`}
                         className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                       >
                         <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
@@ -1111,7 +1369,7 @@ export default function TournamentDetail() {
 
                     {!isBasketball && topKeeper && (
                       <Link
-                        to={`/${topKeeper.username ?? topKeeper.playerId}`}
+                        to={`/@${topKeeper.username ?? topKeeper.playerId}`}
                         className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                       >
                         <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
@@ -1133,7 +1391,7 @@ export default function TournamentDetail() {
 
                     {isBasketball && topRebounder && (
                       <Link
-                        to={`/${topRebounder.username ?? topRebounder.playerId}`}
+                        to={`/@${topRebounder.username ?? topRebounder.playerId}`}
                         className="group flex items-center gap-4 bg-ink-900 border border-ink-700 border-l-2 border-l-red-500/50 px-5 py-4 transition-colors duration-200 hover:bg-ink-800 hover:border-l-red-400"
                       >
                         <div className="w-11 h-11 rounded-full bg-ink-800 ring-1 ring-red-500/40 flex items-center justify-center shrink-0">
@@ -1161,6 +1419,43 @@ export default function TournamentDetail() {
                   <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">O turniru</span>
                   <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
                   <p className="text-sm text-paper-200 leading-relaxed whitespace-pre-line">{tournament.description}</p>
+                </div>
+              )}
+
+              {user?.id === tournament.owner_id && !isLocked && availableOwnerTeams.length > 0 && (
+                <div className="mb-10">
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Prijavi svoj tim</span>
+                  <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    {availableOwnerTeams.length > 1 && (
+                      <div className="w-full sm:w-64">
+                        <Dropdown
+                          id="owner-team"
+                          value={selectedOwnerTeamId}
+                          onChange={setSelectedOwnerTeamId}
+                          options={availableOwnerTeams.map((t) => ({ value: t.id, label: t.name }))}
+                          triggerClassName="w-full bg-transparent border border-ink-700 hover:border-paper-100 transition-colors px-5 py-2.5 text-xs uppercase tracking-widest flex items-center justify-between gap-3"
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAddOwnTeam}
+                      disabled={addingOwnTeam || isFull || notEnoughForOwner}
+                      className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
+                    >
+                      {addingOwnTeam
+                        ? 'Dodavanje…'
+                        : isFull
+                          ? 'Turnir je popunjen'
+                          : notEnoughForOwner
+                            ? `Potrebno ${requiredSize} igrača (ima ${ownerPool?.eligible.length ?? 0})`
+                            : availableOwnerTeams.length === 1
+                              ? `Dodaj svoj tim „${availableOwnerTeams[0].name}“`
+                              : 'Dodaj svoj tim'}
+                    </button>
+                  </div>
+                  {addOwnTeamError && <p className="text-sm text-red-400 mt-3">{addOwnTeamError}</p>}
                 </div>
               )}
 
@@ -1208,6 +1503,7 @@ export default function TournamentDetail() {
                       <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] max-h-72 overflow-y-auto">
                         {inviteMatches.map((t) => {
                           const alreadyInvited = invitedTeamIds.has(t.id);
+                          const notEnoughPlayers = t.eligibleCount < requiredSize;
                           return (
                             <div
                               key={t.id}
@@ -1225,11 +1521,19 @@ export default function TournamentDetail() {
                                   <span className="font-display text-xs text-paper-500">{t.name[0]?.toUpperCase()}</span>
                                 )}
                               </div>
-                              <span className="flex-1 min-w-0 truncate text-sm text-paper-100">{t.name}</span>
+                              <div className="flex-1 min-w-0">
+                                <span className="block truncate text-sm text-paper-100">{t.name}</span>
+                                {notEnoughPlayers && (
+                                  <span className="block text-[10px] text-paper-500">
+                                    Nedovoljno igrača ({t.eligibleCount}/{requiredSize})
+                                  </span>
+                                )}
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => handleInviteTeam(t.id)}
-                                disabled={alreadyInvited || invitingTeamId === t.id}
+                                disabled={alreadyInvited || notEnoughPlayers || invitingTeamId === t.id}
+                                title={notEnoughPlayers ? `Tim nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${requiredSize}, dostupno ${t.eligibleCount}).` : undefined}
                                 className="shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                               >
                                 {invitingTeamId === t.id ? 'Slanje…' : alreadyInvited ? 'Poziv poslat' : 'Pozovi'}
@@ -1247,6 +1551,65 @@ export default function TournamentDetail() {
                     </p>
                   )}
                   {inviteError && <p className="text-sm text-red-400 mt-3">{inviteError}</p>}
+                </div>
+              )}
+
+              {ownedParticipatingTeams.length > 0 && (
+                <div className="mt-16 border border-red-500/20 bg-ink-900/60">
+                  <div className="px-6 py-4 border-b border-red-500/20 flex items-center justify-between gap-4 flex-wrap">
+                    <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Izmena igrača</span>
+                    <span className="text-[11px] text-paper-500">
+                      {rosterEditClosed
+                        ? `${rosterEditClosedReason} — sastav se više ne može menjati.`
+                        : startLabel
+                          ? `Sastav možeš menjati do ${startLabel}${
+                              tournament.start_time ? ` u ${tournament.start_time.slice(0, 5)}` : ''
+                            }.`
+                          : 'Sastav možeš menjati do početka turnira.'}
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-ink-800">
+                    {ownedParticipatingTeams.map((team) => {
+                      const pool = rosterPools.get(team.id);
+                      const selectedIds = rosterSelections.get(team.id) ?? [];
+                      const selectedPlayers = pool ? pool.eligible.filter((p) => selectedIds.includes(p.id)) : [];
+                      const notEnoughEligible = !!pool && pool.eligible.length < requiredSize;
+                      const canSwap = !!pool && pool.eligible.length > requiredSize;
+                      const disabled = !pool || !canSwap || rosterEditClosed;
+                      return (
+                        <div key={team.id} className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-paper-100">{team.name}</p>
+                            <p className="text-xs text-paper-500 mt-1">
+                              {!pool
+                                ? 'Učitavanje sastava…'
+                                : notEnoughEligible
+                                  ? `Tim trenutno nema dovoljno igrača koji ispunjavaju uslove turnira (potrebno ${requiredSize}, dostupno ${pool.eligible.length}).`
+                                  : `Izabrano ${selectedIds.length} / ${requiredSize} igrača${
+                                      canSwap ? '' : ' — ceo tim je već u sastavu'
+                                    }`}
+                            </p>
+                            {selectedPlayers.length > 0 && (
+                              <p className="text-xs text-paper-500/80 mt-1 truncate">
+                                {selectedPlayers.map((p) => p.full_name || 'Igrač').join(', ')}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              pool && setRosterEditModal({ teamId: team.id, teamName: team.name, pool, initialSelected: selectedIds })
+                            }
+                            disabled={disabled}
+                            className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          >
+                            {rosterEditClosed ? rosterEditClosedReason : 'Izmeni sastav'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -1281,6 +1644,54 @@ export default function TournamentDetail() {
                           >
                             {withdrawingTeamId === team.id ? 'Povlačenje…' : 'Povuci tim'}
                           </button>
+                        )}
+                      </div>
+                    ))}
+
+                    {otherParticipatingTeams.map((team) => (
+                      <div key={team.id} className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-paper-100">Izbaci tim „{team.name}“</p>
+                          <p className="text-xs text-paper-500 mt-1">
+                            {groupsFormed
+                              ? 'Grupe su već formirane – tim više ne može da se izbaci sa turnira.'
+                              : tournament.roster_locked
+                                ? 'Tabela je već formirana – tim više ne može da se izbaci sa turnira.'
+                                : 'Tim više neće učestvovati na ovom turniru.'}
+                          </p>
+                          {kickError && confirmingKickTeamId === team.id && (
+                            <p className="text-xs text-red-400 mt-2">{kickError}</p>
+                          )}
+                        </div>
+                        {!groupsFormed && !tournament.roster_locked && (
+                          confirmingKickTeamId === team.id ? (
+                            <div className="flex items-center gap-3 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleKickTeam(team.id)}
+                                disabled={kickingTeamId === team.id}
+                                className="px-4 py-2 text-xs uppercase tracking-widest text-paper-100 bg-red-500 hover:bg-red-400 transition-colors"
+                              >
+                                {kickingTeamId === team.id ? 'Izbacivanje…' : 'Potvrdi'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmingKickTeamId(null)}
+                                disabled={kickingTeamId === team.id}
+                                className="text-xs uppercase tracking-widest text-paper-500 hover:text-paper-100 transition-colors"
+                              >
+                                Otkaži
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmingKickTeamId(team.id)}
+                              className="shrink-0 px-4 py-2 text-xs uppercase tracking-widest text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors"
+                            >
+                              Izbaci tim
+                            </button>
+                          )
                         )}
                       </div>
                     ))}
@@ -1366,6 +1777,52 @@ export default function TournamentDetail() {
           </>
         )}
       </main>
+
+      {squadModal && (
+        <SquadSelectionModal
+          teamName={squadModal.teamName}
+          requiredSize={requiredSize}
+          pool={squadModal.pool}
+          submitting={squadSubmitting}
+          onCancel={() => setSquadModal(null)}
+          onConfirm={(userIds) =>
+            squadModal.mode === 'request'
+              ? finishRequest(squadModal.teamId, userIds)
+              : finishAddOwnTeam(squadModal.teamId, userIds)
+          }
+        />
+      )}
+
+      {rosterEditModal && (
+        <SquadSelectionModal
+          teamName={rosterEditModal.teamName}
+          requiredSize={requiredSize}
+          pool={rosterEditModal.pool}
+          initialSelected={rosterEditModal.initialSelected}
+          submitting={rosterEditSubmitting}
+          error={rosterEditError}
+          onCancel={() => {
+            setRosterEditModal(null);
+            setRosterEditError(null);
+          }}
+          onConfirm={async (userIds) => {
+            if (rosterEditClosed) {
+              setRosterEditError(`${rosterEditClosedReason} u međuvremenu — sastav se više ne može menjati.`);
+              return;
+            }
+            setRosterEditSubmitting(true);
+            setRosterEditError(null);
+            const { error } = await finalizeRoster(tournament!.id, rosterEditModal.teamId, userIds);
+            setRosterEditSubmitting(false);
+            if (error) {
+              setRosterEditError('Izmena sastava nije uspela. Pokušaj ponovo.');
+              return;
+            }
+            setRosterSelections((prev) => new Map(prev).set(rosterEditModal.teamId, userIds));
+            setRosterEditModal(null);
+          }}
+        />
+      )}
 
       <SiteFooter />
     </div>

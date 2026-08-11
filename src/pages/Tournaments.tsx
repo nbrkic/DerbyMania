@@ -6,6 +6,7 @@ import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
 import { CardSkeletonGrid } from '../components/Skeleton';
 import { normalizeForSearch } from '../lib/text';
+import { Seo } from '../components/Seo';
 
 type Sport = { id: number; name: string };
 
@@ -37,9 +38,20 @@ function SearchIcon({ className }: { className?: string }) {
   );
 }
 
-function formatStartDate(start: string | null) {
+export function formatStartDate(start: string | null) {
   if (!start) return null;
   return new Date(start).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function teamWord(count: number) {
+  if (count === 1) return 'Tim';
+  if (count >= 2 && count <= 4) return 'Tima';
+  return 'Timova';
+}
+
+export function teamCountLabel(teamCount: number, maxTeams: number | null) {
+  if (maxTeams) return `${teamCount} / ${maxTeams} ${teamWord(maxTeams)}`;
+  return `${teamCount} ${teamWord(teamCount)}`;
 }
 
 const RISE_CLASSES = ['rise-1', 'rise-2', 'rise-3', 'rise-4'];
@@ -50,8 +62,13 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
   return (
     <Link
       to={`/turniri/${tournament.id}`}
-      className={`group relative block bg-ink-800 border border-ink-700 border-t-2 border-t-red-500/40 overflow-hidden transition-[transform,border-color,box-shadow] duration-300 hover:scale-[1.02] hover:border-red-500/60 hover:shadow-[0_0_0_1px_rgba(239,68,68,0.3),0_20px_40px_-18px_rgba(220,38,38,0.55)] ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
+      className={`group relative block bg-ink-800 border border-ink-700 border-t-2 border-t-red-500/40 overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:border-red-500/50 hover:shadow-[0_24px_48px_-20px_rgba(0,0,0,0.7)] ${RISE_CLASSES[index % RISE_CLASSES.length]}`}
     >
+      {/* diagonal shine sweep on hover */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-20">
+        <div className="absolute inset-y-0 -left-1/3 w-1/4 -skew-x-12 bg-paper-100/[0.06] -translate-x-[120%] group-hover:translate-x-[600%] transition-transform duration-700 ease-out" />
+      </div>
+
       <div className="aspect-[21/9] bg-ink-700 overflow-hidden relative">
         {tournament.banner_url && (
           <img
@@ -59,10 +76,9 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
             alt=""
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           />
         )}
-        <div className="absolute inset-0 bg-red-600/0 group-hover:bg-red-600/10 transition-colors duration-300" />
         {tournament.status === 'finished' && (
           <span className="absolute top-3 right-3 text-[10px] uppercase tracking-widest text-paper-100 bg-ink-950/80 border border-ink-700 px-2.5 py-1">
             Završen
@@ -71,7 +87,7 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
       </div>
 
       <div className="px-5 pb-5 relative">
-        <div className="relative z-10 w-16 h-16 -mt-8 mb-3 rounded-full overflow-hidden bg-ink-700 border-4 border-ink-900 ring-2 ring-red-500/30 flex items-center justify-center transition-[box-shadow,transform] duration-300 group-hover:ring-4 group-hover:ring-red-500/60 group-hover:scale-110">
+        <div className="relative z-10 w-16 h-16 -mt-8 mb-3 rounded-full overflow-hidden bg-ink-700 border-4 border-ink-900 ring-2 ring-red-500/30 flex items-center justify-center transition-colors duration-300 group-hover:ring-red-500/60">
           {tournament.crest_url ? (
             <img
               src={tournament.crest_url}
@@ -90,23 +106,17 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
           {tournament.name}
         </h3>
         {tournament.sports && (
-          <p className="text-xs uppercase tracking-widest text-red-400 font-semibold mb-2">{tournament.sports.name}</p>
+          <p className="text-xs uppercase tracking-widest text-red-400 font-semibold mb-3">{tournament.sports.name}</p>
         )}
-        <div className="h-0.5 w-0 bg-red-500 group-hover:w-full transition-all duration-500 ease-out mb-3" />
 
         <div className="flex items-center justify-between text-xs text-paper-500 pt-3 border-t border-ink-700">
           <span>{tournament.city || '—'}</span>
           <span>{dateRange || ''}</span>
         </div>
-        {tournament.founderName && (
-          <p className="text-xs text-paper-500 mt-2">
-            Organizator: <span className="text-paper-100">{tournament.founderName}</span>
-          </p>
-        )}
-        <p className="text-xs text-paper-700 uppercase tracking-widest mt-2">
-          {tournament.teamCount}
-          {tournament.max_teams ? ` / ${tournament.max_teams}` : ''} timova
-        </p>
+        <div className="flex items-center justify-between text-xs text-paper-500 mt-2">
+          <span className="text-paper-100">{tournament.founderName || ''}</span>
+          <span>{teamCountLabel(tournament.teamCount, tournament.max_teams)}</span>
+        </div>
       </div>
     </Link>
   );
@@ -147,9 +157,7 @@ export function TournamentRow({ tournament, index }: { tournament: Tournament; i
           tournament.status === 'finished' ? 'text-paper-500' : 'text-red-400'
         }`}
       >
-        {tournament.status === 'finished'
-          ? 'Završen'
-          : `${tournament.teamCount}${tournament.max_teams ? ` / ${tournament.max_teams}` : ''} timova`}
+        {tournament.status === 'finished' ? 'Završen' : teamCountLabel(tournament.teamCount, tournament.max_teams)}
       </span>
     </Link>
   );
@@ -228,6 +236,12 @@ export default function Tournaments() {
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+      <Seo
+        title="Turniri"
+        description="Pregledaj sve aktivne i završene fudbalske i košarkaške turnire na DerbyManiji. Prijavi svoju ekipu i prati raspored, tabelu i rezultate uživo."
+        path="/turniri"
+        keywords={['fudbalski turniri', 'košarkaški turniri', 'lista turnira', 'prijava na turnir', 'raspored turnira']}
+      />
       <div className="grain" />
       <SiteHeader />
 

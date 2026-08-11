@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { UserAvatar } from '../components/SiteHeader';
+import { Seo } from '../components/Seo';
 
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth();
@@ -15,6 +16,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-ink-950 text-paper-100 flex items-center justify-center px-6 py-16">
+      <Seo title="Kontrolna tabla" description="Tvoj DerbyMania nalog." path="/dashboard" noindex />
       <div className="w-full max-w-sm text-center">
         <Link to="/profile" className="inline-block mb-6">
           <UserAvatar

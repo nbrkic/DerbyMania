@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { AuthShell, TicketField, USERNAME_REGEX, sanitizeUsernameInput } from '../components/AuthShell';
+import { Seo } from '../components/Seo';
 
 type LoginMode = 'username' | 'email';
 
@@ -96,7 +97,14 @@ export default function Login() {
   }
 
   return (
-    <AuthShell
+    <>
+      <Seo
+        title="Prijava"
+        description="Uloguj se na svoj DerbyMania nalog i nastavi da vodiš svoje turnire, timove i rezultate."
+        path="/login"
+        noindex
+      />
+      <AuthShell
       headline={
         <>
           Nazad u <span className="text-red-400">igru.</span>
@@ -160,6 +168,7 @@ export default function Login() {
           {submitting ? 'Prijavljivanje…' : 'Prijavi se'}
         </button>
       </form>
-    </AuthShell>
+      </AuthShell>
+    </>
   );
 }

@@ -72,7 +72,7 @@ export function CrestField({
   position,
   onSelect,
   onPositionChange,
-  emptyHint = 'Postavi grb tima (maksimalno 5MB).',
+  emptyHint = 'JPG / PNG / WEBP - Maksimalno 5MB',
 }: {
   n: string;
   label: string;

@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /obavestenja
+Disallow: /timovi/novi
+Disallow: /turniri/novi
+Disallow: /turniri/*/izmena
+
+Sitemap: https://derbymania.xyz/sitemap.xml
