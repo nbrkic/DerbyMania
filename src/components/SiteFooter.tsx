@@ -10,7 +10,7 @@ export function SiteFooter() {
         <Link to="/" aria-label="DerbyMania — početna">
           <img src="/logo.png" alt="DerbyMania" className="h-9 w-auto" />
         </Link>
-        <div className="flex items-center gap-8">
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:gap-x-8">
           {NAV_LINKS.map((l) => (
             <Link
               key={l.label}

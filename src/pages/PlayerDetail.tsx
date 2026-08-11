@@ -28,6 +28,7 @@ type PlayerDetail = {
   age: number | null;
   city: string | null;
   dominant_hand: string | null;
+  dominant_leg: string | null;
   career_football_goals: number;
   career_basketball_points: number;
   career_football_assists: number;
@@ -134,7 +135,7 @@ export default function PlayerDetail() {
       const { data: playerRow } = await supabase
         .from('public_profiles')
         .select(
-          'id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, height_cm, weight_kg, age, city, dominant_hand, career_football_goals, career_basketball_points, career_football_assists, career_basketball_assists, career_saves, career_yellow_cards, career_red_cards, career_rebounds, preferred_positions'
+          'id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at, height_cm, weight_kg, age, city, dominant_hand, dominant_leg, career_football_goals, career_basketball_points, career_football_assists, career_basketball_assists, career_saves, career_yellow_cards, career_red_cards, career_rebounds, preferred_positions'
         )
         .eq('id', id)
         .single();
@@ -434,7 +435,7 @@ export default function PlayerDetail() {
                             .join(', ') || '—'
                         }
                       />
-                      <StatRow label="Jača noga" value="—" />
+                      <StatRow label="Jača noga" value={player.dominant_leg ? DOMINANT_LABELS[player.dominant_leg] : '—'} />
                       <StatRow label="Golovi" value={String(player.career_football_goals)} />
                       <StatRow label="Asistencije" value={String(player.career_football_assists)} />
                       <StatRow label="Odbrane" value={String(player.career_saves)} />
