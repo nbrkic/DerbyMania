@@ -1,6 +1,11 @@
-import { useRef, type ChangeEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type PointerEvent } from 'react';
+import { ImageCropper } from './ImageCropper';
+import { BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
 
 export type ImagePosition = { x: number; y: number };
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const BANNER_ASPECT = 21 / 9;
 
 function CameraIcon({ className }: { className?: string }) {
   return (
@@ -27,10 +32,35 @@ export function ImageField({
   onSelect: (file: File) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [cropState, setCropState] = useState<{ src: string; fileName: string } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (cropState) URL.revokeObjectURL(cropState.src);
+    };
+  }, [cropState]);
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) onSelect(file);
+    e.target.value = '';
+    if (!file) return;
+    // Prevelike originale prepusti roditelju (prikaže grešku); ostalo isecamo.
+    if (file.size > MAX_IMAGE_SIZE) {
+      onSelect(file);
+      return;
+    }
+    setCropState({ src: URL.createObjectURL(file), fileName: file.name });
+  }
+
+  function handleCropConfirm(file: File) {
+    if (cropState) URL.revokeObjectURL(cropState.src);
+    setCropState(null);
+    onSelect(file);
+  }
+
+  function handleCropCancel() {
+    if (cropState) URL.revokeObjectURL(cropState.src);
+    setCropState(null);
   }
 
   return (
@@ -61,6 +91,19 @@ export function ImageField({
         onChange={handleChange}
         className="sr-only"
       />
+
+      {cropState && (
+        <ImageCropper
+          src={cropState.src}
+          fileName={cropState.fileName}
+          aspect={shape === 'banner' ? BANNER_ASPECT : 1}
+          round={shape === 'circle'}
+          outputMaxDimension={shape === 'banner' ? BANNER_MAX_DIMENSION : CREST_MAX_DIMENSION}
+          title={shape === 'banner' ? 'Podesi baner' : 'Podesi sliku'}
+          onCancel={handleCropCancel}
+          onConfirm={handleCropConfirm}
+        />
+      )}
     </div>
   );
 }
@@ -86,10 +129,34 @@ export function CrestField({
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const lastPointRef = useRef({ x: 0, y: 0 });
+  const [cropState, setCropState] = useState<{ src: string; fileName: string } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (cropState) URL.revokeObjectURL(cropState.src);
+    };
+  }, [cropState]);
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) onSelect(file);
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_IMAGE_SIZE) {
+      onSelect(file);
+      return;
+    }
+    setCropState({ src: URL.createObjectURL(file), fileName: file.name });
+  }
+
+  function handleCropConfirm(file: File) {
+    if (cropState) URL.revokeObjectURL(cropState.src);
+    setCropState(null);
+    onSelect(file);
+  }
+
+  function handleCropCancel() {
+    if (cropState) URL.revokeObjectURL(cropState.src);
+    setCropState(null);
   }
 
   function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
@@ -149,7 +216,7 @@ export function CrestField({
       </div>
 
       <p className="text-xs text-paper-500 mt-2 leading-relaxed max-w-[14rem]">
-        {previewUrl ? 'Prevuci sliku da podesiš poziciju.' : emptyHint}
+        {previewUrl ? 'Prevuci sliku da fino podesiš poziciju.' : emptyHint}
       </p>
       {previewUrl && (
         <button
@@ -168,6 +235,19 @@ export function CrestField({
         onChange={handleChange}
         className="sr-only"
       />
+
+      {cropState && (
+        <ImageCropper
+          src={cropState.src}
+          fileName={cropState.fileName}
+          aspect={1}
+          round
+          outputMaxDimension={CREST_MAX_DIMENSION}
+          title="Podesi grb"
+          onCancel={handleCropCancel}
+          onConfirm={handleCropConfirm}
+        />
+      )}
     </div>
   );
 }

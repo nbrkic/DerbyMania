@@ -19,6 +19,7 @@ import { TeamRow, type Team } from './Teams';
 import { TournamentRow, type Tournament } from './Tournaments';
 import { RowSkeletonGrid } from '../components/Skeleton';
 import { compressImage, CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { ImageCropper } from '../components/ImageCropper';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -73,6 +74,8 @@ export default function Profile() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropFileName, setCropFileName] = useState('avatar.jpg');
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
@@ -402,8 +405,22 @@ export default function Profile() {
       return;
     }
     setError(null);
+    // Otvori cropper (zoom/pomeranje) umesto direktnog postavljanja slike.
+    setCropFileName(file.name);
+    setCropSrc(URL.createObjectURL(file));
+  }
+
+  function handleCropConfirm(file: File) {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+  }
+
+  function handleCropCancel() {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
   }
 
   function openAvatarPicker() {
@@ -848,6 +865,10 @@ export default function Profile() {
             </button>
           </div>
         </div>
+      )}
+
+      {cropSrc && (
+        <ImageCropper src={cropSrc} fileName={cropFileName} title="Podesi profilnu sliku" onCancel={handleCropCancel} onConfirm={handleCropConfirm} />
       )}
 
       <SiteFooter />
