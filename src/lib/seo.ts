@@ -1,13 +1,10 @@
-// Central SEO configuration. Update SITE_URL once the production domain is final —
-// every canonical link, sitemap entry, and Open Graph URL is derived from it.
 export const SITE_URL = 'https://derbymania.xyz';
 export const SITE_NAME = 'DerbyMania';
 export const DEFAULT_LOCALE = 'sr_RS';
 export const DEFAULT_LANG = 'sr';
 
 export const DEFAULT_TITLE = 'DerbyMania × Organizacija sportskih turnira';
-export const DEFAULT_DESCRIPTION =
-  'DerbyMania je besplatna platforma za organizaciju fudbalskih i košarkaških turnira. Prati rezultate uživo i drži tabelu ažurnom, bez ijedne ručno vođene tabele.';
+export const DEFAULT_DESCRIPTION = 'DerbyMania je platforma za organizaciju sportskih turnira. Prati rezultate uživo i drži tabelu ažurnom, bez ijedne ručno vođene tabele.';
 export const DEFAULT_KEYWORDS = [
   'organizacija turnira',
   'sportski turniri',
@@ -20,7 +17,7 @@ export const DEFAULT_KEYWORDS = [
   'DerbyMania',
 ];
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.png`;
-export const DEFAULT_OG_IMAGE_ALT = 'DerbyMania — organizacija sportskih turnira';
+export const DEFAULT_OG_IMAGE_ALT = 'DerbyMania × Organizacija sportskih turnira';
 
 export function absoluteUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;

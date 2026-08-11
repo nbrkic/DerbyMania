@@ -1,7 +1,7 @@
 {
   "name": "DerbyMania",
   "short_name": "DerbyMania",
-  "description": "Organizacija sportskih turnira online.",
+  "description": "Organizacija sportskih turnira",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
