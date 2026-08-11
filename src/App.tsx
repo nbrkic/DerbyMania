@@ -67,6 +67,14 @@ export function App() {
             }
           />
           <Route path="/timovi/:id" element={<TeamDetail />} />
+          <Route
+            path="/timovi/:id/izmena"
+            element={
+              <ProtectedRoute>
+                <CreateTeam />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/igraci" element={<Players />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/:handle" element={<PlayerDetail />} />

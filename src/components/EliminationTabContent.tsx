@@ -617,11 +617,13 @@ function FinishedMatchRow({ match, teamA, teamB, roundText, isBasketball, isExpa
 export function EliminationTabContent({
   id,
   tournament,
+  canScore = false,
   onSwitchToGroups,
   onFinished,
 }: {
   id: string;
   tournament: TournamentInfo;
+  canScore?: boolean;
   onSwitchToGroups?: () => void;
   onFinished?: () => void;
 }) {
@@ -978,7 +980,7 @@ export function EliminationTabContent({
           label: `${m.team_a_id ? (teamsById.get(m.team_a_id)?.name ?? '?') : '?'} — ${m.team_b_id ? (teamsById.get(m.team_b_id)?.name ?? '?') : '?'}`,
           sublabel: roundLabel(m.round, totalRounds),
           status: m.status,
-          onStart: isOwner && m.status === 'pending' && m.team_a_id && m.team_b_id && tournament.status !== 'finished' ? () => handleStartBracketMatch(m.id) : undefined,
+          onStart: canScore && m.status === 'pending' && m.team_a_id && m.team_b_id && tournament.status !== 'finished' ? () => handleStartBracketMatch(m.id) : undefined,
           starting: startingMatchId === m.id,
         }))
     : [];
@@ -996,7 +998,7 @@ export function EliminationTabContent({
       {bracketExists ? (
         <>
           {champion && <ChampionBanner champion={champion} />}
-          <BracketTree totalRounds={totalRounds} matchesByRound={matchesByRound} teamsById={teamsById} isOwner={isOwner} onStart={handleStartBracketMatch} />
+          <BracketTree totalRounds={totalRounds} matchesByRound={matchesByRound} teamsById={teamsById} isOwner={canScore} onStart={handleStartBracketMatch} />
 
           <ScheduleSection items={scheduleItems} />
 
@@ -1011,7 +1013,7 @@ export function EliminationTabContent({
                   if (!teamA || !teamB) return null;
                   return (
                     <div id={`match-${m.id}`} key={m.id}>
-                      <LiveMatchCard match={m} teamA={teamA} teamB={teamB} roundText={roundLabel(m.round, totalRounds)} isOwner={isOwner} rosterA={rosters.get(teamA.id) ?? []} rosterB={rosters.get(teamB.id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} finishError={finishError} onAddGoal={handleAddGoal} onFinishMatch={handleFinishBracketMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
+                      <LiveMatchCard match={m} teamA={teamA} teamB={teamB} roundText={roundLabel(m.round, totalRounds)} isOwner={canScore} rosterA={rosters.get(teamA.id) ?? []} rosterB={rosters.get(teamB.id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} finishError={finishError} onAddGoal={handleAddGoal} onFinishMatch={handleFinishBracketMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
                     </div>
                   );
                 })}

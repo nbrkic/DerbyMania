@@ -477,10 +477,12 @@ function FinishedMatchRow({ match, teamA, teamB, groupName, isBasketball, isExpa
 export function GroupsTabContent({
   id,
   tournament,
+  canScore = false,
   onSwitchToElimination,
 }: {
   id: string;
   tournament: TournamentInfo;
+  canScore?: boolean;
   onSwitchToElimination?: () => void;
 }) {
   const { user } = useAuth();
@@ -968,7 +970,7 @@ export function GroupsTabContent({
           label: `${teamsById.get(m.team_a_id)?.name ?? '?'} — ${teamsById.get(m.team_b_id)?.name ?? '?'}`,
           sublabel: groupNameById.get(m.group_id),
           status: m.status,
-          onStart: isOwner && m.status === 'pending' && tournament.status !== 'finished' ? () => handleStartMatch(m.id) : undefined,
+          onStart: canScore && m.status === 'pending' && tournament.status !== 'finished' ? () => handleStartMatch(m.id) : undefined,
           starting: startingMatchId === m.id,
         }))
     : [];
@@ -1041,7 +1043,7 @@ export function GroupsTabContent({
                   if (!teamA || !teamB) return null;
                   return (
                     <div id={`match-${m.id}`} key={m.id}>
-                      <LiveMatchCard match={m} teamA={teamA} teamB={teamB} groupName={groupNameById.get(m.group_id) ?? ''} isOwner={isOwner} rosterA={rosters.get(m.team_a_id) ?? []} rosterB={rosters.get(m.team_b_id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} onAddGoal={handleAddGoal} onFinishMatch={handleFinishMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
+                      <LiveMatchCard match={m} teamA={teamA} teamB={teamB} groupName={groupNameById.get(m.group_id) ?? ''} isOwner={canScore} rosterA={rosters.get(m.team_a_id) ?? []} rosterB={rosters.get(m.team_b_id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} onAddGoal={handleAddGoal} onFinishMatch={handleFinishMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
                     </div>
                   );
                 })}

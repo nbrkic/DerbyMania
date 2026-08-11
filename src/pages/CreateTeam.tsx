@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader } from '../components/SiteHeader';
@@ -8,6 +8,7 @@ import { TicketField, ComboboxField, TextAreaField } from '../components/AuthShe
 import { Seo } from '../components/Seo';
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { normalizeForSearch } from '../lib/text';
+import { FormSkeleton } from '../components/Skeleton';
 import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
 import { playerCountLabel } from './Teams';
 
@@ -48,6 +49,8 @@ function TeamPreviewCard({
   crestPosition,
   bannerUrl,
   founderName,
+  foundedYear,
+  playerCount,
 }: {
   name: string;
   sportName: string | null;
@@ -56,6 +59,8 @@ function TeamPreviewCard({
   crestPosition: Position;
   bannerUrl: string | null;
   founderName: string | null;
+  foundedYear: number;
+  playerCount: number;
 }) {
   return (
     <div className="relative z-10 w-full max-w-sm bg-ink-900 border border-ink-700 overflow-hidden text-left">
@@ -82,9 +87,9 @@ function TeamPreviewCard({
 
         <div className="grid grid-cols-2 gap-y-1.5 text-xs text-paper-500 pt-3 border-t border-ink-700">
           <span className="truncate pr-2">{city || 'Grad'}</span>
-          <span className="text-right">Osnovan {CURRENT_YEAR}.</span>
+          <span className="text-right">Osnovan {foundedYear}.</span>
           <span className="truncate pr-2 text-paper-100">{founderName || '—'}</span>
-          <span className="text-right">{playerCountLabel(0)}</span>
+          <span className="text-right">{playerCountLabel(playerCount)}</span>
         </div>
       </div>
     </div>
@@ -153,6 +158,8 @@ function TeamCreatedCelebration({
 }
 
 export default function CreateTeam() {
+  const { id: teamId } = useParams<{ id: string }>();
+  const isEditMode = !!teamId;
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
@@ -167,9 +174,15 @@ export default function CreateTeam() {
   const [crestPosition, setCrestPosition] = useState<Position>({ x: 50, y: 50 });
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [foundedYear, setFoundedYear] = useState<number>(CURRENT_YEAR);
+  const [existingPlayerCount, setExistingPlayerCount] = useState(0);
+  const [existingFounderName, setExistingFounderName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [attempted, setAttempted] = useState(false);
+  const [editAttempted, setEditAttempted] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(isEditMode);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [createdTeamId, setCreatedTeamId] = useState<string | null>(null);
@@ -182,6 +195,51 @@ export default function CreateTeam() {
       .order('name')
       .then(({ data }) => setSports(data ?? []));
   }, []);
+
+  useEffect(() => {
+    if (!teamId) return;
+
+    async function loadExisting() {
+      const { data } = await supabase
+        .from('teams')
+        .select('owner_id, sport_id, name, city, description, founded_year, crest_url, crest_position_x, crest_position_y, banner_url')
+        .eq('id', teamId)
+        .is('deleted_at', null)
+        .single();
+
+      if (!data || (user && data.owner_id !== user.id)) {
+        setAccessDenied(true);
+        setLoadingExisting(false);
+        return;
+      }
+
+      setSportId(String(data.sport_id));
+      setName(data.name);
+      setCity(data.city ?? '');
+      setDescription(data.description ?? '');
+      setFoundedYear(data.founded_year ?? CURRENT_YEAR);
+      setCrestPreview(data.crest_url);
+      setCrestPosition({ x: data.crest_position_x, y: data.crest_position_y });
+      setBannerPreview(data.banner_url);
+
+      const { count } = await supabase
+        .from('team_members')
+        .select('user_id', { count: 'exact', head: true })
+        .eq('team_id', teamId);
+      setExistingPlayerCount(count ?? 0);
+
+      const { data: founder } = await supabase
+        .from('public_profiles')
+        .select('full_name')
+        .eq('id', data.owner_id)
+        .single();
+      setExistingFounderName(founder?.full_name ?? null);
+
+      setLoadingExisting(false);
+    }
+
+    loadExisting();
+  }, [teamId, user]);
 
   useEffect(() => {
     supabase
@@ -244,6 +302,83 @@ export default function CreateTeam() {
   }
 
   const fieldError = attempted ? getStepFieldError() : undefined;
+
+  type EditFieldErrors = { name?: string; city?: string; description?: string };
+
+  function getEditFieldErrors(): EditFieldErrors {
+    const errors: EditFieldErrors = {};
+
+    const trimmedName = name.trim();
+    if (!trimmedName) errors.name = 'Unesi naziv tima.';
+    else if (!TEAM_NAME_REGEX.test(trimmedName)) errors.name = 'Naziv tima može sadržati samo slova, brojeve i razmak.';
+    else if (trimmedName.length < MIN_TEAM_NAME_LENGTH) errors.name = `Naziv tima mora imati najmanje ${MIN_TEAM_NAME_LENGTH} karaktera.`;
+
+    const trimmedCity = city.trim();
+    if (!trimmedCity) {
+      errors.city = 'Unesi grad tima.';
+    } else {
+      const matchedCity = cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(trimmedCity));
+      if (!matchedCity) errors.city = 'Izaberi grad iz ponuđene liste.';
+    }
+
+    const normalizedDescriptionLength = description.trim().replace(/\s+/g, ' ').length;
+    if (normalizedDescriptionLength < MIN_DESCRIPTION_LENGTH) {
+      errors.description = `Opis mora imati najmanje ${MIN_DESCRIPTION_LENGTH} karaktera.`;
+    }
+
+    return errors;
+  }
+
+  const EDIT_FIELD_IDS: { key: keyof EditFieldErrors; id: string }[] = [
+    { key: 'name', id: 'name' },
+    { key: 'city', id: 'city' },
+    { key: 'description', id: 'description' },
+  ];
+
+  const editFieldErrors = editAttempted ? getEditFieldErrors() : {};
+
+  async function handleSaveTeam(e: FormEvent) {
+    e.preventDefault();
+    if (!user || !teamId) return;
+
+    setEditAttempted(true);
+    const errors = getEditFieldErrors();
+    const firstInvalid = EDIT_FIELD_IDS.find(({ key }) => errors[key]);
+    if (firstInvalid) {
+      document.getElementById(firstInvalid.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    const matchedCity = cities.find((c) => normalizeForSearch(c.name) === normalizeForSearch(city.trim()));
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const crestUrl = crestFile ? await uploadImage(teamId, crestFile, 'crest') : crestPreview;
+      const bannerUrl = bannerFile ? await uploadImage(teamId, bannerFile, 'banner') : bannerPreview;
+
+      const { error: updateError } = await supabase
+        .from('teams')
+        .update({
+          name: name.trim(),
+          city: matchedCity ? matchedCity.name : null,
+          description: description.trim() || null,
+          crest_url: crestUrl,
+          crest_position_x: Math.round(crestPosition.x),
+          crest_position_y: Math.round(crestPosition.y),
+          banner_url: bannerUrl,
+        })
+        .eq('id', teamId);
+
+      if (updateError) throw new Error(updateError.message);
+
+      navigate(`/timovi/${teamId}`);
+    } catch (err) {
+      setSubmitting(false);
+      setError(err instanceof Error ? err.message : 'Došlo je do greške pri čuvanju tima.');
+    }
+  }
 
   function handleCrestSelect(file: File) {
     if (file.size > MAX_IMAGE_SIZE) {
@@ -335,6 +470,163 @@ export default function CreateTeam() {
   }
 
   const selectedSportName = sports.find((s) => String(s.id) === sportId)?.name ?? null;
+
+  if (loadingExisting) {
+    return (
+      <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+        <div className="grain" />
+        <SiteHeader />
+        <main className="flex-1 pt-16 flex items-center py-16">
+          <FormSkeleton fields={5} />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  if (isEditMode && accessDenied) {
+    return (
+      <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+        <div className="grain" />
+        <SiteHeader />
+        <main className="flex-1 pt-16 flex flex-col items-center justify-center gap-6 px-6 text-center">
+          <p className="text-paper-500">Nemaš pristup izmeni ovog tima.</p>
+          <Link to={`/timovi/${teamId}`} className="btn-line px-6 py-3 text-sm uppercase tracking-widest">
+            Nazad na tim
+          </Link>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  if (isEditMode) {
+    return (
+      <div className="min-h-screen flex flex-col bg-ink-950 text-paper-100 overflow-x-hidden">
+        <Seo
+          title="Izmena tima"
+          description="Izmeni podatke tima na DerbyManiji."
+          path={`/timovi/${teamId}/izmena`}
+          noindex
+        />
+        <div className="grain" />
+        <SiteHeader />
+
+        <main className="flex-1 pt-16 flex flex-col">
+          <div className="flex-1 flex flex-col max-w-6xl mx-auto w-full">
+            <div className="flex-1 flex flex-col lg:grid lg:grid-cols-2 mx-6 lg:border-x border-ink-700">
+              {/* ── PREVIEW PANEL ───────────────────────────────────── */}
+              <div className="order-2 lg:order-2 flex-1 relative overflow-hidden bg-ink-950 lg:border-l border-ink-700 flex flex-col items-center justify-center px-6 py-14 lg:py-20">
+                <div
+                  className="absolute inset-x-0 top-10 h-64 opacity-[0.08] pointer-events-none"
+                  style={{
+                    backgroundImage:
+                      'repeating-linear-gradient(135deg, var(--paper-100) 0, var(--paper-100) 1px, transparent 1px, transparent 28px)',
+                    WebkitMaskImage: 'radial-gradient(ellipse at center, black 35%, transparent 80%)',
+                    maskImage: 'radial-gradient(ellipse at center, black 35%, transparent 80%)',
+                  }}
+                />
+
+                <div className="relative z-10 text-center mb-8 max-w-sm">
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Pregled</span>
+                  <h2 className="font-display text-2xl sm:text-3xl mt-3 leading-tight">Ovako će izgledati tvoj tim.</h2>
+                </div>
+
+                <TeamPreviewCard
+                  name={name}
+                  sportName={selectedSportName}
+                  city={city}
+                  crestUrl={crestPreview}
+                  crestPosition={crestPosition}
+                  bannerUrl={bannerPreview}
+                  founderName={existingFounderName ?? profile?.full_name ?? null}
+                  foundedYear={foundedYear}
+                  playerCount={existingPlayerCount}
+                />
+              </div>
+
+              {/* ── FORM PANEL ──────────────────────────────────────── */}
+              <div className="order-1 lg:order-1 flex-1 bg-ink-900 border-b lg:border-b-0 border-ink-700 px-6 sm:px-12 py-16 lg:py-20 flex flex-col items-center justify-center">
+                <div className="w-full max-w-sm lg:max-w-none">
+                  <h1 className="font-display text-3xl sm:text-4xl mb-10 leading-tight">Izmeni tim</h1>
+
+                  <form onSubmit={handleSaveTeam} noValidate className="flex flex-col gap-7">
+                    <TicketField
+                      n="01"
+                      label="Naziv tima"
+                      id="name"
+                      type="text"
+                      required
+                      value={name}
+                      onChange={setName}
+                      error={editFieldErrors.name}
+                    />
+                    <ComboboxField
+                      n="02"
+                      label="Grad"
+                      id="city"
+                      value={city}
+                      onChange={setCity}
+                      options={cities}
+                      error={editFieldErrors.city}
+                    />
+                    <TextAreaField
+                      n="03"
+                      label="O timu"
+                      id="description"
+                      required
+                      value={description}
+                      onChange={setDescription}
+                      placeholder="Par rečenica o timu…"
+                      error={editFieldErrors.description}
+                    />
+
+                    <CrestField
+                      n="04"
+                      label="Grb tima"
+                      previewUrl={crestPreview}
+                      position={crestPosition}
+                      onSelect={handleCrestSelect}
+                      onPositionChange={setCrestPosition}
+                    />
+                    <ImageField
+                      n="05"
+                      label="Baner tima"
+                      shape="banner"
+                      previewUrl={bannerPreview}
+                      onSelect={handleBannerSelect}
+                      hint="JPG / PNG / WEBP - Maksimalno 5MB"
+                    />
+
+                    {error && (
+                      <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-2">{error}</p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="ticket-submit w-full mt-2 py-4 font-display text-sm tracking-widest uppercase flex items-center justify-center gap-3"
+                    >
+                      {submitting ? 'Čuvanje…' : 'Sačuvaj izmene'}
+                    </button>
+
+                    <Link
+                      to={`/timovi/${teamId}`}
+                      className="btn-line w-full py-3.5 text-sm uppercase tracking-widest flex items-center justify-center"
+                    >
+                      Nazad na tim
+                    </Link>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <SiteFooter />
+      </div>
+    );
+  }
 
   if (createdTeamId) {
     return (
@@ -536,6 +828,8 @@ export default function CreateTeam() {
                     crestPosition={crestPosition}
                     bannerUrl={bannerPreview}
                     founderName={profile?.full_name ?? null}
+                    foundedYear={CURRENT_YEAR}
+                    playerCount={0}
                   />
                 </>
               )}

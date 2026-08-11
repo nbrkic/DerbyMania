@@ -809,6 +809,7 @@ function FinishedMatchRow({
 export function LeagueTabContent({
   id,
   tournament,
+  canScore = false,
   onFinished,
 }: {
   id: string;
@@ -823,6 +824,7 @@ export function LeagueTabContent({
     period_duration_minutes: number;
     sports: { name: string } | null;
   };
+  canScore?: boolean;
   onFinished?: () => void;
 }) {
   const { user } = useAuth();
@@ -1297,7 +1299,7 @@ export function LeagueTabContent({
           ),
           label: `${teamsById.get(m.team_a_id)?.name ?? '?'} — ${teamsById.get(m.team_b_id)?.name ?? '?'}`,
           status: m.status,
-          onStart: isOwner && m.status === 'pending' && !isTournamentFinished ? () => handleStartMatch(m.id) : undefined,
+          onStart: canScore && m.status === 'pending' && !isTournamentFinished ? () => handleStartMatch(m.id) : undefined,
           starting: startingMatchId === m.id,
         }))
     : [];
@@ -1409,7 +1411,7 @@ export function LeagueTabContent({
                         match={m}
                         teamA={teamA}
                         teamB={teamB}
-                        isOwner={isOwner && !isTournamentFinished}
+                        isOwner={canScore && !isTournamentFinished}
                         rosterA={rosters.get(m.team_a_id) ?? []}
                         rosterB={rosters.get(m.team_b_id) ?? []}
                         isBasketball={isBasketball}

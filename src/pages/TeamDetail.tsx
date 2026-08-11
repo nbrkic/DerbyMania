@@ -681,6 +681,12 @@ export default function TeamDetail() {
                         <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
                           Ovo je tvoj tim
                         </span>
+                        <Link
+                          to={`/timovi/${team.id}/izmena`}
+                          className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                        >
+                          Izmeni tim
+                        </Link>
                         <ShareInviteButton
                           url={`${window.location.origin}/timovi/${team.id}?invite=1`}
                           title={`Pridruži se timu ${team.name}`}

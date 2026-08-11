@@ -144,6 +144,15 @@ type InviteTeamOption = {
   eligibleCount: number;
 };
 
+type Collaborator = {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  avatar_position_x: number;
+  avatar_position_y: number;
+};
+
 function StatBlock({ label, value, className = '' }: { label: string; value: string; className?: string }) {
   return (
     <div className={`bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-3 py-3 sm:px-5 sm:py-4 ${className}`}>
@@ -220,6 +229,16 @@ export default function TournamentDetail() {
   const [invitingTeamId, setInvitingTeamId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [collabQuery, setCollabQuery] = useState('');
+  const [collabOpen, setCollabOpen] = useState(false);
+  const [collabResults, setCollabResults] = useState<Collaborator[]>([]);
+  const [invitedCollabIds, setInvitedCollabIds] = useState<Set<string>>(new Set());
+  const [invitingCollabId, setInvitingCollabId] = useState<string | null>(null);
+  const [removingCollabId, setRemovingCollabId] = useState<string | null>(null);
+  const [collabError, setCollabError] = useState<string | null>(null);
+  const collabBoxRef = useRef<HTMLDivElement>(null);
+
   const [activeTab, setActiveTab] = useState<TabId>('pocetna');
   const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(new Set(['pocetna']));
 
@@ -285,6 +304,35 @@ export default function TournamentDetail() {
           );
         } else {
           setTeams([]);
+        }
+
+        // Saradnici (co-organizatori) — mogu da beleže rezultate, ali ne menjaju podešavanja turnira.
+        const { data: collabRows } = await supabase
+          .from('tournament_organizers')
+          .select('user_id')
+          .eq('tournament_id', row.id);
+        const collabIds = (collabRows ?? []).map((c) => c.user_id);
+        if (collabIds.length) {
+          const [{ data: collabProfiles }, { data: collabUsernames }] = await Promise.all([
+            supabase
+              .from('public_profiles')
+              .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y')
+              .in('id', collabIds),
+            supabase.from('player_usernames').select('id, username').in('id', collabIds),
+          ]);
+          const usernameById = new Map((collabUsernames ?? []).map((u) => [u.id, u.username]));
+          setCollaborators(
+            (collabProfiles ?? []).map((p) => ({
+              id: p.id,
+              full_name: p.full_name,
+              username: usernameById.get(p.id) ?? null,
+              avatar_url: p.avatar_url,
+              avatar_position_x: p.avatar_position_x,
+              avatar_position_y: p.avatar_position_y,
+            }))
+          );
+        } else {
+          setCollaborators([]);
         }
       }
 
@@ -573,6 +621,127 @@ export default function TournamentDetail() {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [inviteOpen]);
+
+  const isTournamentOwner = !!user && !!tournament && user.id === tournament.owner_id;
+
+  // Zatvaranje liste za pretragu saradnika klikom van boxa / na Escape.
+  useEffect(() => {
+    if (!collabOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (collabBoxRef.current?.contains(e.target as Node)) return;
+      setCollabOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setCollabOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [collabOpen]);
+
+  // Učitaj već poslate (na čekanju) pozive za saradnju kako bi se dugme označilo.
+  useEffect(() => {
+    if (!isTournamentOwner || !tournament) {
+      setInvitedCollabIds(new Set());
+      return;
+    }
+    supabase
+      .from('tournament_organizer_requests')
+      .select('user_id')
+      .eq('tournament_id', tournament.id)
+      .eq('status', 'pending')
+      .then(({ data }) => setInvitedCollabIds(new Set((data ?? []).map((r) => r.user_id))));
+  }, [isTournamentOwner, tournament]);
+
+  // Pretraga korisnika po imenu i korisničkom imenu za pozivanje kao saradnik.
+  useEffect(() => {
+    if (!isTournamentOwner || !tournament) return;
+    const q = collabQuery.trim();
+    if (q.length < 2) {
+      setCollabResults([]);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(async () => {
+      const [{ data: byName }, { data: byUsername }] = await Promise.all([
+        supabase
+          .from('public_profiles')
+          .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y')
+          .ilike('full_name', `%${q}%`)
+          .limit(10),
+        supabase.from('player_usernames').select('id, username').ilike('username', `%${q}%`).limit(10),
+      ]);
+
+      const ids = [...new Set([...(byName ?? []).map((p) => p.id), ...(byUsername ?? []).map((u) => u.id)])];
+      if (!ids.length) {
+        if (active) setCollabResults([]);
+        return;
+      }
+
+      const [{ data: profiles }, { data: usernames }] = await Promise.all([
+        supabase
+          .from('public_profiles')
+          .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y')
+          .in('id', ids),
+        supabase.from('player_usernames').select('id, username').in('id', ids),
+      ]);
+      const usernameById = new Map((usernames ?? []).map((u) => [u.id, u.username]));
+      const excluded = new Set<string>([tournament.owner_id, ...collaborators.map((c) => c.id)]);
+      const results = (profiles ?? [])
+        .filter((p) => !excluded.has(p.id))
+        .slice(0, 8)
+        .map((p) => ({
+          id: p.id,
+          full_name: p.full_name,
+          username: usernameById.get(p.id) ?? null,
+          avatar_url: p.avatar_url,
+          avatar_position_x: p.avatar_position_x,
+          avatar_position_y: p.avatar_position_y,
+        }));
+      if (active) setCollabResults(results);
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [collabQuery, isTournamentOwner, tournament, collaborators]);
+
+  async function handleInviteCollaborator(userId: string) {
+    if (!user || !tournament) return;
+    setInvitingCollabId(userId);
+    setCollabError(null);
+    const { error } = await supabase
+      .from('tournament_organizer_requests')
+      .insert({ tournament_id: tournament.id, user_id: userId, initiated_by: user.id, type: 'invite' });
+    setInvitingCollabId(null);
+    if (error) {
+      setCollabError('Slanje poziva nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    setInvitedCollabIds((prev) => new Set(prev).add(userId));
+  }
+
+  async function handleRemoveCollaborator(userId: string) {
+    if (!tournament) return;
+    setRemovingCollabId(userId);
+    setCollabError(null);
+    const { error } = await supabase
+      .from('tournament_organizers')
+      .delete()
+      .eq('tournament_id', tournament.id)
+      .eq('user_id', userId);
+    setRemovingCollabId(null);
+    if (error) {
+      setCollabError('Uklanjanje saradnika nije uspelo. Pokušaj ponovo.');
+      return;
+    }
+    setCollaborators((prev) => prev.filter((c) => c.id !== userId));
+  }
 
   async function handleInviteTeam(teamId: string) {
     if (!tournament || !user) return;
@@ -972,6 +1141,8 @@ export default function TournamentDetail() {
   const isFull = tournament?.max_teams != null && teams.length >= tournament.max_teams;
   const isFinished = tournament?.status === 'finished';
   const isLocked = isFinished || !!tournament?.roster_locked;
+  const isCollaborator = !!user && !isTournamentOwner && collaborators.some((c) => c.id === user.id);
+  const canManageScores = isTournamentOwner || isCollaborator;
   const tournamentStartTimestamp =
     tournament?.start_date != null
       ? new Date(`${tournament.start_date}T${tournament.start_time ?? '00:00:00'}`).getTime()
@@ -1169,6 +1340,11 @@ export default function TournamentDetail() {
                   </div>
 
                   <div className="mb-1 w-full sm:w-auto flex flex-col items-center sm:items-end gap-3">
+                    {isCollaborator && (
+                      <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
+                        Saradnik na turniru
+                      </span>
+                    )}
                     {user?.id === tournament.owner_id ? (
                       <div className="flex items-center justify-center flex-wrap gap-3">
                         <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
@@ -1554,6 +1730,108 @@ export default function TournamentDetail() {
                 </div>
               )}
 
+              {isTournamentOwner && (
+                <div className="mb-10">
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Saradnici na turniru</span>
+                  <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
+                  <p className="text-sm text-paper-500 mb-4 max-w-md">
+                    Pozovi druge korisnike da ti pomognu u vođenju turnira. Saradnici mogu da beleže rezultate i vode
+                    utakmice uživo, ali ne mogu da menjaju podešavanja turnira niti da ga brišu.
+                  </p>
+
+                  <div ref={collabBoxRef} className="relative max-w-md">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-paper-500 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={collabQuery}
+                      onChange={(e) => setCollabQuery(e.target.value)}
+                      onFocus={() => setCollabOpen(true)}
+                      placeholder="Pretraži korisnike po imenu ili korisničkom imenu…"
+                      className="w-full bg-ink-900 border border-ink-700 focus:border-red-400 focus:outline-none pl-10 pr-4 py-2.5 text-sm text-paper-100 placeholder:text-paper-500 transition-colors"
+                    />
+
+                    {collabOpen && collabResults.length > 0 && (
+                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] max-h-72 overflow-y-auto">
+                        {collabResults.map((u) => {
+                          const alreadyInvited = invitedCollabIds.has(u.id);
+                          return (
+                            <div key={u.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-ink-800 last:border-b-0">
+                              <div className="w-8 h-8 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center">
+                                {u.avatar_url ? (
+                                  <img
+                                    src={u.avatar_url}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    style={{ objectPosition: `${u.avatar_position_x}% ${u.avatar_position_y}%` }}
+                                  />
+                                ) : (
+                                  <span className="font-display text-xs text-paper-500">
+                                    {(u.full_name || u.username || '?')[0]?.toUpperCase()}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="block truncate text-sm text-paper-100">{u.full_name || 'Korisnik'}</span>
+                                {u.username && <span className="block text-[10px] text-paper-500">@{u.username}</span>}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleInviteCollaborator(u.id)}
+                                disabled={alreadyInvited || invitingCollabId === u.id}
+                                className="shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                              >
+                                {invitingCollabId === u.id ? 'Slanje…' : alreadyInvited ? 'Poziv poslat' : 'Pozovi'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {collabOpen && collabQuery.trim().length >= 2 && collabResults.length === 0 && (
+                    <p className="text-sm text-paper-500 mt-3">Nema rezultata.</p>
+                  )}
+
+                  {collaborators.length > 0 && (
+                    <div className="mt-6 flex flex-col gap-2 max-w-md">
+                      {collaborators.map((c) => (
+                        <div key={c.id} className="flex items-center gap-3 bg-ink-900 border border-ink-700 px-4 py-2.5">
+                          <div className="w-8 h-8 rounded-full overflow-hidden bg-ink-800 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center">
+                            {c.avatar_url ? (
+                              <img
+                                src={c.avatar_url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                style={{ objectPosition: `${c.avatar_position_x}% ${c.avatar_position_y}%` }}
+                              />
+                            ) : (
+                              <span className="font-display text-xs text-paper-500">
+                                {(c.full_name || c.username || '?')[0]?.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="block truncate text-sm text-paper-100">{c.full_name || 'Korisnik'}</span>
+                            {c.username && <span className="block text-[10px] text-paper-500">@{c.username}</span>}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCollaborator(c.id)}
+                            disabled={removingCollabId === c.id}
+                            className="shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                          >
+                            {removingCollabId === c.id ? 'Uklanjanje…' : 'Ukloni'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {collabError && <p className="text-sm text-red-400 mt-3">{collabError}</p>}
+                </div>
+              )}
+
               {ownedParticipatingTeams.length > 0 && (
                 <div className="mt-16 border border-red-500/20 bg-ink-900/60">
                   <div className="px-6 py-4 border-b border-red-500/20 flex items-center justify-between gap-4 flex-wrap">
@@ -1743,7 +2021,7 @@ export default function TournamentDetail() {
 
             {visitedTabs.has('grupna') && id && (
               <div className={activeTab === 'grupna' ? undefined : 'hidden'}>
-                <GroupsTabContent id={id} tournament={tournament} onSwitchToElimination={() => setActiveTab('eliminacija')} />
+                <GroupsTabContent id={id} tournament={tournament} canScore={canManageScores} onSwitchToElimination={() => setActiveTab('eliminacija')} />
               </div>
             )}
             {visitedTabs.has('eliminacija') && id && (
@@ -1751,6 +2029,7 @@ export default function TournamentDetail() {
                 <EliminationTabContent
                   id={id}
                   tournament={tournament}
+                  canScore={canManageScores}
                   onSwitchToGroups={() => setActiveTab('grupna')}
                   onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
                 />
@@ -1761,6 +2040,7 @@ export default function TournamentDetail() {
                 <LeagueTabContent
                   id={id}
                   tournament={tournament}
+                  canScore={canManageScores}
                   onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
                 />
               </div>
@@ -1770,6 +2050,7 @@ export default function TournamentDetail() {
                 <EliminationTabContent
                   id={id}
                   tournament={tournament}
+                  canScore={canManageScores}
                   onFinished={() => setTournament((prev) => (prev ? { ...prev, status: 'finished' } : prev))}
                 />
               </div>

@@ -26,6 +26,8 @@ type NotificationRow = {
   team_join_requests: { status: string } | null;
   tournament_request_id: string | null;
   tournament_team_requests: { status: string; team_id: string; tournament_id: string } | null;
+  organizer_request_id: string | null;
+  tournament_organizer_requests: { status: string } | null;
 };
 
 type InviteSquadModal = {
@@ -72,7 +74,7 @@ export default function Notifications() {
     const { data } = await supabase
       .from('notifications')
       .select(
-        'id, type, title, body, read, created_at, join_request_id, team_join_requests(status), tournament_request_id, tournament_team_requests(status, team_id, tournament_id)'
+        'id, type, title, body, read, created_at, join_request_id, team_join_requests(status), tournament_request_id, tournament_team_requests(status, team_id, tournament_id), organizer_request_id, tournament_organizer_requests(status)'
       )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
@@ -114,6 +116,21 @@ export default function Notifications() {
 
   async function respond(notification: NotificationRow, status: 'accepted' | 'rejected') {
     setRespondError(null);
+
+    if (notification.organizer_request_id) {
+      setRespondingId(notification.id);
+      const { error } = await supabase
+        .from('tournament_organizer_requests')
+        .update({ status, responded_at: new Date().toISOString() })
+        .eq('id', notification.organizer_request_id);
+      setRespondingId(null);
+      if (error) {
+        setRespondError('Akcija nije uspela. Pokušaj ponovo.');
+        return;
+      }
+      await load();
+      return;
+    }
 
     if (notification.join_request_id) {
       setRespondingId(notification.id);
@@ -352,19 +369,23 @@ export default function Notifications() {
                       ? n.team_join_requests?.status
                       : n.type === 'tournament_request' || n.type === 'tournament_invite'
                         ? n.tournament_team_requests?.status
-                        : null;
+                        : n.type === 'tournament_organizer_invite'
+                          ? n.tournament_organizer_requests?.status
+                          : null;
                   const isPendingAction = requestStatus === 'pending';
                   const isAccepted =
                     n.type === 'join_accepted' ||
                     n.type === 'invite_accepted' ||
                     n.type === 'tournament_request_accepted' ||
                     n.type === 'tournament_invite_accepted' ||
+                    n.type === 'tournament_organizer_accepted' ||
                     requestStatus === 'accepted';
                   const isRejected =
                     n.type === 'join_rejected' ||
                     n.type === 'invite_rejected' ||
                     n.type === 'tournament_request_rejected' ||
                     n.type === 'tournament_invite_rejected' ||
+                    n.type === 'tournament_organizer_rejected' ||
                     requestStatus === 'rejected';
                   const isChampion = n.type === 'tournament_champion';
                   const accentClass = isChampion

@@ -66,11 +66,13 @@ function samePositions(a: string[], b: string[]) {
 export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const seededRef = useRef(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
@@ -385,7 +387,11 @@ export default function Profile() {
   const fieldErrors = attempted ? getFieldErrors() : {};
 
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const input = e.target;
+    const file = input.files?.[0];
+    // Dozvoli da se ista slika izabere ponovo tako što reset-ujemo vrednost inputa.
+    input.value = '';
+    setAvatarMenuOpen(false);
     if (!file) return;
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
       setError('Slika nije ispravnog formata. Dozvoljeni formati su JPG, PNG ili WEBP.');
@@ -399,6 +405,23 @@ export default function Profile() {
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   }
+
+  function openAvatarPicker() {
+    // Na dodirnim uređajima (telefon/tablet) ponudi izbor: uslikaj se ili iz galerije,
+    // kao na Instagramu. Na desktopu direktno otvori izbor fajla.
+    const isTouch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    if (isTouch) setAvatarMenuOpen(true);
+    else fileInputRef.current?.click();
+  }
+
+  useEffect(() => {
+    if (!avatarMenuOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setAvatarMenuOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [avatarMenuOpen]);
 
   useEffect(() => {
     if (error) {
@@ -543,7 +566,7 @@ export default function Profile() {
             <div className="flex flex-col items-center text-center mb-12">
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openAvatarPicker}
                 className="relative w-28 h-28 sm:w-32 sm:h-32 group"
               >
                 <UserAvatar
@@ -567,6 +590,14 @@ export default function Profile() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
+                onChange={handleAvatarChange}
+                className="sr-only"
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="user"
                 onChange={handleAvatarChange}
                 className="sr-only"
               />
@@ -763,6 +794,61 @@ export default function Profile() {
           </div>
         </section>
       </main>
+
+      {avatarMenuOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            aria-label="Zatvori"
+            onClick={() => setAvatarMenuOpen(false)}
+            className="absolute inset-0 bg-ink-950/70"
+          />
+          <div className="relative z-10 w-full sm:max-w-sm bg-ink-900 border-t sm:border border-red-500/30 sm:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.85)] sm:mx-6 mb-0 sm:mb-0 rise-1">
+            <div className="px-6 py-4 border-b border-ink-700 text-center">
+              <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Profilna slika</span>
+            </div>
+            <div className="divide-y divide-ink-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setAvatarMenuOpen(false);
+                  cameraInputRef.current?.click();
+                }}
+                className="w-full flex items-center gap-3 px-6 py-4 text-left text-sm text-paper-100 hover:bg-red-500/10 transition-colors"
+              >
+                <CameraIcon className="w-5 h-5 text-red-400 shrink-0" />
+                Uslikaj se
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAvatarMenuOpen(false);
+                  fileInputRef.current?.click();
+                }}
+                className="w-full flex items-center gap-3 px-6 py-4 text-left text-sm text-paper-100 hover:bg-red-500/10 transition-colors"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-red-400 shrink-0">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.5-3.5a2 2 0 0 0-2.8 0L4 22" />
+                </svg>
+                Izaberi iz galerije
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAvatarMenuOpen(false)}
+              className="w-full px-6 py-4 text-sm uppercase tracking-widest text-paper-500 hover:text-paper-100 border-t border-ink-700 transition-colors"
+            >
+              Otkaži
+            </button>
+          </div>
+        </div>
+      )}
 
       <SiteFooter />
     </div>
