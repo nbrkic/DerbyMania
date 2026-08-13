@@ -28,3 +28,4 @@ export function SiteFooter() {
     </footer>
   );
 }
+//dodajem komentar da bi pushovo
