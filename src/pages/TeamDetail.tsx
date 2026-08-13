@@ -279,7 +279,13 @@ export default function TeamDetail() {
             .select('id, full_name, avatar_url, avatar_position_x, avatar_position_y, created_at')
             .in('id', memberIds);
 
-          const profiles = (memberProfiles as unknown as Omit<Player, 'teamCount'>[]) ?? [];
+          const profiles = (memberProfiles as unknown as Omit<Player, 'teamCount' | 'username'>[]) ?? [];
+
+          const { data: usernameRows } = await supabase
+            .from('player_usernames')
+            .select('id, username')
+            .in('id', memberIds);
+          const usernameById = new Map((usernameRows ?? []).map((u) => [u.id, u.username]));
 
           const { data: teamCountRows } = await supabase
             .from('team_members')
@@ -291,7 +297,13 @@ export default function TeamDetail() {
             countByUser.set(m.user_id, (countByUser.get(m.user_id) ?? 0) + 1)
           );
 
-          setMembers(profiles.map((p) => ({ ...p, teamCount: countByUser.get(p.id) ?? 0 })));
+          setMembers(
+            profiles.map((p) => ({
+              ...p,
+              username: usernameById.get(p.id) ?? null,
+              teamCount: countByUser.get(p.id) ?? 0,
+            }))
+          );
         } else {
           setMembers([]);
         }
