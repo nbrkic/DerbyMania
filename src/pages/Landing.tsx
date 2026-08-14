@@ -65,6 +65,7 @@ const STANDINGS = [
 export default function Landing() {
   const { user } = useAuth();
   const createTournamentHref = user ? '/turniri/novi' : '/register';
+  const createTeamHref = user ? '/timovi/novi' : '/register';
 
   return (
     <div className="min-h-screen bg-ink-950 text-paper-100 overflow-x-hidden">
@@ -109,8 +110,8 @@ export default function Landing() {
           </p>
 
           <div className="rise-3 flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to={createTournamentHref} className="btn-solid px-8 py-4 text-base inline-flex items-center justify-center gap-2">
-              Napravi prvi turnir
+            <Link to={createTeamHref} className="btn-solid px-8 py-4 text-base inline-flex items-center justify-center gap-2">
+              Napravi tim
             </Link>
             <a href="#how" className="btn-line px-8 py-4 text-base inline-flex items-center justify-center gap-2">
               Vidi kako radi

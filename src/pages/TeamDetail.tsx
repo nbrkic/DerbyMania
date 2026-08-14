@@ -687,15 +687,15 @@ export default function TeamDetail() {
                     )}
                   </div>
 
-                  <div className="mb-1 flex flex-col items-end gap-3">
+                  <div className="mb-1 flex flex-col items-end gap-3 max-[576px]:w-full max-[576px]:items-stretch">
                     {user?.id === team.owner_id ? (
-                      <div className="flex items-center flex-wrap justify-end gap-3">
-                        <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
+                      <div className="flex items-center flex-wrap justify-end gap-3 max-[576px]:flex-col max-[576px]:w-full max-[576px]:items-stretch">
+                        <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block max-[576px]:w-full max-[576px]:text-center">
                           Ovo je tvoj tim
                         </span>
                         <Link
                           to={`/timovi/${team.id}/izmena`}
-                          className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                          className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2 max-[576px]:w-full"
                         >
                           Izmeni tim
                         </Link>
@@ -703,14 +703,15 @@ export default function TeamDetail() {
                           url={`${window.location.origin}/timovi/${team.id}?invite=1`}
                           title={`Pridruži se timu ${team.name}`}
                           text={`Pridruži se timu ${team.name} u DerbyManiji!`}
+                          className="max-[576px]:w-full"
                         />
                       </div>
                     ) : isMember ? (
-                      <span className="text-xs uppercase tracking-widest text-paper-500 border border-ink-700 px-4 py-2.5 inline-block">
+                      <span className="text-xs uppercase tracking-widest text-paper-500 border border-ink-700 px-4 py-2.5 inline-block max-[576px]:w-full max-[576px]:text-center">
                         Već si član tima
                       </span>
                     ) : hasPendingRequest ? (
-                      <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
+                      <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block max-[576px]:w-full max-[576px]:text-center">
                         Zahtev je poslat
                       </span>
                     ) : (
@@ -718,7 +719,7 @@ export default function TeamDetail() {
                         type="button"
                         onClick={handleJoinRequest}
                         disabled={joining}
-                        className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest"
+                        className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest max-[576px]:w-full"
                       >
                         {joining ? 'Slanje…' : 'Pridruži se timu'}
                       </button>

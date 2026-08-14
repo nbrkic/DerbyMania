@@ -292,16 +292,17 @@ type SelectFieldProps = {
   required?: boolean;
   placeholder?: string;
   error?: string;
+  disabled?: boolean;
 };
 
-export function SelectField({ n, label, id, value, onChange, options, placeholder, error }: SelectFieldProps) {
+export function SelectField({ n, label, id, value, onChange, options, placeholder, error, disabled }: SelectFieldProps) {
   return (
     <div>
       <label htmlFor={id} className="flex items-baseline text-[11px] uppercase tracking-widest text-paper-500 mb-2">
         {n && <span className="text-red-400 font-bold mr-2">{n}</span>}
         {label}
       </label>
-      <Dropdown id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} />
+      <Dropdown id={id} value={value} onChange={onChange} options={options} placeholder={placeholder} disabled={disabled} />
       {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
     </div>
   );

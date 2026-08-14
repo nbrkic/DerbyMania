@@ -600,7 +600,9 @@ export default function Profile() {
                 />
                 <span className="absolute inset-0 rounded-full bg-ink-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-paper-100">
                   <CameraIcon className="w-6 h-6" />
-                  <span className="text-[10px] uppercase tracking-widest">Promeni</span>
+                  <span className="text-[10px] uppercase tracking-widest">
+                    {(avatarPreview ?? profile?.avatar_url) ? 'Promeni' : 'Dodaj'}
+                  </span>
                 </span>
               </button>
               <input
@@ -619,7 +621,9 @@ export default function Profile() {
                 className="sr-only"
               />
               <p className="text-xs text-paper-500 mt-3">
-                Dodaj svoju sliku (maksimalno 5MB).
+                {(avatarPreview ?? profile?.avatar_url)
+                  ? 'Klikni na sliku da je promeniš.'
+                  : 'Klikni da dodaš svoju sliku (maksimalno 5MB).'}
               </p>
 
               <h1 className="font-display text-3xl sm:text-4xl mt-6 mb-1 leading-tight">Tvoj profil</h1>

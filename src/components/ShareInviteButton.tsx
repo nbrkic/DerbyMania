@@ -11,11 +11,12 @@ function ShareIcon({ className }: { className?: string }) {
   );
 }
 
-export function ShareInviteButton({ url, title, text, label = 'Podeli poziv' }: {
+export function ShareInviteButton({ url, title, text, label = 'Podeli poziv', className = '' }: {
   url: string;
   title: string;
   text: string;
   label?: string;
+  className?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -41,7 +42,7 @@ export function ShareInviteButton({ url, title, text, label = 'Podeli poziv' }: 
     <button
       type="button"
       onClick={handleShare}
-      className="btn-line px-4 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap"
+      className={`btn-line px-4 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2 whitespace-nowrap ${className}`}
     >
       <ShareIcon className="w-3.5 h-3.5" />
       {copied ? 'Link kopiran!' : label}

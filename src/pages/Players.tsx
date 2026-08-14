@@ -134,7 +134,7 @@ export function PlayerCard({
       </div>
 
       <div className="min-w-0 flex-1">
-        <h3 className="font-display text-base leading-tight truncate transition-colors duration-200 group-hover:text-red-400">
+        <h3 className="font-sans font-semibold text-base leading-tight truncate transition-colors duration-200 group-hover:text-red-400">
           {displayName}
         </h3>
         <p className="text-[11px] uppercase tracking-widest text-paper-700 mt-0.5 truncate">
@@ -467,7 +467,9 @@ export default function Players() {
               <p className="text-paper-500">Nema igrača koji odgovaraju pretrazi.</p>
             ) : (
               <>
-                <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">Svi DerbyMania igrači</span>
+                <span className="text-xs uppercase tracking-widest text-red-400 font-semibold">
+                  Svi DerbyMania igrači <span className="text-paper-400">| {players.length}</span>
+                </span>
                 <div className="w-10 h-0.5 bg-red-500 mt-3 mb-5" />
 
                 <div className="grid sm:grid-cols-3 gap-3">

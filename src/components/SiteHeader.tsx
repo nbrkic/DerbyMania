@@ -292,7 +292,7 @@ export function SiteHeader() {
                 <Link
                   to={l.href}
                   onClick={closeMenu}
-                  className={`block rounded-2xl px-4 py-3 font-display text-base transition-colors ${
+                  className={`block rounded-2xl px-4 py-3 font-sans text-base transition-colors ${
                     isNavLinkActive(l.href, location.pathname)
                       ? 'bg-red-500/10 text-red-400'
                       : 'text-paper-100 hover:bg-ink-800 hover:text-red-400'
@@ -309,7 +309,7 @@ export function SiteHeader() {
               <Link
                 to="/obavestenja"
                 onClick={closeMenu}
-                className="flex items-center justify-between rounded-2xl px-4 py-3 font-display text-base text-paper-100 hover:bg-ink-800 hover:text-red-400 transition-colors"
+                className="flex items-center justify-between rounded-2xl px-4 py-3 font-sans text-base text-paper-100 hover:bg-ink-800 hover:text-red-400 transition-colors"
               >
                 <span className="flex items-center gap-2">
                   <BellIcon className="w-4 h-4" /> Obaveštenja

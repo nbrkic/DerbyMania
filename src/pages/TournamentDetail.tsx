@@ -157,7 +157,7 @@ function StatBlock({ label, value, className = '' }: { label: string; value: str
   return (
     <div className={`bg-ink-900 border border-ink-700 border-t-2 border-t-red-500/50 px-3 py-3 sm:px-5 sm:py-4 ${className}`}>
       <p className="text-[10px] sm:text-[11px] uppercase tracking-widest text-paper-500 mb-1 truncate">{label}</p>
-      <p className="font-display text-base sm:text-xl leading-tight truncate">{value}</p>
+      <p className="font-sans font-semibold text-sm sm:text-lg leading-tight truncate">{value}</p>
     </div>
   );
 }
@@ -1208,6 +1208,7 @@ export default function TournamentDetail() {
 
   const sportName = tournament?.sports?.name ?? null;
   const isBasketball = !!sportName && BASKETBALL_SPORT_NAMES.includes(sportName);
+  const isBasket = sportName === 'Basket';
   const periodLabel = 'Trajanje pauze';
   const startLabel = tournament?.start_date ? formatDate(tournament.start_date) : null;
   const ageRestrictionLabel = tournament ? formatAgeRestriction(tournament.min_birth_year, tournament.max_birth_year) : '—';
@@ -1346,14 +1347,14 @@ export default function TournamentDetail() {
                       </span>
                     )}
                     {user?.id === tournament.owner_id ? (
-                      <div className="flex items-center justify-center flex-wrap gap-3">
-                        <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block">
+                      <div className="flex items-center justify-center flex-wrap gap-3 max-[576px]:flex-col max-[576px]:w-full max-[576px]:items-stretch">
+                        <span className="text-xs uppercase tracking-widest text-red-400 border border-red-500/30 px-4 py-2.5 inline-block max-[576px]:w-full max-[576px]:text-center">
                           {isFinished ? 'Turnir je završen' : isLocked ? 'Turnir je zaključan' : 'Ovo je tvoj turnir'}
                         </span>
                         {!isLocked && (
                           <Link
                             to={`/turniri/${tournament.id}/izmena`}
-                            className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                            className="btn-solid px-5 py-2.5 text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2 max-[576px]:w-full"
                           >
                             Izmeni turnir
                           </Link>
@@ -1362,6 +1363,7 @@ export default function TournamentDetail() {
                           url={`${window.location.origin}/turniri/${tournament.id}?invite=1`}
                           title={`Pridruži se turniru ${tournament.name}`}
                           text={`Pridruži se turniru ${tournament.name} u DerbyManiji!`}
+                          className="max-[576px]:w-full"
                         />
                       </div>
                     ) : isLocked ? (
@@ -1369,10 +1371,10 @@ export default function TournamentDetail() {
                         {isFinished ? 'Turnir je završen' : 'Prijave su zatvorene'}
                       </span>
                     ) : ownedTeams.length > 0 ? (
-                      <div className="w-full sm:max-w-sm">
-                        <div className="flex flex-col sm:flex-row items-center gap-3">
+                      <div className="w-full min-[577px]:max-w-sm">
+                        <div className="flex flex-col min-[577px]:flex-row items-center gap-3">
                           {ownedTeams.length > 1 && (
-                            <div className="w-full sm:w-48">
+                            <div className="w-full min-[577px]:w-48">
                               <Dropdown
                                 id="request-team"
                                 value={selectedTeamId}
@@ -1390,7 +1392,7 @@ export default function TournamentDetail() {
                               (isFull && currentStatus === 'none') ||
                               (notEnoughForSelected && currentStatus === 'none')
                             }
-                            className="btn-solid w-full sm:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
+                            className="btn-solid w-full min-[577px]:w-auto px-5 py-2.5 text-xs uppercase tracking-widest whitespace-nowrap"
                           >
                             {isFull && currentStatus === 'none' ? 'Turnir je popunjen' : requestLabel}
                           </button>
@@ -1442,8 +1444,14 @@ export default function TournamentDetail() {
                 <StatBlock label="Broj igrača" value={squadLabel} className="col-span-2" />
                 <StatBlock label="Format" value={FORMAT_LABELS[tournament.format] ?? tournament.format} className="col-span-4" />
 
-                <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} className="col-span-2" />
-                <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} className="col-span-2" />
+                <StatBlock
+                  label="Trajanje utakmice"
+                  value={`${tournament.match_duration_minutes} min`}
+                  className={isBasket ? 'col-span-4' : 'col-span-2'}
+                />
+                {!isBasket && (
+                  <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} className="col-span-2" />
+                )}
                 <StatBlock
                   label="Kotizacija"
                   value={
@@ -1472,8 +1480,14 @@ export default function TournamentDetail() {
                   label="Timova"
                   value={tournament.max_teams ? `${teams.length} / ${tournament.max_teams}` : String(teams.length)}
                 />
-                <StatBlock label="Trajanje utakmice" value={`${tournament.match_duration_minutes} min`} />
-                <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
+                <StatBlock
+                  label="Trajanje utakmice"
+                  value={`${tournament.match_duration_minutes} min`}
+                  className={isBasket ? 'col-span-2 text-center' : ''}
+                />
+                {!isBasket && (
+                  <StatBlock label={periodLabel} value={`${tournament.period_duration_minutes} min`} />
+                )}
                 <StatBlock
                   label="Kotizacija"
                   value={

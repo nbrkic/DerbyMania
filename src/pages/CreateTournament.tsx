@@ -15,7 +15,7 @@ import { formatStartDate, teamCountLabel } from './Tournaments';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
-const NAME_REGEX = /^[A-Za-z0-9ČĆŽŠĐčćžšđ]+(?: [A-Za-z0-9ČĆŽŠĐčćžšđ]+)*$/;
+const NAME_REGEX = /^[A-Za-z0-9ČĆŽŠĐčćžšđ|&#-]+(?: [A-Za-z0-9ČĆŽŠĐčćžšđ|&#-]+)*$/;
 const MIN_NAME_LENGTH = 3;
 const MIN_DESCRIPTION_LENGTH = 10;
 const MIN_PLAYERS_PER_TEAM = 1;
@@ -25,6 +25,7 @@ const MAX_SUBSTITUTIONS = 20;
 const MIN_MATCH_DURATION = 1;
 const MIN_PERIOD_DURATION = 0;
 const MIN_MAX_TEAMS = 2;
+const AGE_CLEAR = '__clear__';
 const MIN_ENTRY_FEE = 1;
 const MIN_AGE_YEARS = 8;
 const MAX_AGE_YEARS = 80;
@@ -370,7 +371,7 @@ export default function CreateTournament() {
     if (step === 'naziv') {
       const trimmed = name.trim();
       if (!trimmed) errors.name = 'Unesi naziv turnira.';
-      else if (!NAME_REGEX.test(trimmed)) errors.name = 'Naziv turnira može sadržati samo slova, brojeve i razmak.';
+      else if (!NAME_REGEX.test(trimmed)) errors.name = 'Naziv turnira može sadržati slova, brojeve, razmak i simbole - | & #.';
       else if (trimmed.length < MIN_NAME_LENGTH) errors.name = `Naziv turnira mora imati najmanje ${MIN_NAME_LENGTH} karaktera.`;
     }
 
@@ -399,8 +400,10 @@ export default function CreateTournament() {
     if (step === 'trajanje') {
       if (!matchDurationMinutes.trim()) errors.matchDuration = 'Unesi trajanje utakmice.';
       else if (Number(matchDurationMinutes) < MIN_MATCH_DURATION) errors.matchDuration = `Trajanje utakmice mora biti bar ${MIN_MATCH_DURATION} minut.`;
-      if (!periodDurationMinutes.trim()) errors.periodDuration = 'Unesi trajanje pauze.';
-      else if (Number(periodDurationMinutes) < MIN_PERIOD_DURATION) errors.periodDuration = 'Trajanje pauze ne može biti negativno.';
+      if (showPeriodField) {
+        if (!periodDurationMinutes.trim()) errors.periodDuration = 'Unesi trajanje pauze.';
+        else if (Number(periodDurationMinutes) < MIN_PERIOD_DURATION) errors.periodDuration = 'Trajanje pauze ne može biti negativno.';
+      }
     }
 
     if (step === 'termin') {
@@ -440,6 +443,13 @@ export default function CreateTournament() {
     return errors;
   }
 
+  const selectedSportName = sports.find((s) => String(s.id) === sportId)?.name ?? null;
+  const isBasketball = !!selectedSportName && BASKETBALL_SPORT_NAMES.includes(selectedSportName);
+  const isBasket = selectedSportName === 'Basket';
+  // Basket se igra do određenog broja poena / vremena, bez poluvremena — pauza nema smisla, pa je polje sakriveno.
+  const showPeriodField = !isBasket;
+  const periodLabel = isBasketball ? 'Trajanje pauze između četvrtina (min)' : 'Trajanje pauze između poluvremena (min)';
+
   const fieldErrors = attempted ? getStepFieldErrors() : {};
 
   function getEditFieldErrors(): StepFieldErrors {
@@ -449,7 +459,7 @@ export default function CreateTournament() {
 
     const trimmedName = name.trim();
     if (!trimmedName) errors.name = 'Unesi naziv turnira.';
-    else if (!NAME_REGEX.test(trimmedName)) errors.name = 'Naziv turnira može sadržati samo slova, brojeve i razmak.';
+    else if (!NAME_REGEX.test(trimmedName)) errors.name = 'Naziv turnira može sadržati slova, brojeve, razmak i simbole - | & #.';
     else if (trimmedName.length < MIN_NAME_LENGTH) errors.name = `Naziv turnira mora imati najmanje ${MIN_NAME_LENGTH} karaktera.`;
 
     const trimmedCity = city.trim();
@@ -474,8 +484,10 @@ export default function CreateTournament() {
 
     if (!matchDurationMinutes.trim()) errors.matchDuration = 'Unesi trajanje utakmice.';
     else if (Number(matchDurationMinutes) < MIN_MATCH_DURATION) errors.matchDuration = `Trajanje utakmice mora biti bar ${MIN_MATCH_DURATION} minut.`;
-    if (!periodDurationMinutes.trim()) errors.periodDuration = 'Unesi trajanje pauze.';
-    else if (Number(periodDurationMinutes) < MIN_PERIOD_DURATION) errors.periodDuration = 'Trajanje pauze ne može biti negativno.';
+    if (showPeriodField) {
+      if (!periodDurationMinutes.trim()) errors.periodDuration = 'Unesi trajanje pauze.';
+      else if (Number(periodDurationMinutes) < MIN_PERIOD_DURATION) errors.periodDuration = 'Trajanje pauze ne može biti negativno.';
+    }
 
     if (!startDate) errors.startDate = 'Unesi datum početka turnira.';
     if (!startTime) errors.startTime = 'Izaberi tačno vreme početka turnira.';
@@ -593,7 +605,7 @@ export default function CreateTournament() {
         players_per_team: Number(playersPerTeam),
         substitutions_allowed: Number(substitutionsAllowed),
         match_duration_minutes: Number(matchDurationMinutes),
-        period_duration_minutes: Number(periodDurationMinutes),
+        period_duration_minutes: showPeriodField ? Number(periodDurationMinutes) : 0,
         start_date: startDate || null,
         start_time: startTime || null,
         max_teams: capacityMode === 'limited' && maxTeams ? Number(maxTeams) : null,
@@ -642,7 +654,7 @@ export default function CreateTournament() {
         players_per_team: Number(playersPerTeam),
         substitutions_allowed: Number(substitutionsAllowed),
         match_duration_minutes: Number(matchDurationMinutes),
-        period_duration_minutes: Number(periodDurationMinutes),
+        period_duration_minutes: showPeriodField ? Number(periodDurationMinutes) : 0,
         start_date: startDate || null,
         start_time: startTime || null,
         max_teams: maxTeams ? Number(maxTeams) : null,
@@ -696,11 +708,17 @@ export default function CreateTournament() {
     }
   }
 
-  const selectedSportName = sports.find((s) => String(s.id) === sportId)?.name ?? null;
-  const isBasketball = !!selectedSportName && BASKETBALL_SPORT_NAMES.includes(selectedSportName);
-  const periodLabel = isBasketball ? 'Trajanje pauze između četvrtina (min)' : 'Trajanje pauze između poluvremena (min)';
-  const minAgeOptions = AGE_OPTIONS.map((o) => ({ ...o, disabled: maxAge !== '' && Number(o.value) > Number(maxAge) }));
-  const maxAgeOptions = AGE_OPTIONS.map((o) => ({ ...o, disabled: minAge !== '' && Number(o.value) < Number(minAge) }));
+  // Opcija „Poništi" na vrhu liste omogućava da se već izabrana godina obriše nazad na prazno.
+  const minAgeOptions = [
+    ...(minAge ? [{ value: AGE_CLEAR, label: 'Poništi' }] : []),
+    ...AGE_OPTIONS.map((o) => ({ ...o, disabled: maxAge !== '' && Number(o.value) > Number(maxAge) })),
+  ];
+  const maxAgeOptions = [
+    ...(maxAge ? [{ value: AGE_CLEAR, label: 'Poništi' }] : []),
+    ...AGE_OPTIONS.map((o) => ({ ...o, disabled: minAge !== '' && Number(o.value) < Number(minAge) })),
+  ];
+  const handleMinAgeChange = (v: string) => setMinAge(v === AGE_CLEAR ? '' : v);
+  const handleMaxAgeChange = (v: string) => setMaxAge(v === AGE_CLEAR ? '' : v);
 
   if (loadingExisting) {
     return (
@@ -781,6 +799,7 @@ export default function CreateTournament() {
                       label="Sport"
                       id="sport"
                       required
+                      disabled
                       placeholder="Izaberi sport"
                       value={sportId}
                       onChange={setSportId}
@@ -842,17 +861,19 @@ export default function CreateTournament() {
                         onChange={setMatchDurationMinutes}
                         error={editFieldErrors.matchDuration}
                       />
-                      <TicketField
-                        n="09"
-                        label={periodLabel}
-                        id="period-duration"
-                        type="number"
-                        required
-                        min={MIN_PERIOD_DURATION}
-                        value={periodDurationMinutes}
-                        onChange={setPeriodDurationMinutes}
-                        error={editFieldErrors.periodDuration}
-                      />
+                      {showPeriodField && (
+                        <TicketField
+                          n="09"
+                          label={periodLabel}
+                          id="period-duration"
+                          type="number"
+                          required
+                          min={MIN_PERIOD_DURATION}
+                          value={periodDurationMinutes}
+                          onChange={setPeriodDurationMinutes}
+                          error={editFieldErrors.periodDuration}
+                        />
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -938,16 +959,18 @@ export default function CreateTournament() {
                             label="Minimalna starost (GOD)"
                             id="min-age"
                             value={minAge}
-                            onChange={setMinAge}
+                            onChange={handleMinAgeChange}
                             options={minAgeOptions}
+                            placeholder="Bez donje granice"
                           />
                           <SelectField
                             n="16"
                             label="Maksimalna starost (GOD)"
                             id="max-age"
                             value={maxAge}
-                            onChange={setMaxAge}
+                            onChange={handleMaxAgeChange}
                             options={maxAgeOptions}
+                            placeholder="Bez gornje granice"
                           />
                         </div>
                         {editFieldErrors.ageRestrictionRange && (
@@ -1257,16 +1280,18 @@ export default function CreateTournament() {
                       onChange={setMatchDurationMinutes}
                       error={fieldErrors.matchDuration}
                     />
-                    <TicketField
-                      n=""
-                      label={periodLabel}
-                      id="period-duration"
-                      type="number"
-                      min={MIN_PERIOD_DURATION}
-                      value={periodDurationMinutes}
-                      onChange={setPeriodDurationMinutes}
-                      error={fieldErrors.periodDuration}
-                    />
+                    {showPeriodField && (
+                      <TicketField
+                        n=""
+                        label={periodLabel}
+                        id="period-duration"
+                        type="number"
+                        min={MIN_PERIOD_DURATION}
+                        value={periodDurationMinutes}
+                        onChange={setPeriodDurationMinutes}
+                        error={fieldErrors.periodDuration}
+                      />
+                    )}
                   </div>
                 </>
               )}
@@ -1404,16 +1429,18 @@ export default function CreateTournament() {
                         label="Minimalna starost (GOD)"
                         id="min-age"
                         value={minAge}
-                        onChange={setMinAge}
+                        onChange={handleMinAgeChange}
                         options={minAgeOptions}
+                        placeholder="Bez donje granice"
                       />
                       <SelectField
                         n=""
                         label="Maksimalna starost (GOD)"
                         id="max-age"
                         value={maxAge}
-                        onChange={setMaxAge}
+                        onChange={handleMaxAgeChange}
                         options={maxAgeOptions}
+                        placeholder="Bez gornje granice"
                       />
                       {fieldErrors.ageRestrictionRange && (
                         <p className="text-[11px] text-red-400">{fieldErrors.ageRestrictionRange}</p>
@@ -1508,7 +1535,6 @@ export default function CreateTournament() {
                       {STEP_LABELS.grb}
                     </span>
                     <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Postavi logo turnira</h1>
-                    <p className="text-paper-500 mt-3">Opciono — možeš i da preskočiš.</p>
                   </div>
                   <CrestField
                     n=""
@@ -1529,7 +1555,6 @@ export default function CreateTournament() {
                       {STEP_LABELS.baner}
                     </span>
                     <h1 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">Postavi baner turnira</h1>
-                    <p className="text-paper-500 mt-3">Opciono — možeš i da preskočiš.</p>
                   </div>
                   <div className="w-full max-w-md">
                     <ImageField

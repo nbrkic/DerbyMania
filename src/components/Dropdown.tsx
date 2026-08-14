@@ -10,9 +10,10 @@ type DropdownProps = {
   options: DropdownOption[];
   placeholder?: string;
   triggerClassName?: string;
+  disabled?: boolean;
 };
 
-export function Dropdown({ id, value, onChange, options, placeholder, triggerClassName }: DropdownProps) {
+export function Dropdown({ id, value, onChange, options, placeholder, triggerClassName, disabled }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,8 +63,11 @@ export function Dropdown({ id, value, onChange, options, placeholder, triggerCla
       <button
         type="button"
         id={id}
-        onClick={() => setOpen((v) => !v)}
-        className={triggerClassName ?? 'field-input w-full pb-2.5 text-base text-left flex items-center justify-between gap-3'}
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((v) => !v)}
+        className={`${triggerClassName ?? 'field-input w-full pb-2.5 text-base text-left flex items-center justify-between gap-3'} ${
+          disabled ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
       >
         <span className={`flex-1 min-w-0 truncate ${selected ? 'text-paper-100' : 'text-[rgba(244,235,225,0.3)]'}`}>
           {selected ? selected.label : placeholder}
