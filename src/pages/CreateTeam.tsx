@@ -14,7 +14,7 @@ import { playerCountLabel } from './Teams';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
-const TEAM_NAME_REGEX = /^[A-Za-z0-9ČĆŽŠĐčćžšđ|&#-]+(?: [A-Za-z0-9ČĆŽŠĐčćžšđ|&#-]+)*$/;
+const TEAM_NAME_REGEX = /^[A-Za-z0-9ČĆŽŠĐčćžšđ]+(?: [A-Za-z0-9ČĆŽŠĐčćžšđ]+)*$/;
 const MIN_TEAM_NAME_LENGTH = 3;
 const MIN_DESCRIPTION_LENGTH = 10;
 
@@ -279,7 +279,7 @@ export default function CreateTeam() {
     if (step === 'naziv') {
       const trimmed = name.trim();
       if (!trimmed) return 'Unesi naziv tima.';
-      if (!TEAM_NAME_REGEX.test(trimmed)) return 'Naziv tima može sadržati slova, brojeve, razmak i simbole - | & #.';
+      if (!TEAM_NAME_REGEX.test(trimmed)) return 'Naziv tima može sadržati samo slova, brojeve i razmak.';
       if (trimmed.length < MIN_TEAM_NAME_LENGTH) return `Naziv tima mora imati najmanje ${MIN_TEAM_NAME_LENGTH} karaktera.`;
       return undefined;
     }
@@ -310,7 +310,7 @@ export default function CreateTeam() {
 
     const trimmedName = name.trim();
     if (!trimmedName) errors.name = 'Unesi naziv tima.';
-    else if (!TEAM_NAME_REGEX.test(trimmedName)) errors.name = 'Naziv tima može sadržati slova, brojeve, razmak i simbole - | & #.';
+    else if (!TEAM_NAME_REGEX.test(trimmedName)) errors.name = 'Naziv tima može sadržati samo slova, brojeve i razmak.';
     else if (trimmedName.length < MIN_TEAM_NAME_LENGTH) errors.name = `Naziv tima mora imati najmanje ${MIN_TEAM_NAME_LENGTH} karaktera.`;
 
     const trimmedCity = city.trim();
