@@ -28,7 +28,9 @@
       "Bash(npm ping *)",
       "Bash(python3 -c ' *)",
       "Bash(npm install *)",
-      "Bash(node -e \"require\\('sharp'\\); console.log\\('sharp ok'\\)\")"
+      "Bash(node -e \"require\\('sharp'\\); console.log\\('sharp ok'\\)\")",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__execute_sql"
     ]
   }
 }

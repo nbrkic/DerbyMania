@@ -538,11 +538,19 @@ export default function TeamDetail() {
     setKickingMemberId(memberId);
     setCaptainError(null);
 
-    const { error } = await supabase.from('team_members').delete().eq('team_id', team.id).eq('user_id', memberId);
+    // .select() posle delete-a da znamo da li je red stvarno obrisan — ako RLS
+    // tiho odbije brisanje (nema dozvolu), Supabase ne vraća grešku već samo
+    // 0 obrisanih redova, pa bez ove provere igrač ostaje "duh" u timu.
+    const { data, error } = await supabase
+      .from('team_members')
+      .delete()
+      .eq('team_id', team.id)
+      .eq('user_id', memberId)
+      .select('user_id');
 
     setKickingMemberId(null);
 
-    if (error) {
+    if (error || !data || data.length === 0) {
       setCaptainError('Izbacivanje igrača nije uspelo. Pokušaj ponovo.');
       return;
     }

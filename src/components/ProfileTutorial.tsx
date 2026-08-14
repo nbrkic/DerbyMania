@@ -33,11 +33,20 @@ export function ProfileTutorial({
   /** Poslednji korak — zatvara i odmah čuva profil. */
   onFinish: () => void;
 }) {
+  // Vizuelni viewport (a ne layout viewport) da bi kartica/rupa ostale u
+  // stvarno vidljivoj oblasti kad se na telefonu otvori tastatura — tastatura
+  // često ne menja window.innerHeight, samo smanji visualViewport.height.
+  const getViewport = () => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    return vv ? { w: vv.width, h: vv.height } : { w: window.innerWidth, h: window.innerHeight };
+  };
+
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
-  const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const [viewport, setViewport] = useState(getViewport);
   const [cardSize, setCardSize] = useState({ w: 340, h: 220 });
   const cardRef = useRef<HTMLDivElement>(null);
+  const focusRafRef = useRef(0);
 
   const total = steps.length;
   const step = steps[Math.min(index, total - 1)];
@@ -51,7 +60,7 @@ export function ProfileTutorial({
 
   const measure = useCallback(() => {
     const el = step?.ref.current;
-    setViewport({ w: window.innerWidth, h: window.innerHeight });
+    setViewport(getViewport());
     if (!el) {
       setRect(null);
       return;
@@ -76,14 +85,43 @@ export function ProfileTutorial({
     return () => cancelAnimationFrame(raf);
   }, [index, measure, step]);
 
-  // Prati skrol/resize da highlight ostane zalepljen za element.
+  // Prati skrol/resize da highlight ostane zalepljen za element. Bitno je i
+  // pratiti visualViewport (resize/scroll) — to je ono što se stvarno menja
+  // kad se na telefonu otvori/zatvori tastatura.
   useEffect(() => {
     const onChange = () => measure();
     window.addEventListener('scroll', onChange, true);
     window.addEventListener('resize', onChange);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', onChange);
+    vv?.addEventListener('scroll', onChange);
     return () => {
       window.removeEventListener('scroll', onChange, true);
       window.removeEventListener('resize', onChange);
+      vv?.removeEventListener('resize', onChange);
+      vv?.removeEventListener('scroll', onChange);
+    };
+  }, [measure]);
+
+  // Kad korisnik fokusira polje unutar tutorijala, tastatura se otvara uz
+  // kratku animaciju — prati promenu par stotinki sekunde da se kartica ne
+  // "zaglavi" iza tastature dok se ona podiže.
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') return;
+      cancelAnimationFrame(focusRafRef.current);
+      const start = performance.now();
+      const tick = (t: number) => {
+        measure();
+        if (t - start < 500) focusRafRef.current = requestAnimationFrame(tick);
+      };
+      focusRafRef.current = requestAnimationFrame(tick);
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      cancelAnimationFrame(focusRafRef.current);
     };
   }, [measure]);
 
