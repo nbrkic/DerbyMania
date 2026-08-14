@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { SiteHeader, UserAvatar } from '../components/SiteHeader';
@@ -20,6 +20,9 @@ import { TournamentRow, type Tournament } from './Tournaments';
 import { RowSkeletonGrid } from '../components/Skeleton';
 import { compressImage, CREST_MAX_DIMENSION } from '../lib/imageCompression';
 import { ImageCropper } from '../components/ImageCropper';
+import { ProfileTutorial, type TutorialStep } from '../components/ProfileTutorial';
+
+const TUTORIAL_DONE_KEY = 'dm_profile_tutorial_done';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -66,10 +69,60 @@ function samePositions(a: string[], b: string[]) {
 
 export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const seededRef = useRef(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
+
+  // Elementi koje mini-tutorijal redom ističe.
+  const avatarRef = useRef<HTMLButtonElement>(null);
+  const cityRef = useRef<HTMLDivElement>(null);
+  const sportsRef = useRef<HTMLDivElement>(null);
+  const heightRef = useRef<HTMLDivElement>(null);
+  const weightRef = useRef<HTMLDivElement>(null);
+  const footballPositionsRef = useRef<HTMLDivElement>(null);
+  const dominantLegRef = useRef<HTMLDivElement>(null);
+  const basketballPositionsRef = useRef<HTMLDivElement>(null);
+  const dominantHandRef = useRef<HTMLDivElement>(null);
+
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  // Pokreni tutorijal posle registracije (state iz Register-a) ili ručno preko
+  // ?tour=1 (za pregled). Registracioni put poštuje „već odgledano" iz localStorage.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const forced = params.get('tour') === '1';
+    const fromRegister = (location.state as { tutorial?: boolean } | null)?.tutorial === true;
+    const done = typeof window !== 'undefined' && localStorage.getItem(TUTORIAL_DONE_KEY) === '1';
+    if (forced || (fromRegister && !done)) setShowTutorial(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function closeTutorial() {
+    localStorage.setItem(TUTORIAL_DONE_KEY, '1');
+    setShowTutorial(false);
+    // Očisti state/query da osvežavanje stranice ponovo ne otvori tutorijal.
+    navigate('/profile', { replace: true });
+  }
+
+  // Poslednji korak tutorijala: zatvori ga i odmah pokušaj da sačuvaš profil.
+  // Ako nešto nije ispravno, ponaša se kao običan „Sačuvaj" (inline greške ostaju)
+  // i odvede korisnika do prvog neispravnog polja da ga popravi.
+  async function finishTutorial() {
+    closeTutorial();
+    const ok = await saveProfile();
+    if (!ok) {
+      const errs = getFieldErrors() as Record<string, string | undefined>;
+      const firstInvalidId = ['fullName', 'username', 'city', 'heightCm', 'weightKg'].find((id) => errs[id]);
+      if (firstInvalidId) {
+        setTimeout(() => {
+          document.getElementById(firstInvalidId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 60);
+      }
+    }
+  }
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -448,10 +501,16 @@ export default function Profile() {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    await saveProfile();
+  }
+
+  // Sačuvaj profil. Vraća true ako je uspešno sačuvano, false ako podaci nisu
+  // ispravni ili je došlo do greške (koriste ga i „Sačuvaj" dugme i završetak tutorijala).
+  async function saveProfile(): Promise<boolean> {
+    if (!user) return false;
 
     setAttempted(true);
-    if (Object.keys(getFieldErrors()).length > 0) return;
+    if (Object.keys(getFieldErrors()).length > 0) return false;
 
     setError(null);
     setSuccess(null);
@@ -470,7 +529,7 @@ export default function Profile() {
       if (uploadError) {
         setSaving(false);
         setError(`Otpremanje slike nije uspelo: ${uploadError.message}`);
-        return;
+        return false;
       }
       const { data: publicUrl } = supabase.storage.from('avatars').getPublicUrl(path);
       avatarUrl = `${publicUrl.publicUrl}?t=${Date.now()}`;
@@ -504,7 +563,7 @@ export default function Profile() {
             ? 'Uneta vrednost nije u dozvoljenom opsegu. Proveri visinu i težinu pa pokušaj ponovo.'
             : 'Čuvanje podataka nije uspelo. Pokušaj ponovo.'
       );
-      return;
+      return false;
     }
 
     await supabase.from('profile_preferred_sports').delete().eq('profile_id', user.id);
@@ -515,7 +574,7 @@ export default function Profile() {
       if (sportsError) {
         setSaving(false);
         setError(`Čuvanje sportova nije uspelo: ${sportsError.message}`);
-        return;
+        return false;
       }
     }
 
@@ -524,7 +583,7 @@ export default function Profile() {
       if (emailError) {
         setSaving(false);
         setError(`Email nije promenjen: ${emailError.message}`);
-        return;
+        return false;
       }
     }
 
@@ -534,6 +593,7 @@ export default function Profile() {
     setSaved({ fullName, username, birthDate, phone, city: cityToSave ?? '', email, dominantHand, dominantLeg, heightCm, weightKg, positions, sportIds: selectedSportIds });
     setSaving(false);
     setSuccess('Promene su sačuvane.');
+    return true;
   }
 
   const displayName = fullName || user?.email || '';
@@ -546,6 +606,67 @@ export default function Profile() {
   const dominantLegN = showFootballPositions ? String(nextFieldN++) : undefined;
   const basketballPositionsN = showBasketballPositions ? String(nextFieldN++) : undefined;
   const dominantHandN = showBasketballPositions ? String(nextFieldN++) : undefined;
+
+  // Koraci tutorijala. Osnovni koraci su fiksni, a kad korisnik izabere fudbal
+  // ili košarku (ili varijante/oba), dodaju se po 2 koraka za taj sport
+  // (pozicije + jača noga/ruka) — tačno onim redom kojim se polja pojavljuju.
+  const tutorialSteps = useMemo<TutorialStep[]>(() => {
+    const steps: TutorialStep[] = [
+      {
+        ref: avatarRef,
+        title: 'Postavi profilnu sliku',
+        body: 'Klikni ovde da dodaš svoju sliku. Tako će te saigrači i organizatori lakše prepoznati.',
+      },
+      {
+        ref: cityRef,
+        title: 'Iz kog si grada?',
+        body: 'Izaberi svoj grad iz liste da bismo ti prikazali turnire i ekipe u blizini.',
+      },
+      {
+        ref: sportsRef,
+        title: 'Koje sportove voliš?',
+        body: 'Označi sportove koje igraš: fudbal, košarka i drugi. Možeš izabrati više njih, a za svaki sport dobijaš i dodatna pitanja.',
+      },
+      {
+        ref: heightRef,
+        title: 'Tvoja visina',
+        body: 'Unesi visinu u centimetrima.',
+      },
+      {
+        ref: weightRef,
+        title: 'Tvoja težina',
+        body: 'Unesi težinu u kilogramima.',
+      },
+    ];
+
+    if (showFootballPositions) {
+      steps.push({
+        ref: footballPositionsRef,
+        title: 'Pozicije u fudbalu',
+        body: 'Izaberi pozicije na kojima najviše igraš u fudbalu. Možeš označiti više njih.',
+      });
+      steps.push({
+        ref: dominantLegRef,
+        title: 'Jača noga',
+        body: 'Izaberi kojom nogom si jači: levom, desnom ili obema.',
+      });
+    }
+
+    if (showBasketballPositions) {
+      steps.push({
+        ref: basketballPositionsRef,
+        title: 'Pozicije u košarci',
+        body: 'Izaberi pozicije na kojima najviše igraš u košarci. Možeš označiti više njih.',
+      });
+      steps.push({
+        ref: dominantHandRef,
+        title: 'Jača ruka',
+        body: 'Izaberi kojom rukom si jači: levom, desnom ili obema.',
+      });
+    }
+
+    return steps;
+  }, [showFootballPositions, showBasketballPositions]);
 
   useEffect(() => {
     if (!showFootballPositions) {
@@ -582,6 +703,7 @@ export default function Profile() {
           <div className="relative max-w-2xl mx-auto px-6 py-16 sm:py-20">
             <div className="flex flex-col items-center text-center mb-12">
               <button
+                ref={avatarRef}
                 type="button"
                 onClick={openAvatarPicker}
                 className="relative w-28 h-28 sm:w-32 sm:h-32 group"
@@ -645,71 +767,87 @@ export default function Profile() {
               />
               <TicketField n="3" label="Datum rođenja" id="birthDate" type="date" autoComplete="bday" value={birthDate} onChange={setBirthDate} disabled />
               <TicketField n="4" label="Broj telefona" id="phone" type="tel" autoComplete="tel" value={phone} onChange={setPhone} disabled />
-              <ComboboxField
-                n="5"
-                label="Mesto/grad"
-                id="city"
-                value={city}
-                onChange={setCity}
-                options={cities}
-                error={fieldErrors.city}
-              />
+              <div ref={cityRef}>
+                <ComboboxField
+                  n="5"
+                  label="Mesto/grad"
+                  id="city"
+                  value={city}
+                  onChange={setCity}
+                  options={cities}
+                  error={fieldErrors.city}
+                />
+              </div>
               <TicketField n="6" label="Email" id="email" type="email" autoComplete="email" required value={email} onChange={setEmail} disabled />
 
-              <MultiSelectPills
-                n="7"
-                label="Preferirani sportovi"
-                value={selectedSportIds.map(String)}
-                onChange={(vals) => setSelectedSportIds(vals.map(Number))}
-                options={sports.map((s) => ({ value: String(s.id), label: s.name }))}
-              />
+              <div ref={sportsRef}>
+                <MultiSelectPills
+                  n="7"
+                  label="Preferirani sportovi"
+                  value={selectedSportIds.map(String)}
+                  onChange={(vals) => setSelectedSportIds(vals.map(Number))}
+                  options={sports.map((s) => ({ value: String(s.id), label: s.name }))}
+                />
+              </div>
 
-              <TicketField n="8" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} error={fieldErrors.heightCm} />
-              <TicketField n="9" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} error={fieldErrors.weightKg} />
+              <div ref={heightRef}>
+                <TicketField n="8" label="Visina (cm)" id="heightCm" type="number" value={heightCm} onChange={setHeightCm} error={fieldErrors.heightCm} />
+              </div>
+              <div ref={weightRef}>
+                <TicketField n="9" label="Težina (kg)" id="weightKg" type="number" value={weightKg} onChange={setWeightKg} error={fieldErrors.weightKg} />
+              </div>
 
               {showFootballPositions && footballPositionsN && dominantLegN && (
                 <>
-                  <MultiSelectPills
-                    n={footballPositionsN}
-                    label="Preferirane pozicije (Fudbal)"
-                    value={positions.filter((p) => FOOTBALL_POSITION_VALUES.includes(p))}
-                    onChange={(vals) =>
-                      setPositions((prev) => [...prev.filter((p) => !FOOTBALL_POSITION_VALUES.includes(p)), ...vals])
-                    }
-                    options={FOOTBALL_POSITION_OPTIONS}
-                  />
-                  <SelectField
-                    n={dominantLegN}
-                    label="Dominantna noga"
-                    id="dominantLeg"
-                    placeholder="Izaberi"
-                    value={dominantLeg}
-                    onChange={setDominantLeg}
-                    options={DOMINANT_OPTIONS}
-                  />
+                  <div ref={footballPositionsRef}>
+                    <MultiSelectPills
+                      n={footballPositionsN}
+                      label="Preferirane pozicije (Fudbal)"
+                      value={positions.filter((p) => FOOTBALL_POSITION_VALUES.includes(p))}
+                      onChange={(vals) =>
+                        setPositions((prev) => [...prev.filter((p) => !FOOTBALL_POSITION_VALUES.includes(p)), ...vals])
+                      }
+                      options={FOOTBALL_POSITION_OPTIONS}
+                    />
+                  </div>
+                  <div ref={dominantLegRef}>
+                    <SelectField
+                      n={dominantLegN}
+                      label="Dominantna noga"
+                      id="dominantLeg"
+                      placeholder="Izaberi"
+                      value={dominantLeg}
+                      onChange={setDominantLeg}
+                      options={DOMINANT_OPTIONS}
+                    />
+                  </div>
                 </>
               )}
 
               {showBasketballPositions && basketballPositionsN && dominantHandN && (
                 <>
-                  <MultiSelectPills
-                    n={basketballPositionsN}
-                    label="Preferirane pozicije (Košarka)"
-                    value={positions.filter((p) => BASKETBALL_POSITION_VALUES.includes(p))}
-                    onChange={(vals) =>
-                      setPositions((prev) => [...prev.filter((p) => !BASKETBALL_POSITION_VALUES.includes(p)), ...vals])
-                    }
-                    options={BASKETBALL_POSITION_OPTIONS}
-                  />
-                  <SelectField
-                    n={dominantHandN}
-                    label="Dominantna ruka"
-                    id="dominantHand"
-                    placeholder="Izaberi"
-                    value={dominantHand}
-                    onChange={setDominantHand}
-                    options={DOMINANT_OPTIONS}
-                  />
+                  <div ref={basketballPositionsRef}>
+                    <MultiSelectPills
+                      n={basketballPositionsN}
+                      label="Preferirane pozicije (Košarka)"
+                      value={positions.filter((p) => BASKETBALL_POSITION_VALUES.includes(p))}
+                      onChange={(vals) =>
+                        setPositions((prev) => [...prev.filter((p) => !BASKETBALL_POSITION_VALUES.includes(p)), ...vals])
+                      }
+                      options={BASKETBALL_POSITION_OPTIONS}
+                    />
+                  </div>
+                  <div ref={dominantHandRef}>
+                    <SelectField
+                      n={dominantHandN}
+                      label="Dominantna ruka"
+                      id="dominantHand"
+                      placeholder="Izaberi"
+                      value={dominantHand}
+                      onChange={setDominantHand}
+                      options={DOMINANT_OPTIONS}
+                    />
+                  </div>
                 </>
               )}
 
@@ -874,6 +1012,8 @@ export default function Profile() {
       {cropSrc && (
         <ImageCropper src={cropSrc} fileName={cropFileName} title="Podesi profilnu sliku" onCancel={handleCropCancel} onConfirm={handleCropConfirm} />
       )}
+
+      {showTutorial && <ProfileTutorial steps={tutorialSteps} onClose={closeTutorial} onFinish={finishTutorial} />}
 
       <SiteFooter />
     </div>

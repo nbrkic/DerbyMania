@@ -43,6 +43,11 @@ html, body, #root {
 ::-webkit-scrollbar-thumb { background: rgba(194,31,46,0.4); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(194,31,46,0.7); }
 
+/* Dok traje tutorijal: sakrij traku za skrolovanje da korisnik ne može da je uhvati.
+   Stranica ostaje programski pomerljiva (scrollIntoView po koraku i dalje radi). */
+.tutorial-no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.tutorial-no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
 ::selection { background: rgba(194,31,46,0.45); color: #fff; }
 
 .btn-solid {

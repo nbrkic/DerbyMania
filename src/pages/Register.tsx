@@ -112,7 +112,7 @@ export default function Register() {
       return;
     }
 
-    navigate('/profile');
+    navigate('/profile', { state: { tutorial: true } });
   }
 
   return (

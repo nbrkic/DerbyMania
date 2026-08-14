@@ -136,7 +136,7 @@ export function Combobox({
         createPortal(
           <div
             ref={menuRef}
-            className="fixed z-50 bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] py-1 max-h-64 overflow-y-auto"
+            className="fixed z-50 bg-ink-900 border border-red-500/30 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)] py-1 max-h-64 overflow-y-auto overscroll-contain"
             style={{ top: menuRect.top, left: menuRect.left, width: menuRect.width }}
           >
             {filtered.length === 0 ? (
