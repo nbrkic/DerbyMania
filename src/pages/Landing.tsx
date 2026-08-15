@@ -5,7 +5,7 @@ import { SiteFooter } from '../components/SiteFooter';
 import { Seo } from '../components/Seo';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '../lib/seo';
 
-/* ─── DATA ──────────────────────────────────────────────────── */
+/* ─── DATA ─── */
 const FEATURES = [
   {
     n: '01',
