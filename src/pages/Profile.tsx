@@ -18,7 +18,8 @@ import {
 import { TeamRow, type Team } from './Teams';
 import { TournamentRow, type Tournament } from './Tournaments';
 import { RowSkeletonGrid } from '../components/Skeleton';
-import { compressImage, CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { uploadImageWithCleanup } from '../lib/storageUpload';
 import { ImageCropper } from '../components/ImageCropper';
 import { ProfileTutorial, type TutorialStep } from '../components/ProfileTutorial';
 
@@ -522,17 +523,13 @@ export default function Profile() {
     let avatarUrl = profile?.avatar_url ?? null;
 
     if (avatarFile) {
-      const compressed = await compressImage(avatarFile, CREST_MAX_DIMENSION);
-      const ext = compressed.name.split('.').pop() || 'jpg';
-      const path = `${user.id}/avatar.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, compressed, { upsert: true });
-      if (uploadError) {
+      try {
+        avatarUrl = await uploadImageWithCleanup('avatars', user.id, 'avatar', avatarFile, CREST_MAX_DIMENSION);
+      } catch (err) {
         setSaving(false);
-        setError(`Otpremanje slike nije uspelo: ${uploadError.message}`);
+        setError(`Otpremanje slike nije uspelo: ${err instanceof Error ? err.message : 'nepoznata greška'}`);
         return false;
       }
-      const { data: publicUrl } = supabase.storage.from('avatars').getPublicUrl(path);
-      avatarUrl = `${publicUrl.publicUrl}?t=${Date.now()}`;
     }
 
     const { error: updateError } = await supabase

@@ -9,7 +9,8 @@ import { Seo } from '../components/Seo';
 import { ImageField, CrestField, type ImagePosition } from '../components/ImageFields';
 import { normalizeForSearch } from '../lib/text';
 import { FormSkeleton } from '../components/Skeleton';
-import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { uploadImageWithCleanup } from '../lib/storageUpload';
 import { playerCountLabel } from './Teams';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -402,13 +403,13 @@ export default function CreateTeam() {
   }
 
   async function uploadImage(teamId: string, file: File, kind: 'crest' | 'banner') {
-    const compressed = await compressImage(file, kind === 'banner' ? BANNER_MAX_DIMENSION : CREST_MAX_DIMENSION);
-    const ext = compressed.name.split('.').pop() || 'jpg';
-    const path = `${user!.id}/${teamId}/${kind}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from('teams').upload(path, compressed, { upsert: true });
-    if (uploadError) throw new Error(uploadError.message);
-    const { data } = supabase.storage.from('teams').getPublicUrl(path);
-    return data.publicUrl;
+    return uploadImageWithCleanup(
+      'teams',
+      `${user!.id}/${teamId}`,
+      kind,
+      file,
+      kind === 'banner' ? BANNER_MAX_DIMENSION : CREST_MAX_DIMENSION
+    );
   }
 
   async function handleCreateTeam() {

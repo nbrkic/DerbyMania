@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../lib/auth-context';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
@@ -25,6 +26,8 @@ export type Team = {
   founderName: string | null;
   playerCount: number;
   deleted_at: string | null;
+  created_at?: string;
+  viewerRelation?: 'owner' | 'member' | null;
 };
 
 function SearchIcon({ className }: { className?: string }) {
@@ -54,13 +57,23 @@ export function TeamCard({ team, index }: { team: Team; index: number }) {
         <div className="absolute inset-y-0 -left-1/3 w-1/4 -skew-x-12 bg-paper-100/[0.06] -translate-x-[120%] group-hover:translate-x-[600%] transition-transform duration-700 ease-out" />
       </div>
 
-      <div className="aspect-[21/9] bg-ink-700 overflow-hidden">
+      <div className="aspect-[21/9] bg-ink-700 overflow-hidden relative">
         {team.banner_url && (
           <img
             src={team.banner_url}
             alt=""
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           />
+        )}
+        {team.viewerRelation === 'owner' && (
+          <span className="absolute top-3 right-3 text-[10px] uppercase tracking-widest text-paper-100 bg-red-500/90 border border-red-400 px-2.5 py-1">
+            Tvoj tim
+          </span>
+        )}
+        {team.viewerRelation === 'member' && (
+          <span className="absolute top-3 right-3 text-[10px] uppercase tracking-widest text-paper-100 bg-ink-950/80 border border-ink-700 px-2.5 py-1">
+            U timu si
+          </span>
         )}
       </div>
 
@@ -152,18 +165,34 @@ export function TeamRow({ team, index, fromTournamentId }: { team: Team; index: 
 }
 
 export default function Teams() {
+  const { user } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [sports, setSports] = useState<Sport[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sportFilter, setSportFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [memberTeamIds, setMemberTeamIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user) {
+      setMemberTeamIds(new Set());
+      return;
+    }
+    supabase
+      .from('team_members')
+      .select('team_id')
+      .eq('user_id', user.id)
+      .then(({ data }) => setMemberTeamIds(new Set((data ?? []).map((m) => m.team_id))));
+  }, [user]);
 
   useEffect(() => {
     async function load() {
       const { data: teamRows } = await supabase
         .from('teams')
-        .select('id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name), deleted_at')
+        .select(
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, founded_year, sport_id, sports(name), deleted_at, created_at'
+        )
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
@@ -203,14 +232,34 @@ export default function Teams() {
       .then(({ data }) => setSports(data ?? []));
   }, []);
 
+  const sortedTeams = useMemo(() => {
+    const withRelation = teams.map((t) => ({
+      ...t,
+      viewerRelation: (user?.id === t.owner_id ? 'owner' : memberTeamIds.has(t.id) ? 'member' : null) as
+        | 'owner'
+        | 'member'
+        | null,
+    }));
+
+    const rank = (t: Team) => (t.viewerRelation === 'owner' ? 0 : t.viewerRelation === 'member' ? 1 : 2);
+
+    return withRelation.sort((a, b) => {
+      const diff = rank(a) - rank(b);
+      if (diff !== 0) return diff;
+      // Among the user's own teams, the oldest founded one leads.
+      if (a.viewerRelation === 'owner') return (a.created_at ?? '').localeCompare(b.created_at ?? '');
+      return 0;
+    });
+  }, [teams, user, memberTeamIds]);
+
   const filteredTeams = useMemo(() => {
     const query = normalizeForSearch(search);
-    return teams.filter((t) => {
+    return sortedTeams.filter((t) => {
       const matchesSearch = !query || normalizeForSearch(t.name).includes(query);
       const matchesSport = !sportFilter || String(t.sport_id) === sportFilter;
       return matchesSearch && matchesSport;
     });
-  }, [teams, search, sportFilter]);
+  }, [sortedTeams, search, sportFilter]);
 
   useEffect(() => {
     setPage(1);

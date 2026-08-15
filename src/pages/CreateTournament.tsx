@@ -10,7 +10,8 @@ import { ImageField, CrestField, type ImagePosition } from '../components/ImageF
 import { BASKETBALL_SPORT_NAMES } from '../lib/positions';
 import { normalizeForSearch } from '../lib/text';
 import { FormSkeleton } from '../components/Skeleton';
-import { compressImage, BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { BANNER_MAX_DIMENSION, CREST_MAX_DIMENSION } from '../lib/imageCompression';
+import { uploadImageWithCleanup } from '../lib/storageUpload';
 import { formatStartDate, teamCountLabel } from './Tournaments';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -564,13 +565,13 @@ export default function CreateTournament() {
   }
 
   async function uploadImage(tournamentId: string, file: File, kind: 'crest' | 'banner') {
-    const compressed = await compressImage(file, kind === 'banner' ? BANNER_MAX_DIMENSION : CREST_MAX_DIMENSION);
-    const ext = compressed.name.split('.').pop() || 'jpg';
-    const path = `${user!.id}/${tournamentId}/${kind}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from('tournaments').upload(path, compressed, { upsert: true });
-    if (uploadError) throw new Error(uploadError.message);
-    const { data } = supabase.storage.from('tournaments').getPublicUrl(path);
-    return data.publicUrl;
+    return uploadImageWithCleanup(
+      'tournaments',
+      `${user!.id}/${tournamentId}`,
+      kind,
+      file,
+      kind === 'banner' ? BANNER_MAX_DIMENSION : CREST_MAX_DIMENSION
+    );
   }
 
   async function handleSubmit(e: FormEvent) {

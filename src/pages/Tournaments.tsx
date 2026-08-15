@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../lib/auth-context';
 import { SiteHeader } from '../components/SiteHeader';
 import { SiteFooter } from '../components/SiteFooter';
 import { Dropdown } from '../components/Dropdown';
@@ -27,6 +28,8 @@ export type Tournament = {
   sports: { name: string } | null;
   founderName: string | null;
   teamCount: number;
+  created_at?: string;
+  viewerRelation?: 'owner' | 'member' | null;
 };
 
 function SearchIcon({ className }: { className?: string }) {
@@ -79,11 +82,23 @@ export function TournamentCard({ tournament, index }: { tournament: Tournament; 
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           />
         )}
-        {tournament.status === 'finished' && (
-          <span className="absolute top-3 right-3 text-[10px] uppercase tracking-widest text-paper-100 bg-ink-950/80 border border-ink-700 px-2.5 py-1">
-            Završen
-          </span>
-        )}
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
+          {tournament.status === 'finished' && (
+            <span className="text-[10px] uppercase tracking-widest text-paper-100 bg-ink-950/80 border border-ink-700 px-2.5 py-1">
+              Završen
+            </span>
+          )}
+          {tournament.viewerRelation === 'owner' && (
+            <span className="text-[10px] uppercase tracking-widest text-paper-100 bg-red-500/90 border border-red-400 px-2.5 py-1">
+              Tvoj turnir
+            </span>
+          )}
+          {tournament.viewerRelation === 'member' && (
+            <span className="text-[10px] uppercase tracking-widest text-paper-100 bg-ink-950/80 border border-ink-700 px-2.5 py-1">
+              Učestvuješ
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="px-5 pb-5 relative">
@@ -164,6 +179,7 @@ export function TournamentRow({ tournament, index }: { tournament: Tournament; i
 }
 
 export default function Tournaments() {
+  const { user } = useAuth();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [sports, setSports] = useState<Sport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,13 +187,37 @@ export default function Tournaments() {
   const [sportFilter, setSportFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [participantTournamentIds, setParticipantTournamentIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user) {
+      setParticipantTournamentIds(new Set());
+      return;
+    }
+
+    async function loadParticipation() {
+      const { data: membershipRows } = await supabase.from('team_members').select('team_id').eq('user_id', user!.id);
+      const teamIds = (membershipRows ?? []).map((m) => m.team_id);
+      if (!teamIds.length) {
+        setParticipantTournamentIds(new Set());
+        return;
+      }
+      const { data: participationRows } = await supabase
+        .from('tournament_teams')
+        .select('tournament_id')
+        .in('team_id', teamIds);
+      setParticipantTournamentIds(new Set((participationRows ?? []).map((p) => p.tournament_id)));
+    }
+
+    loadParticipation();
+  }, [user]);
 
   useEffect(() => {
     async function load() {
       const { data: tournamentRows } = await supabase
         .from('tournaments')
         .select(
-          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, max_teams, sport_id, status, sports(name)'
+          'id, owner_id, name, crest_url, crest_position_x, crest_position_y, banner_url, city, location, start_date, max_teams, sport_id, status, sports(name), created_at'
         )
         .order('created_at', { ascending: false });
 
@@ -217,15 +257,35 @@ export default function Tournaments() {
       .then(({ data }) => setSports(data ?? []));
   }, []);
 
+  const sortedTournaments = useMemo(() => {
+    const withRelation = tournaments.map((t) => ({
+      ...t,
+      viewerRelation: (user?.id === t.owner_id ? 'owner' : participantTournamentIds.has(t.id) ? 'member' : null) as
+        | 'owner'
+        | 'member'
+        | null,
+    }));
+
+    const rank = (t: Tournament) => (t.viewerRelation === 'owner' ? 0 : t.viewerRelation === 'member' ? 1 : 2);
+
+    return withRelation.sort((a, b) => {
+      const diff = rank(a) - rank(b);
+      if (diff !== 0) return diff;
+      // Among the user's own tournaments, the oldest organized one leads.
+      if (a.viewerRelation === 'owner') return (a.created_at ?? '').localeCompare(b.created_at ?? '');
+      return 0;
+    });
+  }, [tournaments, user, participantTournamentIds]);
+
   const filteredTournaments = useMemo(() => {
     const query = normalizeForSearch(search);
-    return tournaments.filter((t) => {
+    return sortedTournaments.filter((t) => {
       const matchesSearch = !query || normalizeForSearch(t.name).includes(query);
       const matchesSport = !sportFilter || String(t.sport_id) === sportFilter;
       const matchesStatus = !statusFilter || t.status === statusFilter;
       return matchesSearch && matchesSport && matchesStatus;
     });
-  }, [tournaments, search, sportFilter, statusFilter]);
+  }, [sortedTournaments, search, sportFilter, statusFilter]);
 
   useEffect(() => {
     setPage(1);
