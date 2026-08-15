@@ -30,7 +30,8 @@
       "Bash(npm install *)",
       "Bash(node -e \"require\\('sharp'\\); console.log\\('sharp ok'\\)\")",
       "mcp__claude_ai_Supabase__list_projects",
-      "mcp__claude_ai_Supabase__execute_sql"
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(curl -s \"https://mgxxhynwokcpiutrjohk.supabase.co/rest/v1/\" -H \"apikey: sb_publishable_Nv_oknXL5i2e1F-1IcrXNQ_6sF4P7r8\")"
     ]
   }
 }

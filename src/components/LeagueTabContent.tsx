@@ -48,7 +48,7 @@ type TimelineEntryKind = 'goal' | MatchEventType;
 type TimelineEntry = {
   id: string;
   team_id: string;
-  playerName: string;
+  playerName: string | null;
   kind: TimelineEntryKind;
   points: number;
   created_at: string;
@@ -262,7 +262,7 @@ function MatchTimeline({
           <div key={entry.id} className="flex items-center gap-2.5 px-4 py-2.5">
             {timelineEntryIcon(entry.kind, isBasketball)}
             <TeamBadge team={team} className="w-5 h-5 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
-            <span className="text-xs text-paper-100 truncate flex-1 min-w-0">{entry.playerName}</span>
+            <span className="text-xs text-paper-100 truncate flex-1 min-w-0">{entry.playerName ?? team.name}</span>
             <span className="text-[10px] uppercase tracking-widest text-paper-500 shrink-0 whitespace-nowrap">
               {timelineEntryLabel(entry, isBasketball)}
             </span>
@@ -552,6 +552,23 @@ function ScorerPicker({
   );
 }
 
+function TeamPointsPicker({ onPick, allowThree }: {
+  onPick: (points: number) => void | Promise<void>;
+  allowThree: boolean;
+}) {
+  const points = allowThree ? [1, 2, 3] : [1, 2];
+  return (
+    <div className="w-full max-w-none sm:max-w-[10.5rem] mt-1">
+      <p className="text-[10px] uppercase tracking-widest text-paper-500 mb-1.5">Poeni tima (bez igrača)</p>
+      <div className="flex gap-1.5">
+        {points.map((p) => (
+          <button key={p} type="button" onClick={() => onPick(p)} className="flex-1 py-2 text-xs font-semibold border border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50 transition-colors">+{p}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LiveMatchCard({
   match,
   teamA,
@@ -560,6 +577,7 @@ function LiveMatchCard({
   rosterA,
   rosterB,
   isBasketball,
+  allowThreePointer,
   events,
   onAddGoal,
   onFinishMatch,
@@ -573,8 +591,9 @@ function LiveMatchCard({
   rosterA: RosterPlayer[];
   rosterB: RosterPlayer[];
   isBasketball: boolean;
+  allowThreePointer: boolean;
   events: MatchEvent[];
-  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) => void;
+  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string | null, points: number) => void;
   onFinishMatch: (matchId: string) => void;
   onAddEvent: (matchId: string, teamId: string, playerId: string, eventType: MatchEventType) => void;
   onUndoLast: (matchId: string) => void;
@@ -599,6 +618,12 @@ function LiveMatchCard({
             <span className="text-sm text-paper-100 text-center truncate max-w-full">{teamA.name}</span>
             {isOwner && (
               <>
+                {isBasketball && (
+                  <TeamPointsPicker
+                    allowThree={allowThreePointer}
+                    onPick={(points) => onAddGoal(match.id, 'a', match.team_a_id, null, points)}
+                  />
+                )}
                 <ScorerPicker
                   idPrefix={`league-scorer-a-${match.id}`}
                   roster={rosterA}
@@ -666,6 +691,12 @@ function LiveMatchCard({
             <span className="text-sm text-paper-100 text-center truncate max-w-full">{teamB.name}</span>
             {isOwner && (
               <>
+                {isBasketball && (
+                  <TeamPointsPicker
+                    allowThree={allowThreePointer}
+                    onPick={(points) => onAddGoal(match.id, 'b', match.team_b_id, null, points)}
+                  />
+                )}
                 <ScorerPicker
                   idPrefix={`league-scorer-b-${match.id}`}
                   roster={rosterB}
@@ -1124,7 +1155,7 @@ export function LeagueTabContent({
     setTeamBId('');
   }
 
-  async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) {
+  async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string | null, points: number) {
     const match = matches.find((m) => m.id === matchId);
     if (!match) return;
 
@@ -1228,7 +1259,7 @@ export function LeagueTabContent({
       supabase.from('tournament_league_events').select('id, team_id, player_id, event_type, created_at').eq('match_id', matchId),
     ]);
 
-    const playerIds = [...new Set([...(goalRows ?? []).map((g) => g.player_id), ...(eventRows ?? []).map((e) => e.player_id)])];
+    const playerIds = [...new Set([...(goalRows ?? []).map((g) => g.player_id).filter((pid): pid is string => pid != null), ...(eventRows ?? []).map((e) => e.player_id)])];
     const { data: profiles } = playerIds.length
       ? await supabase.from('public_profiles').select('id, full_name').in('id', playerIds)
       : { data: [] as { id: string; full_name: string | null }[] };
@@ -1238,7 +1269,7 @@ export function LeagueTabContent({
       ...(goalRows ?? []).map((g) => ({
         id: g.id,
         team_id: g.team_id,
-        playerName: nameById.get(g.player_id) || 'Igrač',
+        playerName: g.player_id ? (nameById.get(g.player_id) || 'Igrač') : null,
         kind: 'goal' as TimelineEntryKind,
         points: g.points,
         created_at: g.created_at,
@@ -1278,6 +1309,7 @@ export function LeagueTabContent({
   const isOwner = user?.id === tournament.owner_id;
   const isTournamentFinished = localStatus === 'finished';
   const isBasketball = !!tournament.sports?.name && BASKETBALL_SPORT_NAMES.includes(tournament.sports.name);
+  const allowThreePointer = tournament.sports?.name !== 'Basket';
 
   const teamAOptions = teams.map((t) => ({ value: t.id, label: t.name }));
   const teamBOptions = teamAId ? teams.filter((t) => t.id !== teamAId).map((t) => ({ value: t.id, label: t.name })) : [];
@@ -1415,6 +1447,7 @@ export function LeagueTabContent({
                         rosterA={rosters.get(m.team_a_id) ?? []}
                         rosterB={rosters.get(m.team_b_id) ?? []}
                         isBasketball={isBasketball}
+                        allowThreePointer={allowThreePointer}
                         events={matchEvents.get(m.id) ?? []}
                         onAddGoal={handleAddGoal}
                         onFinishMatch={handleFinishMatch}

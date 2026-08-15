@@ -57,7 +57,7 @@ type TimelineEntryKind = 'goal' | MatchEventType;
 type TimelineEntry = {
   id: string;
   team_id: string;
-  playerName: string;
+  playerName: string | null;
   kind: TimelineEntryKind;
   points: number;
   created_at: string;
@@ -213,7 +213,7 @@ function MatchTimeline({ entries, loading, teamA, teamB, isBasketball }: {
           <div key={entry.id} className="flex items-center gap-2.5 px-5 py-2.5">
             {timelineEntryIcon(entry.kind, isBasketball)}
             <TeamBadge team={team} className="w-5 h-5 rounded-full overflow-hidden bg-ink-700 ring-1 ring-red-500/30 shrink-0 flex items-center justify-center" />
-            <span className="text-xs text-paper-100 truncate flex-1 min-w-0">{entry.playerName}</span>
+            <span className="text-xs text-paper-100 truncate flex-1 min-w-0">{entry.playerName ?? team.name}</span>
             <span className="text-[10px] uppercase tracking-widest text-paper-500 shrink-0 whitespace-nowrap">{timelineEntryLabel(entry, isBasketball)}</span>
           </div>
         );
@@ -311,6 +311,23 @@ function ScorerPicker({ roster, onPick, idPrefix, isBasketball }: {
         options={roster.map((p) => ({ value: p.id, label: p.full_name || 'Igrač' }))}
         triggerClassName="w-full pl-8 pr-3 py-2 text-xs uppercase tracking-widest border border-red-500/30 hover:bg-red-500/10 hover:border-red-400/60 transition-colors flex items-center justify-between gap-2 overflow-hidden"
       />
+    </div>
+  );
+}
+
+function TeamPointsPicker({ onPick, allowThree }: {
+  onPick: (points: number) => void | Promise<void>;
+  allowThree: boolean;
+}) {
+  const points = allowThree ? [1, 2, 3] : [1, 2];
+  return (
+    <div className="w-full max-w-[10.5rem] mt-1">
+      <p className="text-[10px] uppercase tracking-widest text-paper-500 mb-1.5">Poeni tima (bez igrača)</p>
+      <div className="flex gap-1.5">
+        {points.map((p) => (
+          <button key={p} type="button" onClick={() => onPick(p)} className="flex-1 py-2 text-xs font-semibold border border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50 transition-colors">+{p}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -473,11 +490,11 @@ function BracketTree({ totalRounds, matchesByRound, teamsById, isOwner, onStart 
   );
 }
 
-function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, rosterB, isBasketball, events, finishError, onAddGoal, onFinishMatch, onAddEvent, onUndoLast }: {
+function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, rosterB, isBasketball, allowThreePointer, events, finishError, onAddGoal, onFinishMatch, onAddEvent, onUndoLast }: {
   match: BracketMatch; teamA: GroupTeam; teamB: GroupTeam; roundText: string;
-  isOwner: boolean; rosterA: RosterPlayer[]; rosterB: RosterPlayer[]; isBasketball: boolean;
+  isOwner: boolean; rosterA: RosterPlayer[]; rosterB: RosterPlayer[]; isBasketball: boolean; allowThreePointer: boolean;
   events: MatchEvent[]; finishError: string | null;
-  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) => void;
+  onAddGoal: (matchId: string, side: 'a' | 'b', teamId: string, playerId: string | null, points: number) => void;
   onFinishMatch: (matchId: string) => void;
   onAddEvent: (matchId: string, teamId: string, playerId: string, eventType: MatchEventType) => void;
   onUndoLast: (matchId: string) => void;
@@ -500,6 +517,7 @@ function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, roste
             </Link>
             {isOwner && (
               <>
+                {isBasketball && <TeamPointsPicker allowThree={allowThreePointer} onPick={(points) => onAddGoal(match.id, 'a', teamA.id, null, points)} />}
                 <ScorerPicker idPrefix={`b-scorer-a-${match.id}`} roster={rosterA} isBasketball={isBasketball} onPick={(playerId, points) => onAddGoal(match.id, 'a', teamA.id, playerId, points)} />
                 <EventPicker idPrefix={`b-assist-a-${match.id}`} roster={rosterA} icon={<AssistIcon className="w-3.5 h-3.5 text-paper-400" />} placeholder="Asistencija" accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50" onPick={(playerId) => onAddEvent(match.id, teamA.id, playerId, 'assist')} />
                 {isBasketball && <EventPicker idPrefix={`b-rebound-a-${match.id}`} roster={rosterA} icon={<ReboundIcon className="w-3.5 h-3.5 text-paper-400" />} placeholder="Skok" accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50" onPick={(playerId) => onAddEvent(match.id, teamA.id, playerId, 'rebound')} />}
@@ -525,6 +543,7 @@ function LiveMatchCard({ match, teamA, teamB, roundText, isOwner, rosterA, roste
             </Link>
             {isOwner && (
               <>
+                {isBasketball && <TeamPointsPicker allowThree={allowThreePointer} onPick={(points) => onAddGoal(match.id, 'b', teamB.id, null, points)} />}
                 <ScorerPicker idPrefix={`b-scorer-b-${match.id}`} roster={rosterB} isBasketball={isBasketball} onPick={(playerId, points) => onAddGoal(match.id, 'b', teamB.id, playerId, points)} />
                 <EventPicker idPrefix={`b-assist-b-${match.id}`} roster={rosterB} icon={<AssistIcon className="w-3.5 h-3.5 text-paper-400" />} placeholder="Asistencija" accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50" onPick={(playerId) => onAddEvent(match.id, teamB.id, playerId, 'assist')} />
                 {isBasketball && <EventPicker idPrefix={`b-rebound-b-${match.id}`} roster={rosterB} icon={<ReboundIcon className="w-3.5 h-3.5 text-paper-400" />} placeholder="Skok" accentClass="border-paper-500/30 text-paper-400 hover:bg-ink-800 hover:border-paper-400/50" onPick={(playerId) => onAddEvent(match.id, teamB.id, playerId, 'rebound')} />}
@@ -818,6 +837,7 @@ export function EliminationTabContent({
   const isOwner = user?.id === tournament.owner_id;
   const bracketExists = bracketMatches.length > 0;
   const isBasketball = !!tournament.sports?.name && BASKETBALL_SPORT_NAMES.includes(tournament.sports.name);
+  const allowThreePointer = tournament.sports?.name !== 'Basket';
 
   async function handleStartBracketMatch(matchId: string) {
     if (tournament.status === 'finished') return;
@@ -830,7 +850,7 @@ export function EliminationTabContent({
     }
   }
 
-  async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string, points: number) {
+  async function handleAddGoal(matchId: string, side: 'a' | 'b', teamId: string, playerId: string | null, points: number) {
     const match = bracketMatches.find((m) => m.id === matchId);
     if (!match) return;
     const { error: goalError } = await supabase.from('tournament_bracket_goals').insert({ match_id: matchId, team_id: teamId, player_id: playerId, points });
@@ -912,11 +932,11 @@ export function EliminationTabContent({
       supabase.from('tournament_bracket_goals').select('id, team_id, player_id, points, created_at').eq('match_id', matchId),
       supabase.from('tournament_bracket_events').select('id, team_id, player_id, event_type, created_at').eq('match_id', matchId),
     ]);
-    const playerIds = [...new Set([...(goalRows ?? []).map((g) => g.player_id), ...(eventRows ?? []).map((e) => e.player_id)])];
+    const playerIds = [...new Set([...(goalRows ?? []).map((g) => g.player_id).filter((pid): pid is string => pid != null), ...(eventRows ?? []).map((e) => e.player_id)])];
     const { data: profiles } = playerIds.length ? await supabase.from('public_profiles').select('id, full_name').in('id', playerIds) : { data: [] as { id: string; full_name: string | null }[] };
     const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
     const entries: TimelineEntry[] = [
-      ...(goalRows ?? []).map((g) => ({ id: g.id, team_id: g.team_id, playerName: nameById.get(g.player_id) || 'Igrač', kind: 'goal' as TimelineEntryKind, points: g.points, created_at: g.created_at })),
+      ...(goalRows ?? []).map((g) => ({ id: g.id, team_id: g.team_id, playerName: g.player_id ? (nameById.get(g.player_id) || 'Igrač') : null, kind: 'goal' as TimelineEntryKind, points: g.points, created_at: g.created_at })),
       ...(eventRows ?? []).map((e) => ({ id: e.id, team_id: e.team_id, playerName: nameById.get(e.player_id) || 'Igrač', kind: e.event_type as TimelineEntryKind, points: 0, created_at: e.created_at })),
     ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     setMatchTimelines((prev) => new Map(prev).set(matchId, entries));
@@ -1013,7 +1033,7 @@ export function EliminationTabContent({
                   if (!teamA || !teamB) return null;
                   return (
                     <div id={`match-${m.id}`} key={m.id}>
-                      <LiveMatchCard match={m} teamA={teamA} teamB={teamB} roundText={roundLabel(m.round, totalRounds)} isOwner={canScore} rosterA={rosters.get(teamA.id) ?? []} rosterB={rosters.get(teamB.id) ?? []} isBasketball={isBasketball} events={matchEvents.get(m.id) ?? []} finishError={finishError} onAddGoal={handleAddGoal} onFinishMatch={handleFinishBracketMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
+                      <LiveMatchCard match={m} teamA={teamA} teamB={teamB} roundText={roundLabel(m.round, totalRounds)} isOwner={canScore} rosterA={rosters.get(teamA.id) ?? []} rosterB={rosters.get(teamB.id) ?? []} isBasketball={isBasketball} allowThreePointer={allowThreePointer} events={matchEvents.get(m.id) ?? []} finishError={finishError} onAddGoal={handleAddGoal} onFinishMatch={handleFinishBracketMatch} onAddEvent={handleAddEvent} onUndoLast={handleUndoLast} />
                     </div>
                   );
                 })}
